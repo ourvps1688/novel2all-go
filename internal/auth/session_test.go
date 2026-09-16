@@ -60,7 +60,7 @@ func TestSessionManager_LoginBadPassword(t *testing.T) {
 	sm, db := setupTestSessionManager(t)
 
 	hash, _ := HashPassword("correct")
-	db.CreateUser(ctx, "user", hash, "user")
+	_, _ = db.CreateUser(ctx, "user", hash, "user")
 
 	_, _, err := sm.Login(ctx, "user", "wrong", "127.0.0.1", "")
 	if err == nil {
@@ -74,7 +74,7 @@ func TestSessionManager_LoginDisabled(t *testing.T) {
 
 	hash, _ := HashPassword("pass")
 	id, _ := db.CreateUser(ctx, "user", hash, "user")
-	db.SetUserDisabled(ctx, id, true)
+	_ = db.SetUserDisabled(ctx, id, true)
 
 	_, _, err := sm.Login(ctx, "user", "pass", "127.0.0.1", "")
 	if err == nil {
@@ -87,7 +87,7 @@ func TestSessionManager_Logout(t *testing.T) {
 	sm, db := setupTestSessionManager(t)
 
 	hash, _ := HashPassword("pass")
-	db.CreateUser(ctx, "user", hash, "user")
+	_, _ = db.CreateUser(ctx, "user", hash, "user")
 	token, _, _ := sm.Login(ctx, "user", "pass", "127.0.0.1", "")
 
 	// 登出
@@ -112,7 +112,9 @@ func TestSessionManager_SetAndGetCookie(t *testing.T) {
 		t.Error("Set-Cookie 应被设置")
 	}
 	// 应包含 HttpOnly
-	cookie := rec.Result().Cookies()
+	result := rec.Result()
+	defer result.Body.Close()
+	cookie := result.Cookies()
 	if len(cookie) == 0 {
 		t.Fatal("应至少有 1 个 cookie")
 	}
@@ -127,7 +129,7 @@ func TestSessionManager_SetAndGetCookie(t *testing.T) {
 func TestSessionManager_SessionExpired(t *testing.T) {
 	ctx := context.Background()
 	db, _ := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
-	db.Migrate(ctx)
+	_ = db.Migrate(ctx)
 	defer db.Close()
 
 	// 用 1ms TTL 创建 session

@@ -85,9 +85,9 @@ func TestCountAdmins(t *testing.T) {
 	if n, _ := db.CountAdmins(ctx); n != 0 {
 		t.Errorf("初始应为 0，实际=%d", n)
 	}
-	db.CreateUser(ctx, "admin1", "h", "admin")
-	db.CreateUser(ctx, "admin2", "h", "admin")
-	db.CreateUser(ctx, "user1", "h", "user")
+	_, _ = db.CreateUser(ctx, "admin1", "h", "admin")
+	_, _ = db.CreateUser(ctx, "admin2", "h", "admin")
+	_, _ = db.CreateUser(ctx, "user1", "h", "user")
 	if n, _ := db.CountAdmins(ctx); n != 2 {
 		t.Errorf("应为 2，实际=%d", n)
 	}

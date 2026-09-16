@@ -1,6 +1,9 @@
 package auth
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestHashAndVerifyPassword(t *testing.T) {
 	plain := "mysecret123"
@@ -21,7 +24,7 @@ func TestHashAndVerifyPassword(t *testing.T) {
 	}
 
 	// 错误密码
-	if err := VerifyPassword(hash, "wrongpass"); err != ErrPasswordMismatch {
+	if err := VerifyPassword(hash, "wrongpass"); !errors.Is(err, ErrPasswordMismatch) {
 		t.Errorf("错误密码应返回 ErrPasswordMismatch，实际=%v", err)
 	}
 }
@@ -30,7 +33,7 @@ func TestEmptyPassword(t *testing.T) {
 	if _, err := HashPassword(""); err == nil {
 		t.Error("空密码应报错")
 	}
-	if err := VerifyPassword("hash", ""); err != ErrPasswordMismatch {
+	if err := VerifyPassword("hash", ""); !errors.Is(err, ErrPasswordMismatch) {
 		t.Error("空密码应返回 ErrPasswordMismatch")
 	}
 }

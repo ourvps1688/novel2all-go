@@ -169,7 +169,7 @@ func isUniqueConstraintError(err error) bool {
 		return false
 	}
 	// modernc.org/sqlite error 包含 "UNIQUE constraint failed"
-	return errors.Is(err, sql.ErrNoRows) == false &&
+	return !errors.Is(err, sql.ErrNoRows) &&
 		(containsString(err.Error(), "UNIQUE constraint failed") ||
 			containsString(err.Error(), "constraint failed"))
 }

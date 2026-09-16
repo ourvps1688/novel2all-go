@@ -119,7 +119,9 @@ func TestAuthHandler_Me_Authorized(t *testing.T) {
 	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
 	loginRec := httptest.NewRecorder()
 	h.ServeHTTP(loginRec, loginReq)
-	cookies := loginRec.Result().Cookies()
+	loginResult := loginRec.Result()
+	defer loginResult.Body.Close()
+	cookies := loginResult.Cookies()
 	if len(cookies) == 0 {
 		t.Fatal("登录后应设置 cookie")
 	}
