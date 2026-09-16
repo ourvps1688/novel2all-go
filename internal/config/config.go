@@ -47,6 +47,7 @@ type LLMConfig struct {
 	DashScopeAPIKey string
 	DeepSeekAPIKey  string
 	MinimaxAPIKey   string
+	AnthropicAPIKey string // P1+ 可选
 }
 
 // SkillsConfig 技能配置
@@ -89,6 +90,7 @@ func Load(envPath string) (*Config, error) {
 			DashScopeAPIKey: getEnv("DASHSCOPE_API_KEY", ""),
 			DeepSeekAPIKey:  getEnv("DEEPSEEK_API_KEY", ""),
 			MinimaxAPIKey:   getEnv("MINIMAX_API_KEY", ""),
+			AnthropicAPIKey: getEnv("ANTHROPIC_API_KEY", ""),
 		},
 		Skills: SkillsConfig{
 			Dir:         getEnv("SKILLS_DIR", "internal/skills/assets"),
