@@ -41,8 +41,11 @@ linters-settings:
     checks: ["all"]
 
   # errcheck：检查未处理的 error
+  # ⚠️ check-blank: false — 允许 `_ = someFunc()` 模式
+  #   理由：HTTP 响应已发送后再 Encode 失败无意义（客户端可能已断开）
+  #   严格项目可改 true，但每个 `_ =` 都要替换为显式处理
   errcheck:
-    check-blank: true
+    check-blank: false
     check-type-assertions: true
 
   # gosimple：代码简化建议（含 S1008 等）

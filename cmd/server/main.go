@@ -54,7 +54,7 @@ func run() error {
 	)
 
 	// 4. P1 装配：LLM router + Skills loader
-	llmRouter := llm.NewRouter(llm.LLMConfig{
+	llmRouter := llm.NewRouter(llm.Config{
 		DashScopeAPIKey: cfg.LLM.DashScopeAPIKey,
 		DeepSeekAPIKey:  cfg.LLM.DeepSeekAPIKey,
 		MinimaxAPIKey:   cfg.LLM.MinimaxAPIKey,

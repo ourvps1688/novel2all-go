@@ -110,6 +110,7 @@ func (h *SkillsHandler) list(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(out)
 }
 
+//nolint:gocyclo // SSE 流转发天然多分支（select 多 case + 多种 chunk 类型）
 func (h *SkillsHandler) executeStream(w http.ResponseWriter, r *http.Request, name string) {
 	var req ExecuteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -136,43 +137,36 @@ func (h *SkillsHandler) executeStream(w http.ResponseWriter, r *http.Request, na
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 
-	// 拼 LLM request
-	llmReq := llm.Request{
-		Task: llm.TaskUnknown,
-		Messages: []llm.Message{
-			{Role: "system", Content: ""}, // 占位，下面覆盖
-			{Role: "user", Content: req.Input},
-		},
-		Stream:           true,
-		OverrideProvider: llm.ProviderName(req.Provider),
-		OverrideModel:    req.Model,
-	}
-	if req.Task != "" {
-		llmReq.Task = llm.TaskType(req.Task)
+	// 拼执行输入（task/provider/model 传给 executor）
+	input := skills.ExecuteInput{
+		SkillName: name,
+		UserInput: req.Input,
+		Variables: req.Variables,
+		Task:      req.Task,
+		Provider:  req.Provider,
+		Model:     req.Model,
 	}
 
-	// 加载 skill body
-	skill, err := h.loader.Get(name)
-	if err != nil {
+	// 提前检查 skill 存在（避免 executor 异步报错时 SSE 已发送 started）
+	if _, err := h.loader.Get(name); err != nil {
 		sendSSE(w, flusher, SSEEvent{Event: "error", Error: err.Error()})
 		return
 	}
-	llmReq.Messages[0].Content = skill.Body
 
 	// 发送 started 事件
+	taskLabel := req.Task
+	if taskLabel == "" {
+		taskLabel = "UNKNOWN"
+	}
 	sendSSE(w, flusher, SSEEvent{Event: "started", Meta: map[string]string{
-		"skill": name, "task": string(llmReq.Task),
+		"skill": name, "task": taskLabel,
 	}})
 
 	// 流式调用
 	ch := make(chan llm.Chunk, 32)
 	errCh := make(chan error, 1)
 	go func() {
-		err := h.executor.ExecuteStream(ctx, skills.ExecuteInput{
-			SkillName: name,
-			UserInput: req.Input,
-			Variables: req.Variables,
-		}, ch)
+		err := h.executor.ExecuteStream(ctx, input, ch)
 		errCh <- err
 	}()
 
@@ -217,31 +211,19 @@ func (h *SkillsHandler) executeSync(w http.ResponseWriter, r *http.Request, name
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 
-	llmReq := llm.Request{
-		Task: llm.TaskUnknown,
-		Messages: []llm.Message{
-			{Role: "user", Content: req.Input},
-		},
-		Stream:           false,
-		OverrideProvider: llm.ProviderName(req.Provider),
-		OverrideModel:    req.Model,
-	}
-	if req.Task != "" {
-		llmReq.Task = llm.TaskType(req.Task)
-	}
-
-	skill, err := h.loader.Get(name)
-	if err != nil {
+	if _, err := h.loader.Get(name); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	llmReq.Messages = append([]llm.Message{{Role: "system", Content: skill.Body}}, llmReq.Messages...)
 
 	// 直接调 executor
 	result, err := h.executor.Execute(ctx, skills.ExecuteInput{
 		SkillName: name,
 		UserInput: req.Input,
 		Variables: req.Variables,
+		Task:      req.Task,
+		Provider:  req.Provider,
+		Model:     req.Model,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

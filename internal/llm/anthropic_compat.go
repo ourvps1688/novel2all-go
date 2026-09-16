@@ -91,8 +91,12 @@ func (p *AnthropicCompat) Chat(ctx context.Context, req Request) (*Response, err
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%s: HTTP %d: %s", p.name, resp.StatusCode, string(b))
+		b, readErr := io.ReadAll(resp.Body)
+		body := string(b)
+		if readErr != nil {
+			body = fmt.Sprintf("<read body failed: %v>", readErr)
+		}
+		return nil, fmt.Errorf("%s: HTTP %d: %s", p.name, resp.StatusCode, body)
 	}
 
 	var data antResponse
@@ -112,6 +116,8 @@ func (p *AnthropicCompat) Chat(ctx context.Context, req Request) (*Response, err
 }
 
 // ChatStream 流式
+//
+//nolint:gocyclo // SSE 流处理天然多分支（line 解析 + EOF + JSON unmarshal + select）
 func (p *AnthropicCompat) ChatStream(ctx context.Context, req Request, ch chan<- Chunk) error {
 	defer close(ch)
 
@@ -132,8 +138,12 @@ func (p *AnthropicCompat) ChatStream(ctx context.Context, req Request, ch chan<-
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		b, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("%s: HTTP %d: %s", p.name, resp.StatusCode, string(b))
+		b, readErr := io.ReadAll(resp.Body)
+		body := string(b)
+		if readErr != nil {
+			body = fmt.Sprintf("<read body failed: %v>", readErr)
+		}
+		err := fmt.Errorf("%s: HTTP %d: %s", p.name, resp.StatusCode, body)
 		ch <- Chunk{Err: err}
 		return err
 	}

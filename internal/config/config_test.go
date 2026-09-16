@@ -61,7 +61,7 @@ NOVEL2ALL_REPO=test/repo
 
 INVALID_LINE_NO_EQUAL
 `
-	if err := os.WriteFile(envPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(envPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("写入临时 .env 失败：%v", err)
 	}
 
@@ -80,7 +80,7 @@ NOVEL2ALL_REPO=test/repo
 # 注释
 DASHSCOPE_API_KEY=test-dashscope-key
 `
-	if err := os.WriteFile(envPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(envPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("写入临时 .env 失败：%v", err)
 	}
 

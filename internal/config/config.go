@@ -14,6 +14,19 @@ import (
 	"strings"
 )
 
+// 配置默认值常量（goconst: 让重复字符串提取为常量）
+const (
+	defaultHTTPHost    = "0.0.0.0"
+	defaultHTTPPort    = 8000
+	defaultLogLevel    = "info"
+	defaultLogFormat   = "json"
+	defaultDBDriver    = "sqlite3"
+	defaultDBDSN       = "data/novel2all.db"
+	defaultSkillsDir   = "internal/skills/assets"
+	defaultMaxParallel = 4
+	defaultRepoOwner   = "ourvps1688/novel2all-go"
+)
+
 // Config 是 novel2all-go 的完整配置
 type Config struct {
 	HTTP   HTTPConfig
@@ -75,16 +88,16 @@ func Load(envPath string) (*Config, error) {
 	// 2. 再用环境变量（可能来自 .env 或外部注入）初始化 Config
 	cfg := &Config{
 		HTTP: HTTPConfig{
-			Host: getEnv("HTTP_HOST", "0.0.0.0"),
-			Port: getEnvInt("HTTP_PORT", 8000),
+			Host: getEnv("HTTP_HOST", defaultHTTPHost),
+			Port: getEnvInt("HTTP_PORT", defaultHTTPPort),
 		},
 		Log: LogConfig{
-			Level:  getEnv("LOG_LEVEL", "info"),
-			Format: getEnv("LOG_FORMAT", "json"),
+			Level:  getEnv("LOG_LEVEL", defaultLogLevel),
+			Format: getEnv("LOG_FORMAT", defaultLogFormat),
 		},
 		DB: DBConfig{
-			Driver: getEnv("DB_DRIVER", "sqlite3"),
-			DSN:    getEnv("DB_DSN", "data/novel2all.db"),
+			Driver: getEnv("DB_DRIVER", defaultDBDriver),
+			DSN:    getEnv("DB_DSN", defaultDBDSN),
 		},
 		LLM: LLMConfig{
 			DashScopeAPIKey: getEnv("DASHSCOPE_API_KEY", ""),
@@ -93,12 +106,12 @@ func Load(envPath string) (*Config, error) {
 			AnthropicAPIKey: getEnv("ANTHROPIC_API_KEY", ""),
 		},
 		Skills: SkillsConfig{
-			Dir:         getEnv("SKILLS_DIR", "internal/skills/assets"),
-			MaxParallel: getEnvInt("SKILLS_MAX_PARALLEL", 4),
+			Dir:         getEnv("SKILLS_DIR", defaultSkillsDir),
+			MaxParallel: getEnvInt("SKILLS_MAX_PARALLEL", defaultMaxParallel),
 		},
 		GitHub: GitHubConfig{
 			Token: getEnv("GHCR_TOKEN", ""),
-			Repo:  getEnv("NOVEL2ALL_REPO", "ourvps1688/novel2all-go"),
+			Repo:  getEnv("NOVEL2ALL_REPO", defaultRepoOwner),
 		},
 	}
 
@@ -130,7 +143,7 @@ func (c *Config) Validate() error {
 	}
 
 	switch c.DB.Driver {
-	case "sqlite3":
+	case defaultDBDriver:
 	default:
 		errs = append(errs, fmt.Sprintf("DB_DRIVER 必须是 sqlite3（P0 阶段），当前=%q", c.DB.Driver))
 	}

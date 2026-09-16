@@ -25,13 +25,19 @@ func (e *Executor) Execute(ctx context.Context, input ExecuteInput) (*ExecuteRes
 		return nil, err
 	}
 
+	task := llm.TaskUnknown
+	if input.Task != "" {
+		task = llm.TaskType(input.Task)
+	}
 	req := llm.Request{
-		Task: llm.TaskUnknown, // executor 不预设 task，由 router 默认 deepseek
+		Task: task,
 		Messages: []llm.Message{
 			{Role: "system", Content: skill.Body},
 			{Role: "user", Content: input.UserInput},
 		},
-		Stream: false,
+		Stream:           false,
+		OverrideProvider: llm.ProviderName(input.Provider),
+		OverrideModel:    input.Model,
 	}
 
 	resp, err := e.router.Chat(ctx, req)
@@ -56,13 +62,19 @@ func (e *Executor) ExecuteStream(ctx context.Context, input ExecuteInput, ch cha
 		return err
 	}
 
+	task := llm.TaskUnknown
+	if input.Task != "" {
+		task = llm.TaskType(input.Task)
+	}
 	req := llm.Request{
-		Task: llm.TaskUnknown,
+		Task: task,
 		Messages: []llm.Message{
 			{Role: "system", Content: skill.Body},
 			{Role: "user", Content: input.UserInput},
 		},
-		Stream: true,
+		Stream:           true,
+		OverrideProvider: llm.ProviderName(input.Provider),
+		OverrideModel:    input.Model,
 	}
 
 	return e.router.ChatStream(ctx, req, ch)

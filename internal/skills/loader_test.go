@@ -115,8 +115,11 @@ func TestLoader_Get(t *testing.T) {
 }
 
 func TestLoader_Get_NotFound(t *testing.T) {
-	l, _ := NewLoader()
-	_, err := l.Get("non-existent-skill")
+	l, err := NewLoader()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = l.Get("non-existent-skill")
 	if err == nil {
 		t.Error("不存在的 skill 应该报错")
 	}

@@ -32,6 +32,15 @@ type ExecuteInput struct {
 
 	// Variables 模板变量（用于未来扩展，V0.1 暂未使用）
 	Variables map[string]any
+
+	// 可选：路由 task 类型（WRITING/CONSISTENCY 等），空 = 走 router 默认（deepseek）
+	Task string
+
+	// 可选：强制 provider（dashscope/deepseek/minimax/anthropic），空 = 走路由
+	Provider string
+
+	// 可选：强制 model 名（覆盖 provider 默认 model）
+	Model string
 }
 
 // ExecuteResult 执行结果（非流式）

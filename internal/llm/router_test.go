@@ -5,14 +5,14 @@ import (
 )
 
 func TestNewRouter_NoKeys(t *testing.T) {
-	r := NewRouter(LLMConfig{})
+	r := NewRouter(Config{})
 	if got := len(r.AvailableProviders()); got != 0 {
 		t.Errorf("无 key 时应有 0 个 provider，实际=%d", got)
 	}
 }
 
 func TestNewRouter_AllKeys(t *testing.T) {
-	r := NewRouter(LLMConfig{
+	r := NewRouter(Config{
 		DashScopeAPIKey: "k1",
 		DeepSeekAPIKey:  "k2",
 		MinimaxAPIKey:   "k3",
@@ -24,7 +24,7 @@ func TestNewRouter_AllKeys(t *testing.T) {
 }
 
 func TestRouter_Resolve_Writing(t *testing.T) {
-	r := NewRouter(LLMConfig{
+	r := NewRouter(Config{
 		DeepSeekAPIKey: "k2",
 		MinimaxAPIKey:  "k3",
 	})
@@ -41,7 +41,7 @@ func TestRouter_Resolve_Writing(t *testing.T) {
 }
 
 func TestRouter_Resolve_Consistency(t *testing.T) {
-	r := NewRouter(LLMConfig{
+	r := NewRouter(Config{
 		DeepSeekAPIKey: "k2",
 		MinimaxAPIKey:  "k3",
 	})
@@ -55,7 +55,7 @@ func TestRouter_Resolve_Consistency(t *testing.T) {
 }
 
 func TestRouter_Resolve_OverrideProvider(t *testing.T) {
-	r := NewRouter(LLMConfig{
+	r := NewRouter(Config{
 		DashScopeAPIKey: "k1",
 		DeepSeekAPIKey:  "k2",
 	})
@@ -72,7 +72,7 @@ func TestRouter_Resolve_OverrideProvider(t *testing.T) {
 }
 
 func TestRouter_Resolve_OverrideProviderNotConfigured(t *testing.T) {
-	r := NewRouter(LLMConfig{
+	r := NewRouter(Config{
 		DeepSeekAPIKey: "k2",
 	})
 	_, _, err := r.resolve(Request{
@@ -84,7 +84,7 @@ func TestRouter_Resolve_OverrideProviderNotConfigured(t *testing.T) {
 }
 
 func TestRouter_Resolve_Fallback(t *testing.T) {
-	r := NewRouter(LLMConfig{
+	r := NewRouter(Config{
 		DeepSeekAPIKey: "k2",
 		// minimax 未配置
 	})
@@ -99,7 +99,7 @@ func TestRouter_Resolve_Fallback(t *testing.T) {
 }
 
 func TestRouter_Resolve_NoProvider(t *testing.T) {
-	r := NewRouter(LLMConfig{}) // 全部未配置
+	r := NewRouter(Config{}) // 全部未配置
 	_, _, err := r.resolve(Request{Task: TaskWriting})
 	if err == nil {
 		t.Error("全部 provider 未配置应该报错")

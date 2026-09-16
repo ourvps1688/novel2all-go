@@ -30,7 +30,7 @@ const (
 )
 
 // NewRouter 创建 Router，自动注册所有 provider
-func NewRouter(cfg LLMConfig) *Router {
+func NewRouter(cfg Config) *Router {
 	r := &Router{
 		providers: make(map[ProviderName]Provider),
 		routes:    defaultRoutes(),
@@ -161,8 +161,9 @@ func (r *Router) Chat(ctx context.Context, req Request) (*Response, error) {
 // ErrProviderNotConfigured provider 未配置
 var ErrProviderNotConfigured = errors.New("provider not configured")
 
-// LLMConfig LLM provider 配置（从 internal/config.LLMConfig 镜像）
-type LLMConfig struct {
+// Config LLM provider 配置（从 internal/config.LLMConfig 镜像）
+// 镜像内部 config.LLMConfig 是必要的，因为跨包共享结构会引入循环依赖
+type Config struct {
 	DashScopeAPIKey string
 	DeepSeekAPIKey  string
 	MinimaxAPIKey   string

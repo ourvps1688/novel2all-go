@@ -93,8 +93,12 @@ func (p *OpenAICompat) Chat(ctx context.Context, req Request) (*Response, error)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%s: HTTP %d: %s", p.name, resp.StatusCode, string(b))
+		b, readErr := io.ReadAll(resp.Body)
+		body := string(b)
+		if readErr != nil {
+			body = fmt.Sprintf("<read body failed: %v>", readErr)
+		}
+		return nil, fmt.Errorf("%s: HTTP %d: %s", p.name, resp.StatusCode, body)
 	}
 
 	var data oaiChatResponse
@@ -137,8 +141,12 @@ func (p *OpenAICompat) ChatStream(ctx context.Context, req Request, ch chan<- Ch
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		b, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("%s: HTTP %d: %s", p.name, resp.StatusCode, string(b))
+		b, readErr := io.ReadAll(resp.Body)
+		body := string(b)
+		if readErr != nil {
+			body = fmt.Sprintf("<read body failed: %v>", readErr)
+		}
+		err := fmt.Errorf("%s: HTTP %d: %s", p.name, resp.StatusCode, body)
 		ch <- Chunk{Err: err}
 		return err
 	}

@@ -14,15 +14,19 @@ import (
 
 // TestSkillsList 测试 GET /api/skills
 func TestSkillsList(t *testing.T) {
-	loader, _ := skills.NewLoader()
+	loader, err := skills.NewLoader()
+
+	if err != nil {
+		t.Fatal(err)
+	}
 	if loader == nil {
 		t.Fatal("loader nil")
 	}
-	router := llm.NewRouter(llm.LLMConfig{DeepSeekAPIKey: "test"})
+	router := llm.NewRouter(llm.Config{DeepSeekAPIKey: "test"})
 	exec := skills.NewExecutor(loader, router)
 	h := NewSkillsHandler(exec, loader)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/skills", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/skills", http.NoBody)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -40,8 +44,12 @@ func TestSkillsList(t *testing.T) {
 
 // TestSkillsExecute_BadRequest 测试缺 input 字段
 func TestSkillsExecute_BadRequest(t *testing.T) {
-	loader, _ := skills.NewLoader()
-	router := llm.NewRouter(llm.LLMConfig{DeepSeekAPIKey: "test"})
+	loader, err := skills.NewLoader()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := llm.NewRouter(llm.Config{DeepSeekAPIKey: "test"})
 	exec := skills.NewExecutor(loader, router)
 	h := NewSkillsHandler(exec, loader)
 
@@ -57,8 +65,12 @@ func TestSkillsExecute_BadRequest(t *testing.T) {
 
 // TestSkillsExecute_NotFound 测试不存在的 skill
 func TestSkillsExecute_NotFound(t *testing.T) {
-	loader, _ := skills.NewLoader()
-	router := llm.NewRouter(llm.LLMConfig{DeepSeekAPIKey: "test"})
+	loader, err := skills.NewLoader()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := llm.NewRouter(llm.Config{DeepSeekAPIKey: "test"})
 	exec := skills.NewExecutor(loader, router)
 	h := NewSkillsHandler(exec, loader)
 
@@ -88,8 +100,12 @@ func TestSkillsExecute_NotFound(t *testing.T) {
 
 // TestSkillsExecuteSync_NotFound 测试 sync 路径的 404
 func TestSkillsExecuteSync_NotFound(t *testing.T) {
-	loader, _ := skills.NewLoader()
-	router := llm.NewRouter(llm.LLMConfig{DeepSeekAPIKey: "test"})
+	loader, err := skills.NewLoader()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := llm.NewRouter(llm.Config{DeepSeekAPIKey: "test"})
 	exec := skills.NewExecutor(loader, router)
 	h := NewSkillsHandler(exec, loader)
 

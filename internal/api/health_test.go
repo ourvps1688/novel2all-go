@@ -9,7 +9,7 @@ import (
 
 func TestHealthHandler(t *testing.T) {
 	h := NewHealthHandler()
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
 	rec := httptest.NewRecorder()
 
 	h.ServeHTTP(rec, req)
@@ -32,7 +32,7 @@ func TestHealthHandler(t *testing.T) {
 
 func TestVersionHandler(t *testing.T) {
 	h := NewVersionHandler()
-	req := httptest.NewRequest(http.MethodGet, "/version", nil)
+	req := httptest.NewRequest(http.MethodGet, "/version", http.NoBody)
 	rec := httptest.NewRecorder()
 
 	h.ServeHTTP(rec, req)
