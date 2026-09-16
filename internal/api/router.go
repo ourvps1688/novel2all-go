@@ -25,8 +25,8 @@ type Deps struct {
 // P1: + /api/skills/*
 // P1-E: /api/auth/{login,logout,me}
 // P1-F: + register, users CRUD, audit
-//       + /api/roles
-//       + /api/cache/{stats,prompt-stats}
+//   - /api/roles
+//   - /api/cache/{stats,prompt-stats}
 func Router(deps Deps) *http.ServeMux {
 	mux := http.NewServeMux()
 

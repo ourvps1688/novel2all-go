@@ -10,23 +10,23 @@ import (
 
 // CacheStats LLM cache 运行时统计
 type CacheStats struct {
-	HitRate    float64 `json:"hit_rate"`
-	Hits       int64   `json:"hits"`
-	Misses     int64   `json:"misses"`
-	Size       int     `json:"size"`
-	MaxSize    int     `json:"max_size"`
-	Backend    string  `json:"backend"`
-	LockBackend string `json:"lock_backend"`
-	TTLSeconds int     `json:"ttl_seconds"`
+	HitRate     float64 `json:"hit_rate"`
+	Hits        int64   `json:"hits"`
+	Misses      int64   `json:"misses"`
+	Size        int     `json:"size"`
+	MaxSize     int     `json:"max_size"`
+	Backend     string  `json:"backend"`
+	LockBackend string  `json:"lock_backend"`
+	TTLSeconds  int     `json:"ttl_seconds"`
 }
 
 // PromptCacheStats Prompt prefix cache 统计
 type PromptCacheStats struct {
-	PrefixHits        int64   `json:"prefix_hits"`
-	PrefixMisses      int64   `json:"prefix_misses"`
-	Total             int64   `json:"total"`
-	HitRate           float64 `json:"hit_rate"`
-	CostSavedCNY      float64 `json:"cost_saved_cny"`
+	PrefixHits          int64   `json:"prefix_hits"`
+	PrefixMisses        int64   `json:"prefix_misses"`
+	Total               int64   `json:"total"`
+	HitRate             float64 `json:"hit_rate"`
+	CostSavedCNY        float64 `json:"cost_saved_cny"`
 	PotentialSavingsCNY float64 `json:"potential_savings_cny"`
 }
 
@@ -45,13 +45,13 @@ func NewCacheHandler() *CacheHandler {
 
 // 简单统计（mock）
 var (
-	cacheHits      int64
-	cacheMisses    int64
-	prefixHits     int64
-	prefixMisses   int64
-	cacheSize      int64
-	cacheMaxSize   int64 = 1000
-	cacheTTLSec    int64 = 3600
+	cacheHits    int64
+	cacheMisses  int64
+	prefixHits   int64
+	prefixMisses int64
+	cacheSize    int64
+	cacheMaxSize int64 = 1000
+	cacheTTLSec  int64 = 3600
 )
 
 // ServeHTTP 路由
@@ -111,8 +111,8 @@ func (h *CacheHandler) handlePromptStats(w http.ResponseWriter, r *http.Request)
 		PrefixMisses:        misses,
 		Total:               total,
 		HitRate:             hitRate,
-		CostSavedCNY:        0.0,  // mock
-		PotentialSavingsCNY: 0.0,  // mock
+		CostSavedCNY:        0.0, // mock
+		PotentialSavingsCNY: 0.0, // mock
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(stats)

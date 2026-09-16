@@ -73,7 +73,7 @@ type AuditEntryResponse struct {
 // AuditListResponse GET /api/auth/audit
 type AuditListResponse struct {
 	Entries []AuditEntryResponse `json:"entries"`
-	Count   int                   `json:"count"`
+	Count   int                  `json:"count"`
 }
 
 // LoginRequest POST /api/auth/login
@@ -89,7 +89,6 @@ type LoginResponse struct {
 }
 
 // ServeHTTP 路由分发
-//
 //
 //	POST /api/auth/login
 //	POST /api/auth/logout
@@ -279,7 +278,7 @@ func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request) {
 
 	// 写审计
 	uid := user.ID
-	_ = h.manager.Logout // 引用避免 unused（其实 Register 没 log 这里加）
+	_ = h.manager.Logout         // 引用避免 unused（其实 Register 没 log 这里加）
 	_ = h.manager.GetUserByToken // 同上
 	_ = store.AuditEntry{
 		EventType: "register",
