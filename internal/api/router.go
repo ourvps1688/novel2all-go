@@ -53,6 +53,23 @@ func Router(deps Deps) *http.ServeMux {
 	// Cache API（P1-F mock）
 	mux.Handle("/api/cache/", NewCacheHandler())
 
+	// Status API（P1-F）
+	mux.Handle("/api/status", NewStatusHandler())
+
+	// Models API（P1-F）
+	// 注册 /api/model/ subtree（匹配 /api/model/{current,switch}）
+	// + /api/models/ 精确（带 slash，匹配 listModels）
+	//   /api/models 不带 slash → ServeMux 自动 301 重定向到 /api/models/
+	if deps.Router != nil {
+		modelsHandler := NewModelsHandler(deps.Router)
+		mux.Handle("/api/model/", modelsHandler)
+		mux.Handle("/api/models/", modelsHandler)
+	}
+
+	// Projects API（P1-F, 内存版）
+	mux.Handle("/api/projects/", NewProjectsHandler())
+	// /api/projects 不带 slash → ServeMux 自动 301 重定向到 /api/projects/
+
 	// 根路径提示
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -60,7 +77,7 @@ func Router(deps Deps) *http.ServeMux {
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("novel2all-go v0.4.0 — see /health, /version, /api/auth, /api/skills, /api/roles, /api/cache\n"))
+		_, _ = w.Write([]byte("novel2all-go v0.5.0 — see /health, /version, /api/auth, /api/skills, /api/roles, /api/cache, /api/status, /api/models, /api/projects\n"))
 	})
 
 	return mux

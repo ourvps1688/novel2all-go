@@ -77,6 +77,12 @@ type Provider interface {
 	// Name 返回 provider 名
 	Name() ProviderName
 
+	// DefaultModel 返回 provider 的默认模型名（用于 /api/models 列出 + /api/model/switch 校验）
+	DefaultModel() string
+
+	// APIBase 返回 provider 的 base URL（用于 /api/models 调试展示；空字符串 = 用 SDK 默认）
+	APIBase() string
+
 	// ChatStream 流式调用，发送分片到 ch，结束时关闭 ch
 	ChatStream(ctx context.Context, req Request, ch chan<- Chunk) error
 

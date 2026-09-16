@@ -39,6 +39,12 @@ func NewAnthropicCompat(name ProviderName, apiKey, baseURL, defaultModel string)
 func (p *AnthropicCompat) Name() ProviderName { return p.name }
 func (p *AnthropicCompat) Available() bool    { return p.apiKey != "" }
 
+// DefaultModel 返回 Anthropic 兼容 provider 的默认模型名
+func (p *AnthropicCompat) DefaultModel() string { return p.model }
+
+// APIBase 返回 Anthropic 兼容 provider 的 base URL
+func (p *AnthropicCompat) APIBase() string { return p.baseURL }
+
 // antRequest Anthropic Messages API 请求
 type antRequest struct {
 	Model       string       `json:"model"`

@@ -39,6 +39,12 @@ func NewOpenAICompat(name ProviderName, apiKey, baseURL, defaultModel string) *O
 func (p *OpenAICompat) Name() ProviderName { return p.name }
 func (p *OpenAICompat) Available() bool    { return p.apiKey != "" }
 
+// DefaultModel 返回 OpenAI 兼容 provider 的默认模型名
+func (p *OpenAICompat) DefaultModel() string { return p.model }
+
+// APIBase 返回 OpenAI 兼容 provider 的 base URL
+func (p *OpenAICompat) APIBase() string { return p.baseURL }
+
 // oaiChatRequest OpenAI 协议请求体
 type oaiChatRequest struct {
 	Model       string       `json:"model"`

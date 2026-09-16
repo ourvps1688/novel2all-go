@@ -74,6 +74,13 @@ func (r *Router) AvailableProviders() []ProviderName {
 	return out
 }
 
+// ProviderByName 按名查 provider（返回 nil 如果未配置）
+func (r *Router) ProviderByName(name ProviderName) Provider {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.providers[name]
+}
+
 // resolve 解析请求到具体 provider + model
 func (r *Router) resolve(req Request) (Provider, string, error) {
 	r.mu.RLock()
