@@ -26,7 +26,7 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.Log.Format != "json" {
 		t.Errorf("默认 LOG_FORMAT 应为 json，实际=%q", cfg.Log.Format)
 	}
-	if cfg.DB.Driver != "sqlite3" {
+	if cfg.DB.Driver != defaultDBDriver {
 		t.Errorf("默认 DB_DRIVER 应为 sqlite3，实际=%q", cfg.DB.Driver)
 	}
 	if cfg.GitHub.Repo != "ourvps1688/novel2all-go" {

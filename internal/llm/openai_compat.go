@@ -119,6 +119,8 @@ func (p *OpenAICompat) Chat(ctx context.Context, req Request) (*Response, error)
 }
 
 // ChatStream 流式
+//
+//nolint:gocyclo // SSE 流处理天然多分支（line 解析 + EOF + JSON unmarshal + select）
 func (p *OpenAICompat) ChatStream(ctx context.Context, req Request, ch chan<- Chunk) error {
 	defer close(ch)
 

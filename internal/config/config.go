@@ -131,13 +131,13 @@ func (c *Config) Validate() error {
 	}
 
 	switch c.Log.Level {
-	case "debug", "info", "warn", "error":
+	case "debug", defaultLogLevel, "warn", "error":
 	default:
 		errs = append(errs, fmt.Sprintf("LOG_LEVEL 必须是 debug/info/warn/error 之一，当前=%q", c.Log.Level))
 	}
 
 	switch c.Log.Format {
-	case "json", "text":
+	case defaultLogFormat, "text":
 	default:
 		errs = append(errs, fmt.Sprintf("LOG_FORMAT 必须是 json/text 之一，当前=%q", c.Log.Format))
 	}
