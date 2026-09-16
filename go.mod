@@ -1,6 +1,8 @@
 module github.com/ourvps1688/novel2all-go
 
-go 1.26.0
+go 1.22
+
+toolchain go1.22.12
 
 require (
 	golang.org/x/crypto v0.57.0
