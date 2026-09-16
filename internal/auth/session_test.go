@@ -139,7 +139,7 @@ func TestSessionManager_SessionExpired(t *testing.T) {
 		SameSite:   0,
 	})
 	hash, _ := HashPassword("p")
-	db.CreateUser(ctx, "u", hash, "user")
+	_, _ = db.CreateUser(ctx, "u", hash, "user")
 	token, _, _ := sm.Login(ctx, "u", "p", "", "")
 
 	// 等待过期

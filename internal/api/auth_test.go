@@ -29,7 +29,7 @@ func setupTestAuth(t *testing.T) (*AuthHandler, *store.DB) {
 
 	// 创建测试用户
 	hash, _ := auth.HashPassword("testpass")
-	db.CreateUser(ctx, "alice", hash, "user")
+	_, _ = db.CreateUser(ctx, "alice", hash, "user")
 
 	sm := auth.NewSessionManager(db, auth.DefaultSessionConfig())
 	limiter := auth.NewRateLimiter(5, 1*time.Minute, 30*time.Second)
