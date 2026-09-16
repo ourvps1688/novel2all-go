@@ -52,6 +52,72 @@ func NewSessionManager(s *store.DB, config SessionConfig) *SessionManager {
 	return &SessionManager{store: s, config: config}
 }
 
+// RegisterInput 注册用户输入
+type RegisterInput struct {
+	Username string
+	Password string
+	Role     string // 默认 "user"
+}
+
+// Register 创建新用户（admin 可指定 role，普通用户强制 user）
+func (m *SessionManager) Register(ctx context.Context, input RegisterInput) (*store.User, error) {
+	if input.Username == "" || input.Password == "" {
+		return nil, fmt.Errorf("username and password required")
+	}
+	if len(input.Password) < 6 {
+		return nil, fmt.Errorf("password too short (min 6 chars)")
+	}
+	if len(input.Username) < 3 {
+		return nil, fmt.Errorf("username too short (min 3 chars)")
+	}
+
+	role := input.Role
+	if role == "" {
+		role = "user"
+	}
+	if role != "admin" && role != "user" {
+		return nil, fmt.Errorf("invalid role: %q", role)
+	}
+
+	hash, err := HashPassword(input.Password)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
+
+	id, err := m.store.CreateUser(ctx, input.Username, hash, role)
+	if err != nil {
+		return nil, err
+	}
+
+	return m.store.GetUserByID(ctx, id)
+}
+
+// ListUsers 列出所有用户（admin guard）
+func (m *SessionManager) ListUsers(ctx context.Context) ([]*store.User, error) {
+	return m.store.ListUsers(ctx)
+}
+
+// GetUserByID 直接按 ID 查用户（不验 session）
+func (m *SessionManager) GetUserByID(ctx context.Context, id int64) (*store.User, error) {
+	return m.store.GetUserByID(ctx, id)
+}
+
+// ListAudit 查审计日志（admin guard 用）
+func (m *SessionManager) ListAudit(ctx context.Context, limit, offset int) ([]*store.AuditEntry, error) {
+	return m.store.ListAudit(ctx, limit, offset)
+}
+
+// DeleteUser 删除用户（admin guard，self-delete 防护）
+func (m *SessionManager) DeleteUser(ctx context.Context, requestor, target *store.User) error {
+	if !IsAdmin(requestor) {
+		return fmt.Errorf("admin required")
+	}
+	if requestor.ID == target.ID {
+		return fmt.Errorf("cannot delete yourself")
+	}
+	return m.store.DeleteUser(ctx, target.ID)
+}
+
 // Login 验证用户名密码，成功返回新 session token
 func (m *SessionManager) Login(ctx context.Context, username, password, ip, userAgent string) (string, *store.User, error) {
 	u, err := m.store.GetUserByUsername(ctx, username)

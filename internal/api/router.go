@@ -24,6 +24,9 @@ type Deps struct {
 // P0: /health, /version
 // P1: + /api/skills/*
 // P1-E: /api/auth/{login,logout,me}
+// P1-F: + register, users CRUD, audit
+//       + /api/roles
+//       + /api/cache/{stats,prompt-stats}
 func Router(deps Deps) *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -31,7 +34,7 @@ func Router(deps Deps) *http.ServeMux {
 	mux.Handle("/health", NewHealthHandler())
 	mux.Handle("/version", NewVersionHandler())
 
-	// Auth API（P1-E）
+	// Auth API（P1-E + P1-F 部分）
 	if deps.Session != nil && deps.Limiter != nil {
 		authHandler := NewAuthHandler(deps.Session, deps.Limiter)
 		mux.Handle("/api/auth/", authHandler)
@@ -44,6 +47,12 @@ func Router(deps Deps) *http.ServeMux {
 		mux.Handle("/api/skills/", skillsHandler)
 	}
 
+	// Roles API（P1-F）
+	mux.Handle("/api/roles", NewRolesHandler())
+
+	// Cache API（P1-F mock）
+	mux.Handle("/api/cache/", NewCacheHandler())
+
 	// 根路径提示
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -51,7 +60,7 @@ func Router(deps Deps) *http.ServeMux {
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("novel2all-go v0.1.0 — see /health, /version, /api/auth, /api/skills\n"))
+		_, _ = w.Write([]byte("novel2all-go v0.4.0 — see /health, /version, /api/auth, /api/skills, /api/roles, /api/cache\n"))
 	})
 
 	return mux
