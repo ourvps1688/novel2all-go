@@ -3,24 +3,21 @@
 #
 # 用法：
 #   golangci-lint run                 # 跑所有启用规则
-#   golangci-lint run --fix          # 自动修复（gofmt/gosimple 等）
-#   golangci-lint run ./internal/... # 跑子目录
+#   golangci-lint run --fix           # 自动修复（gofmt/gosimple 等）
+#   golangci-lint run ./internal/...  # 跑子目录
 
 run:
   # 超时（CI 用 5m）
   timeout: 5m
 
-  # 允许并行
+  # 允许并行 runner
   allow-parallel-runners: true
 
-  # 排除自动生成代码
-  skip-dirs:
-    - vendor
-    - bin
-    - data
-  skip-files:
-    - ".*\\.pb\\.go$"
-    - ".*_mock\\.go$"
+  # 默认要跑 build（先编译）
+  # 注意：v1.61+ 用 issues.exclude-dirs/files 而不是 run.skip-dirs/files
+  build-tags:
+    - ""
+  modules-download-mode: readonly
 
 # 输出格式
 output:
@@ -36,8 +33,8 @@ linters-settings:
   govet:
     enable-all: true
     disable:
-      - shadow  # 误报较多，按需开启
-      - fieldalignment  # 性能优化，不强制
+      - shadow       # 误报较多，按需开启
+      - fieldalignment # 性能优化，不强制
 
   # staticcheck
   staticcheck:
@@ -53,16 +50,17 @@ linters-settings:
     checks: ["all"]
 
   # revive：替代 golint，更现代的 style 检查
+  # ⚠️ rule 名字必须用 enum 列出的：var-naming / dot-imports / exported / if-return / 等
   revive:
     rules:
       - name: var-naming
       - name: package-comments
       - name: exported
       - name: dot-imports
-      - name: error-returned
+      - name: error-return       # ⚠️ 不是 error-returned
       - name: error-strings
       - name: if-return
-      - name: redundant-import-aliases
+      - name: redundant-import-alias  # ⚠️ 不是 redundant-import-aliases
 
   # gocritic：额外风格检查
   gocritic:
@@ -71,8 +69,8 @@ linters-settings:
       - style
       - performance
     disabled-checks:
-      - hugeParam      # 误报多
-      - rangeValCopy   # 误报多
+      - hugeParam
+      - rangeValCopy
 
   # gocyclo：圈复杂度（避免函数过长）
   gocyclo:
@@ -82,16 +80,12 @@ linters-settings:
   misspell:
     locale: US
     ignore-words:
-      - cancelled   # 英文接受 cancelled/canceled 都行
+      - cancelled
 
   # goconst：重复字符串 → 常量
   goconst:
     min-len: 3
     min-occurrences: 3
-
-  # bodyclose：HTTP body 必须关闭
-  bodyclose:
-    check-all: true
 
   # errorlint：用 %w 包装 error
   errorlint:
@@ -111,7 +105,7 @@ linters:
     - unused
 
     # 额外启用
-    - bodyclose     # HTTP body 必须关闭
+    - bodyclose     # HTTP body 必须关闭（不在 linters-settings 下）
     - errorlint     # %w 包装
     - gocritic      # 风格/性能
     - gocyclo       # 圈复杂度
@@ -126,11 +120,19 @@ issues:
   # 同文件多处相同问题 → 只报一次
   max-same-issues: 5
 
-  # 新代码默认 0 issue
+  # 0 issue 政策（max-issues-per-linter 已合并所有 per-dir）
   max-issues-per-linter: 0
-  max-issues-per-dir: 0
 
-  # 排除某些规则在特定路径
+  # 排除目录/文件（v1.61+ 用 exclude-* 不是 skip-*）
+  exclude-dirs:
+    - vendor
+    - bin
+    - data
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*_mock\\.go$"
+
+  # 排除规则
   exclude-rules:
     # 测试文件放宽要求
     - path: _test\.go
@@ -141,19 +143,13 @@ issues:
         - revive
       text: "should have comment|exported"
 
-    # examples / docs 放宽
+    # examples 放宽
     - path: examples/
       linters:
         - gocyclo
         - revive
 
-  # 不报的规则（误报或暂时不处理）
+  # 完全排除的检查（误报或暂时不处理）
   exclude:
-    # interface 兼容
-    - "composites"
-    # 行长度（不强制）
-    - "lll"
-
-# 仅在 main 分支跑严格规则
-# （开发分支可用 `--fast` flag）
-run-tests: true
+    - "composites"  # interface 兼容
+    - "lll"         # 行长度
