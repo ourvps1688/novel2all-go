@@ -2,7 +2,6 @@ package skills
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/ourvps1688/novel2all-go/internal/llm"
@@ -70,7 +69,8 @@ func (e *Executor) ExecuteStream(ctx context.Context, input ExecuteInput, ch cha
 }
 
 // ExecuteWithTask 显式指定 task type（用于需要 WRITING 等路由的场景）
-func (e *Executor) ExecuteWithTask(ctx context.Context, input ExecuteInput, task llm.TaskType) error {
+// TaskType 控制 router 选 provider（WRITING→minimax / 其他→deepseek）
+func (e *Executor) ExecuteWithTask(ctx context.Context, input ExecuteInput, task llm.TaskType, ch chan<- llm.Chunk) error {
 	skill, err := e.loader.Get(input.SkillName)
 	if err != nil {
 		return err
@@ -85,18 +85,5 @@ func (e *Executor) ExecuteWithTask(ctx context.Context, input ExecuteInput, task
 		Stream: true,
 	}
 
-	ch := make(chan llm.Chunk, 32)
-	go func() {
-		_ = e.router.ChatStream(ctx, req, ch)
-	}()
-
-	// 流式结果由调用方消费 ch
-	// （这个函数语义待定，本版本暂用 ExecuteStream）
-	for range ch {
-	}
-	if !errors.Is(ctx.Err(), context.Canceled) {
-		// 防止 nil deref
-	}
-	_ = skill
-	return nil
+	return e.router.ChatStream(ctx, req, ch)
 }

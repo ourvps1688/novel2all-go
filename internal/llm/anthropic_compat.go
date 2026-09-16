@@ -201,16 +201,13 @@ func (p *AnthropicCompat) do(ctx context.Context, body antRequest, stream bool) 
 // Anthropic 协议：system 单独字段，messages 只含 user/assistant
 func toAntRequest(model string, req Request) (antRequest, error) {
 	ar := antRequest{
-		Model:     model,
-		MaxTokens: req.MaxTokens,
-		Stream:    stream(req),
+		Model:       model,
+		MaxTokens:   req.MaxTokens,
+		Stream:      req.Stream,
 		Temperature: req.Temperature,
 	}
 	if ar.MaxTokens == 0 {
 		ar.MaxTokens = 4096
-	}
-	if !ar.Stream {
-		ar.Stream = false
 	}
 
 	var msgs []antMessage
@@ -229,11 +226,4 @@ func toAntRequest(model string, req Request) (antRequest, error) {
 	}
 	ar.Messages = msgs
 	return ar, nil
-}
-
-func stream(req Request) bool {
-	if req.Stream {
-		return true
-	}
-	return false
 }
