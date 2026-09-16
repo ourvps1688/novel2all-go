@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ourvps1688/novel2all-go/internal/llm"
@@ -23,7 +22,6 @@ import (
 //   - GET  /api/write/task/{id}     → 取单个任务状态
 //   - GET  /api/tracking            → 项目状态（mock）
 type WriteHandler struct {
-	mu       sync.RWMutex
 	tasks    *TaskManager
 	executor *skills.Executor
 	loader   *skills.Loader
@@ -97,6 +95,8 @@ func (h *WriteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //   - done: 完成（含 output_path, content_chars, task_id）
 //   - cancelled: 取消
 //   - error: 失败
+//
+//nolint:gocyclo // SSE handler 天然多分支（started/pre-check/chunks/progress/done/error/cancel）
 func (h *WriteHandler) handleStream(w http.ResponseWriter, r *http.Request) {
 	// 解析 query
 	chapter, err := parseInt64(r.URL.Query().Get("chapter"))
