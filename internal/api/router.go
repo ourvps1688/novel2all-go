@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ourvps1688/novel2all-go/internal/auth"
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 	"github.com/ourvps1688/novel2all-go/internal/obs"
 	"github.com/ourvps1688/novel2all-go/internal/skills"
@@ -11,21 +12,30 @@ import (
 
 // Deps 注入依赖（避免循环依赖）
 type Deps struct {
-	Logger *obs.Logger
-	Loader *skills.Loader
-	Router *llm.Router
+	Logger  *obs.Logger
+	Loader  *skills.Loader
+	Router  *llm.Router
+	Session *auth.SessionManager
+	Limiter *auth.RateLimiter
 }
 
 // Router 返回配置好的 http.ServeMux
 //
 // P0: /health, /version
-// P1: + /api/skills, /api/skills/{name}/execute (SSE), /api/skills/{name}/execute-sync
+// P1: + /api/skills/*
+// P1-E: /api/auth/{login,logout,me}
 func Router(deps Deps) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// 健康检查 + 版本
 	mux.Handle("/health", NewHealthHandler())
 	mux.Handle("/version", NewVersionHandler())
+
+	// Auth API（P1-E）
+	if deps.Session != nil && deps.Limiter != nil {
+		authHandler := NewAuthHandler(deps.Session, deps.Limiter)
+		mux.Handle("/api/auth/", authHandler)
+	}
 
 	// Skills API（P1）
 	if deps.Loader != nil && deps.Router != nil {
@@ -41,7 +51,7 @@ func Router(deps Deps) *http.ServeMux {
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("novel2all-go v0.1.0 — see /health, /version, /api/skills\n"))
+		_, _ = w.Write([]byte("novel2all-go v0.1.0 — see /health, /version, /api/auth, /api/skills\n"))
 	})
 
 	return mux

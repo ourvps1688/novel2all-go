@@ -19,10 +19,12 @@ import (
 	"time"
 
 	"github.com/ourvps1688/novel2all-go/internal/api"
+	"github.com/ourvps1688/novel2all-go/internal/auth"
 	"github.com/ourvps1688/novel2all-go/internal/config"
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 	"github.com/ourvps1688/novel2all-go/internal/obs"
 	"github.com/ourvps1688/novel2all-go/internal/skills"
+	"github.com/ourvps1688/novel2all-go/internal/store"
 	"github.com/ourvps1688/novel2all-go/internal/version"
 )
 
@@ -53,6 +55,10 @@ func run() error {
 		"config_path", *configPath,
 	)
 
+	// 3.5 root context for startup
+	rootCtx, rootCancel := context.WithCancel(context.Background())
+	defer rootCancel()
+
 	// 4. P1 装配：LLM router + Skills loader
 	llmRouter := llm.NewRouter(llm.Config{
 		DashScopeAPIKey: cfg.LLM.DashScopeAPIKey,
@@ -72,11 +78,44 @@ func run() error {
 	}
 	logger.Info("skills_loaded", "count", skillLoader.Count())
 
-	// 5. 装配 router
+	// 5. P1-E: Store + Auth
+	db, err := store.Open(rootCtx, cfg.DB.DSN)
+	if err != nil {
+		return fmt.Errorf("open db: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := db.Migrate(rootCtx); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	logger.Info("db_ready", "dsn", cfg.DB.DSN)
+
+	// 引导 admin 用户（从环境变量读 ADMIN_USER/ADMIN_PASS；hash 用 bcrypt cost=10）
+	adminUser := os.Getenv("ADMIN_USER")
+	adminPass := os.Getenv("ADMIN_PASS")
+	if adminUser != "" && adminPass != "" {
+		hash, err := auth.HashPassword(adminPass)
+		if err != nil {
+			return fmt.Errorf("hash admin password: %w", err)
+		}
+		if err := db.EnsureAdminUser(rootCtx, adminUser, hash); err != nil {
+			return fmt.Errorf("ensure admin: %w", err)
+		}
+		logger.Info("admin_user_ready", "username", adminUser)
+	} else {
+		logger.Warn("admin_user_not_initialized", "hint", "set ADMIN_USER and ADMIN_PASS env vars to bootstrap first admin")
+	}
+
+	sessionManager := auth.NewSessionManager(db, auth.DefaultSessionConfig())
+	limiter := auth.NewRateLimiter(5, 5*time.Minute, 5*time.Minute)
+	logger.Info("auth_ready", "session_ttl", auth.DefaultSessionConfig().TTL.String())
+
+	// 6. 装配 router
 	mux := api.Router(api.Deps{
-		Logger: logger,
-		Loader: skillLoader,
-		Router: llmRouter,
+		Logger:  logger,
+		Loader:  skillLoader,
+		Router:  llmRouter,
+		Session: sessionManager,
+		Limiter: limiter,
 	})
 	handler := api.LoggingMiddleware(logger, mux)
 
