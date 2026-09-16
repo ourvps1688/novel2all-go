@@ -5,8 +5,8 @@ go 1.22
 toolchain go1.22.12
 
 require (
-	golang.org/x/crypto v0.57.0
-	modernc.org/sqlite v1.59.0
+	golang.org/x/crypto v0.31.0
+	modernc.org/sqlite v1.34.5
 )
 
 require (
