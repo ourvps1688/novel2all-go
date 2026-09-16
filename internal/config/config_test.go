@@ -20,10 +20,10 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.HTTP.Port != 8000 {
 		t.Errorf("默认 HTTP_PORT 应为 8000，实际=%d", cfg.HTTP.Port)
 	}
-	if cfg.Log.Level != "info" {
+	if cfg.Log.Level != defaultLogLevel {
 		t.Errorf("默认 LOG_LEVEL 应为 info，实际=%q", cfg.Log.Level)
 	}
-	if cfg.Log.Format != "json" {
+	if cfg.Log.Format != defaultLogFormat {
 		t.Errorf("默认 LOG_FORMAT 应为 json，实际=%q", cfg.Log.Format)
 	}
 	if cfg.DB.Driver != defaultDBDriver {
@@ -110,9 +110,9 @@ DASHSCOPE_API_KEY=test-dashscope-key
 func TestValidate_InvalidPort(t *testing.T) {
 	cfg := &Config{}
 	cfg.HTTP.Port = 0
-	cfg.Log.Level = "info"
-	cfg.Log.Format = "json"
-	cfg.DB.Driver = "sqlite3"
+	cfg.Log.Level = defaultLogLevel
+	cfg.Log.Format = defaultLogFormat
+	cfg.DB.Driver = defaultDBDriver
 	cfg.Skills.MaxParallel = 4
 
 	err := cfg.Validate()
@@ -125,8 +125,8 @@ func TestValidate_InvalidLogLevel(t *testing.T) {
 	cfg := &Config{}
 	cfg.HTTP.Port = 8000
 	cfg.Log.Level = "invalid"
-	cfg.Log.Format = "json"
-	cfg.DB.Driver = "sqlite3"
+	cfg.Log.Format = defaultLogFormat
+	cfg.DB.Driver = defaultDBDriver
 
 	err := cfg.Validate()
 	if err == nil {
@@ -137,9 +137,9 @@ func TestValidate_InvalidLogLevel(t *testing.T) {
 func TestValidate_InvalidRepo(t *testing.T) {
 	cfg := &Config{}
 	cfg.HTTP.Port = 8000
-	cfg.Log.Level = "info"
-	cfg.Log.Format = "json"
-	cfg.DB.Driver = "sqlite3"
+	cfg.Log.Level = defaultLogLevel
+	cfg.Log.Format = defaultLogFormat
+	cfg.DB.Driver = defaultDBDriver
 	cfg.GitHub.Repo = "no-slash"
 
 	err := cfg.Validate()
