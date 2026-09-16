@@ -1,0 +1,90 @@
+# --- Go ---
+# Compiled binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+*.out
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Vendored dependencies (we use go mod vendor)
+vendor/
+
+# Coverage reports
+coverage.out
+coverage.html
+*.coverprofile
+
+# Profiling
+*.prof
+
+# --- Configs ---
+# Never commit secrets / env files
+configs/.env
+configs/.env.local
+configs/.env.*.local
+
+# --- Logs / runtime ---
+logs/
+*.log
+*.pid
+
+# --- Database / runtime data ---
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+data/
+.novel2all/
+
+# --- Build artifacts ---
+dist/
+build/
+web-react/dist/
+web-react/node_modules/
+
+# --- IDE / Editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# --- WorkBuddy IDE sandbox ---
+.workbuddy/
+
+# --- Temp / cache ---
+tmp/
+temp/
+cache/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# --- Skill artifacts (if user generates local-only) ---
+*.bak
+*.tmp
+*.orig
+
+# --- Frontend ---
+node_modules/
+.npm/
+.yarn/
+.pnp.*
+*.local

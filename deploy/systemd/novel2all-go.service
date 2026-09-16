@@ -1,0 +1,49 @@
+[Unit]
+Description=novel2all-go (long-form novel automation, Go rewrite)
+Documentation=https://github.com/ourvps1688/novel2all-go
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=novel2all
+Group=novel2all
+WorkingDirectory=/opt/novel2all-go
+
+# 生产环境从 /etc/novel2all/novel2all-go.env 注入环境变量
+EnvironmentFile=/etc/novel2all/novel2all-go.env
+
+# 单二进制入口
+ExecStart=/opt/novel2all-go/bin/novel2all
+
+# 优雅关闭（30s 超时）
+ExecStop=/bin/kill -SIGTERM $MAINPID
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=infinity
+MemoryMax=512M
+
+# 重启策略
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=5
+StartLimitIntervalSec=60s
+
+# 安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/novel2all-go/data /opt/novel2all-go/logs
+
+# 日志转 journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=novel2all-go
+
+[Install]
+WantedBy=multi-user.target
