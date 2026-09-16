@@ -95,12 +95,13 @@ func (l *Loader) Get(name string) (Skill, error) {
 // parseSkill 解析 SKILL.md 内容
 //
 // 格式：
-//   ---
-//   name: <name>
-//   description: "<desc>"
-//   ---
 //
-//   <body>
+//	---
+//	name: <name>
+//	description: "<desc>"
+//	---
+//
+//	<body>
 func parseSkill(filename, content string) (Skill, error) {
 	const sep = "\n---\n"
 
@@ -136,8 +137,9 @@ func parseSkill(filename, content string) (Skill, error) {
 
 // parseFrontmatter 解析简单的 YAML frontmatter
 // 格式（仅支持 key: value 单行）：
-//   name: story-x
-//   description: "..."
+//
+//	name: story-x
+//	description: "..."
 func parseFrontmatter(s string) (name, desc string, err error) {
 	for _, line := range strings.Split(s, "\n") {
 		line = strings.TrimSpace(line)

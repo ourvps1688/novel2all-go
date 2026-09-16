@@ -39,10 +39,10 @@ type SkillSummary struct {
 
 // ExecuteRequest POST /api/skills/{name}/execute 请求体
 type ExecuteRequest struct {
-	Input    string         `json:"input"`
-	Task     string         `json:"task,omitempty"`     // 可选：覆盖 task type
-	Provider string         `json:"provider,omitempty"` // 可选：覆盖 provider
-	Model    string         `json:"model,omitempty"`    // 可选：覆盖 model
+	Input     string         `json:"input"`
+	Task      string         `json:"task,omitempty"`     // 可选：覆盖 task type
+	Provider  string         `json:"provider,omitempty"` // 可选：覆盖 provider
+	Model     string         `json:"model,omitempty"`    // 可选：覆盖 model
 	Variables map[string]any `json:"variables,omitempty"`
 }
 
@@ -57,9 +57,9 @@ type SSEEvent struct {
 
 // ServeHTTP 实现路由分发
 //
-//   GET  /api/skills                      → 列出所有
-//   POST /api/skills/{name}/execute       → 流式执行
-//   POST /api/skills/{name}/execute-sync  → 同步执行
+//	GET  /api/skills                      → 列出所有
+//	POST /api/skills/{name}/execute       → 流式执行
+//	POST /api/skills/{name}/execute-sync  → 同步执行
 func (h *SkillsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/skills")
 	path = strings.Trim(path, "/")

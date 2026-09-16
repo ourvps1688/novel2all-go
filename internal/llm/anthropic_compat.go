@@ -37,16 +37,16 @@ func NewAnthropicCompat(name ProviderName, apiKey, baseURL, defaultModel string)
 }
 
 func (p *AnthropicCompat) Name() ProviderName { return p.name }
-func (p *AnthropicCompat) Available() bool   { return p.apiKey != "" }
+func (p *AnthropicCompat) Available() bool    { return p.apiKey != "" }
 
 // antRequest Anthropic Messages API 请求
 type antRequest struct {
-	Model       string    `json:"model"`
-	MaxTokens   int       `json:"max_tokens"`
-	System      string    `json:"system,omitempty"`
+	Model       string       `json:"model"`
+	MaxTokens   int          `json:"max_tokens"`
+	System      string       `json:"system,omitempty"`
 	Messages    []antMessage `json:"messages"`
-	Stream      bool      `json:"stream,omitempty"`
-	Temperature float64   `json:"temperature,omitempty"`
+	Stream      bool         `json:"stream,omitempty"`
+	Temperature float64      `json:"temperature,omitempty"`
 }
 
 type antMessage struct {

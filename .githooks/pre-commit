@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# novel2all-go pre-commit hook
+#
+# 启用方法（一次）：
+#   git config core.hooksPath .githooks
+#
+# 功能：
+#   - go fmt 自动格式化 staged 文件
+#   - go vet ./... 静态检查
+#   - go test ./... 跑所有测试（必须 pass）
+#   - golangci-lint run 严格 lint（如果已装）
+#   - 拦截包含 "secret"/"password" 的提交（粗粒度）
+#
+# 跳过 hook（紧急情况）：
+#   git commit --no-verify
+
+set -euo pipefail
+
+# 颜色
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+# 跳过的提交（merge / revert）
+if [[ "${2:-}" == "merge" || "${2:-}" == "commit" && $(git log -1 --pretty=%s) == *"--*--"* ]]; then
+    exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "${REPO_ROOT}"
+
+echo -e "${GREEN}=== pre-commit hook ===${NC}"
+
+# 1. 检查 secrets（粗粒度关键词）
+echo "[1/5] Checking for secrets..."
+SECRET_PATTERN='(secret|password|api[_-]?key|token).*=.*["\x27][a-zA-Z0-9_-]{16,}'
+if git diff --cached --diff-filter=ACM | grep -iE "${SECRET_PATTERN}" 2>/dev/null; then
+    echo -e "${RED}✗ 检测到疑似 secret/credentials 字符串${NC}"
+    echo "  如果确认安全，用: git commit --no-verify"
+    echo "  建议把 secrets 放到 configs/.env（git-ignored）"
+    exit 1
+fi
+
+# 2. go fmt
+echo "[2/5] go fmt..."
+STAGED_GO_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.go$' || true)
+if [[ -n "${STAGED_GO_FILES}" ]]; then
+    # 只 fmt staged 文件
+    UNFORMATTED=$(echo "${STAGED_GO_FILES}" | xargs gofmt -l 2>/dev/null || true)
+    if [[ -n "${UNFORMATTED}" ]]; then
+        echo -e "${YELLOW}! 以下文件未 gofmt:${NC}"
+        echo "${UNFORMATTED}"
+        echo "  自动修复: gofmt -w <file>"
+        exit 1
+    fi
+fi
+
+# 3. go vet
+echo "[3/5] go vet ./..."
+go vet ./...
+
+# 4. go test
+echo "[4/5] go test ./..."
+go test ./...
+
+# 5. golangci-lint（如果已装）
+echo "[5/5] golangci-lint..."
+if command -v golangci-lint >/dev/null 2>&1; then
+    golangci-lint run --timeout=5m
+else
+    echo -e "${YELLOW}  golangci-lint 未安装,跳过（建议安装: make install-lint）${NC}"
+fi
+
+echo -e "${GREEN}=== pre-commit OK ===${NC}"

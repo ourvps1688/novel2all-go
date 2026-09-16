@@ -45,7 +45,7 @@ type Message struct {
 
 // Request 完整请求
 type Request struct {
-	Task TaskType
+	Task     TaskType
 	Messages []Message
 	// 可选覆盖：provider/model
 	OverrideProvider ProviderName // 空 = 用路由
@@ -89,6 +89,6 @@ type Provider interface {
 
 // Common errors
 var (
-	ErrNoProvider        = errors.New("no provider available for request")
+	ErrNoProvider         = errors.New("no provider available for request")
 	ErrAllProvidersFailed = errors.New("all providers failed")
 )

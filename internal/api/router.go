@@ -11,9 +11,9 @@ import (
 
 // Deps 注入依赖（避免循环依赖）
 type Deps struct {
-	Logger   *obs.Logger
-	Loader   *skills.Loader
-	Router   *llm.Router
+	Logger *obs.Logger
+	Loader *skills.Loader
+	Router *llm.Router
 }
 
 // Router 返回配置好的 http.ServeMux

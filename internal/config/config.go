@@ -52,8 +52,8 @@ type LLMConfig struct {
 
 // SkillsConfig 技能配置
 type SkillsConfig struct {
-	Dir          string
-	MaxParallel  int
+	Dir         string
+	MaxParallel int
 }
 
 // GitHubConfig GitHub 集成配置

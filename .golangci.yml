@@ -1,0 +1,159 @@
+# golangci-lint 配置
+# 与 GitHub Actions CI lint job 保持一致（v1.61.0）
+#
+# 用法：
+#   golangci-lint run                 # 跑所有启用规则
+#   golangci-lint run --fix          # 自动修复（gofmt/gosimple 等）
+#   golangci-lint run ./internal/... # 跑子目录
+
+run:
+  # 超时（CI 用 5m）
+  timeout: 5m
+
+  # 允许并行
+  allow-parallel-runners: true
+
+  # 排除自动生成代码
+  skip-dirs:
+    - vendor
+    - bin
+    - data
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_mock\\.go$"
+
+# 输出格式
+output:
+  formats:
+    - format: colored-line-number
+      path: stdout
+  print-issued-lines: true
+  print-linter-name: true
+
+# Linter 配置
+linters-settings:
+  # govet 标准
+  govet:
+    enable-all: true
+    disable:
+      - shadow  # 误报较多，按需开启
+      - fieldalignment  # 性能优化，不强制
+
+  # staticcheck
+  staticcheck:
+    checks: ["all"]
+
+  # errcheck：检查未处理的 error
+  errcheck:
+    check-blank: true
+    check-type-assertions: true
+
+  # gosimple：代码简化建议（含 S1008 等）
+  gosimple:
+    checks: ["all"]
+
+  # revive：替代 golint，更现代的 style 检查
+  revive:
+    rules:
+      - name: var-naming
+      - name: package-comments
+      - name: exported
+      - name: dot-imports
+      - name: error-returned
+      - name: error-strings
+      - name: if-return
+      - name: redundant-import-aliases
+
+  # gocritic：额外风格检查
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - hugeParam      # 误报多
+      - rangeValCopy   # 误报多
+
+  # gocyclo：圈复杂度（避免函数过长）
+  gocyclo:
+    min-complexity: 15
+
+  # misspell：拼写检查
+  misspell:
+    locale: US
+    ignore-words:
+      - cancelled   # 英文接受 cancelled/canceled 都行
+
+  # goconst：重复字符串 → 常量
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  # bodyclose：HTTP body 必须关闭
+  bodyclose:
+    check-all: true
+
+  # errorlint：用 %w 包装 error
+  errorlint:
+    asserts: true
+    comparison: true
+
+# 启用的 linter 列表
+linters:
+  disable-all: true
+  enable:
+    # 默认（golangci-lint 默认启用的）
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+    # 额外启用
+    - bodyclose     # HTTP body 必须关闭
+    - errorlint     # %w 包装
+    - gocritic      # 风格/性能
+    - gocyclo       # 圈复杂度
+    - goconst       # 重复字面量
+    - misspell      # 拼写
+    - revive        # 风格
+    - gofmt         # 格式
+    - goimports     # import 排序
+
+# 严重级别问题
+issues:
+  # 同文件多处相同问题 → 只报一次
+  max-same-issues: 5
+
+  # 新代码默认 0 issue
+  max-issues-per-linter: 0
+  max-issues-per-dir: 0
+
+  # 排除某些规则在特定路径
+  exclude-rules:
+    # 测试文件放宽要求
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - goconst
+        - revive
+      text: "should have comment|exported"
+
+    # examples / docs 放宽
+    - path: examples/
+      linters:
+        - gocyclo
+        - revive
+
+  # 不报的规则（误报或暂时不处理）
+  exclude:
+    # interface 兼容
+    - "composites"
+    # 行长度（不强制）
+    - "lll"
+
+# 仅在 main 分支跑严格规则
+# （开发分支可用 `--fast` flag）
+run-tests: true

@@ -53,6 +53,52 @@ go build -o bin/novel2all ./cmd/server
 curl http://localhost:8000/health
 ```
 
+## 开发
+
+本项目用 `Makefile` 统一所有开发命令（与 GitHub Actions CI 镜像）：
+
+```bash
+make help          # 显示所有命令
+make build         # 构建二进制
+make test          # 跑单元测试
+make lint          # 跑 golangci-lint（与 CI 一致）
+make verify        # build + vet + test + lint（CI 镜像）
+make dev           # 构建 + 启动服务器（前台）
+make install-lint  # 安装 golangci-lint v1.61.0（首次需装）
+```
+
+### Pre-commit hook
+
+仓库内置 `.githooks/pre-commit` + `scripts/pre-commit.sh`，可在 commit 前自动跑：
+- gofmt 格式检查
+- go vet
+- go test（必须全过）
+- golangci-lint run（如果已装）
+- 拦截含 `secret/password/api_key/token` 关键词的 diff
+
+启用方法（一次性）：
+
+```bash
+git config core.hooksPath .githooks
+```
+
+临时跳过：
+
+```bash
+git commit --no-verify -m "emergency hotfix"
+```
+
+手动跑（不依赖 git hook）：
+
+```bash
+./scripts/pre-commit.sh           # 严格检查
+./scripts/pre-commit.sh --fix     # 自动修复（gofmt/golangci-lint --fix）
+```
+
+### Lint 配置
+
+`.golangci.yml` 启用 14 个 linter（errcheck/gosimple/govet/staticcheck/ineffassign/unused/bodyclose/errorlint/gocritic/gocyclo/goconst/misspell/revive/gofmt+goimports）。修改规则后记得本地 `make lint` 验证。
+
 ## 项目结构
 
 ```
