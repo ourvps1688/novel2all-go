@@ -70,6 +70,14 @@ func Router(deps Deps) *http.ServeMux {
 	mux.Handle("/api/projects/", NewProjectsHandler())
 	// /api/projects 不带 slash → ServeMux 自动 301 重定向到 /api/projects/
 
+	// Write + Tracking API（P1-F 切片 3：流式写作）
+	if deps.Loader != nil && deps.Router != nil {
+		executor := skills.NewExecutor(deps.Loader, deps.Router)
+		writeHandler := NewWriteHandler(executor, deps.Loader)
+		mux.Handle("/api/write/", writeHandler)
+	}
+	mux.Handle("/api/tracking", NewTrackingHandler())
+
 	// 根路径提示
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -77,7 +85,7 @@ func Router(deps Deps) *http.ServeMux {
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("novel2all-go v0.5.0 — see /health, /version, /api/auth, /api/skills, /api/roles, /api/cache, /api/status, /api/models, /api/projects\n"))
+		_, _ = w.Write([]byte("novel2all-go v0.6.0 — see /health, /version, /api/auth, /api/skills, /api/roles, /api/cache, /api/status, /api/models, /api/projects, /api/write, /api/tracking\n"))
 	})
 
 	return mux
@@ -109,4 +117,12 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
+}
+
+// Flush 实现 http.Flusher，转发到底层 ResponseWriter。
+// 不实现会导致 SSE handler 断言失败报 "streaming unsupported"。
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
