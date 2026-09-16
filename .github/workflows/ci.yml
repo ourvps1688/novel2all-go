@@ -14,6 +14,12 @@ concurrency:
 permissions:
   contents: read
 
+# 关键：actions/setup-go@v5 默认 GOTOOLCHAIN=auto 会下载最新 Go（1.26）
+# 这会触发 2 个问题：
+#   1. golangci-lint v1.61 用 Go 1.23 编译 → 报 "Go version 1.23 < 1.26" 错误
+#   2. go test -coverprofile 触发 covdata 工具 → toolchain 切换后某些工具缺失
+# 解决：设 GOTOOLCHAIN=local 强制使用 setup-go 装的 Go 版本
+
 jobs:
   build:
     name: build (ubuntu/macos/windows × go 1.22/1.23)
@@ -23,6 +29,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         go: ['1.22', '1.23']
+    env:
+      GOTOOLCHAIN: local
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +52,8 @@ jobs:
   test:
     name: test (ubuntu × go 1.23)
     runs-on: ubuntu-latest
+    env:
+      GOTOOLCHAIN: local
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -52,18 +62,15 @@ jobs:
           cache: true
 
       - name: Run unit tests
-        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
-
-      - name: Upload coverage
-        if: matrix.go == '1.23'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.os }}
-          path: coverage.out
+        # ⚠️ 不要 -coverprofile（需要 covdata 工具，toolchain 切换会失败）
+        # 覆盖率用本地 `make test-coverage` 测
+        run: go test -race -count=1 ./...
 
   lint:
     name: lint (ubuntu × go 1.23)
     runs-on: ubuntu-latest
+    env:
+      GOTOOLCHAIN: local
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -81,6 +88,8 @@ jobs:
     name: smoke (ubuntu × go 1.23) — build + start + curl /health
     runs-on: ubuntu-latest
     needs: [build, test]
+    env:
+      GOTOOLCHAIN: local
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
