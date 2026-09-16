@@ -121,7 +121,9 @@ func TestListUsers_AsAdmin(t *testing.T) {
 	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
 	loginRec := httptest.NewRecorder()
 	h.ServeHTTP(loginRec, loginReq)
-	cookies := loginRec.Result().Cookies()
+	loginResult := loginRec.Result()
+	defer loginResult.Body.Close()
+	cookies := loginResult.Cookies()
 	if len(cookies) == 0 {
 		t.Fatal("登录失败")
 	}
@@ -153,7 +155,9 @@ func TestCreateUser_AsAdmin(t *testing.T) {
 	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
 	loginRec := httptest.NewRecorder()
 	h.ServeHTTP(loginRec, loginReq)
-	cookies := loginRec.Result().Cookies()
+	loginResult := loginRec.Result()
+	defer loginResult.Body.Close()
+	cookies := loginResult.Cookies()
 
 	// admin 创建另一个 admin
 	body, _ := json.Marshal(RegisterRequest{
@@ -185,7 +189,9 @@ func TestDeleteUser_SelfDelete(t *testing.T) {
 	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
 	loginRec := httptest.NewRecorder()
 	h.ServeHTTP(loginRec, loginReq)
-	cookies := loginRec.Result().Cookies()
+	loginResult := loginRec.Result()
+	defer loginResult.Body.Close()
+	cookies := loginResult.Cookies()
 
 	// admin 删自己（带 trailing slash 触发 subtree handler）
 	req := httptest.NewRequest(http.MethodDelete, "/api/auth/users/1/", http.NoBody)

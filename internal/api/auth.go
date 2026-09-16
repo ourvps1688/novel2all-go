@@ -19,6 +19,12 @@ type AuthHandler struct {
 	limiter *auth.RateLimiter
 }
 
+// 常量（goconst 建议）
+const (
+	roleAdmin = "admin"
+	roleUser  = "user"
+)
+
 // NewAuthHandler 创建
 func NewAuthHandler(m *auth.SessionManager, l *auth.RateLimiter) *AuthHandler {
 	return &AuthHandler{manager: m, limiter: l}
@@ -84,12 +90,15 @@ type LoginResponse struct {
 
 // ServeHTTP 路由分发
 //
+//
 //	POST /api/auth/login
 //	POST /api/auth/logout
 //	GET  /api/auth/me
 //	POST /api/auth/register
 //	GET/POST/DELETE /api/auth/users[/{id}]
 //	GET /api/auth/audit
+//
+//nolint:gocyclo // auth 路由多分支（login/logout/me/register/users/audit 各 method 检查）
 func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/auth")
 	path = strings.Trim(path, "/")
@@ -256,7 +265,7 @@ func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request) {
 	user, err := h.manager.Register(r.Context(), auth.RegisterInput{
 		Username: req.Username,
 		Password: req.Password,
-		Role:     "user", // 强制
+		Role:     roleUser, // 强制
 	})
 	if err != nil {
 		h.limiter.RecordFailure("ip:" + ip)
@@ -365,9 +374,9 @@ func (h *AuthHandler) createUser(w http.ResponseWriter, r *http.Request) {
 	// admin 可指定 role
 	role := req.Role
 	if role == "" {
-		role = "user"
+		role = roleUser
 	}
-	if role != "admin" && role != "user" {
+	if role != roleAdmin && role != roleUser {
 		http.Error(w, fmt.Sprintf(`{"error":"invalid role: %q"}`, role), http.StatusBadRequest)
 		return
 	}
