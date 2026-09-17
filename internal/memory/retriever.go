@@ -258,7 +258,7 @@ func (r *MemoryRetriever) AddEvent(chapter int, eventType, text string, metadata
 	}
 	r.mu.Unlock()
 
-	_ = r.saveToDisk() // 持久化 (锁外做, 减少锁持有)
+	_ = r.saveToDisk() //nolint:gocritic // 持久化 (锁外, 减少锁持有)
 	return id
 }
 
