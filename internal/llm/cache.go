@@ -100,6 +100,7 @@ func (c *Cache) Get(ctx context.Context, task TaskType, model, prompt string) (*
 
 	// L1 lookup
 	if v, ok := c.l1.Load(key); ok {
+		//nolint:errcheck // type assertion OK (CacheEntry 是唯一写入类型)
 		entry := v.(*CacheEntry)
 		// 移到 LRU 末尾
 		c.touch(key)
