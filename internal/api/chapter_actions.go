@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ourvps1688/novel2all-go/internal/llm"
+	"github.com/ourvps1688/novel2all-go/internal/memory"
 	"github.com/ourvps1688/novel2all-go/internal/skills"
 )
 
@@ -79,11 +80,27 @@ type ReviewItem struct {
 // ChapterActions 提供 LLM 操作（expand/rewrite/review/insert/rollback）
 type ChapterActions struct {
 	executor *skills.Executor
+
+	// Sprint 34: 注入 MemoryManager 让 callLLMSync/callLLMAppend 拼 5 层 memory + settings 到 system prompt.
+	// nil = 走 V0.29 mock 路径 (向后兼容).
+	memMgr *memory.MemoryManager
 }
 
 // NewChapterActions 创建
 func NewChapterActions(executor *skills.Executor) *ChapterActions {
 	return &ChapterActions{executor: executor}
+}
+
+// NewChapterActionsWithMemory 创建带 memory 注入的 ChapterActions.
+//
+// Sprint 34 工厂方法: 与 NewChapterActions 签名不同的"with"变体.
+// 不破坏现有调用方 (Sprint 18+ 测试都用 NewChapterActions).
+//
+// 参数:
+//   - executor: skills 执行器 (调 LLM)
+//   - memMgr: memory manager (5 层 memory 自动加载). 可为 nil → 走 V0.29 mock
+func NewChapterActionsWithMemory(executor *skills.Executor, memMgr *memory.MemoryManager) *ChapterActions {
+	return &ChapterActions{executor: executor, memMgr: memMgr}
 }
 
 // DispatchAction 分发到对应 action
@@ -372,13 +389,15 @@ func (a *ChapterActions) callLLMAppend(ctx context.Context, req ActionRequest, c
 	if a.executor == nil {
 		return mockLLMOutput(skill, contextText), nil
 	}
+	// Sprint 34.8 流式抵消延迟: ExecuteStream 边接收边积累.
 	ch := make(chan llm.Chunk, 32)
 	errCh := make(chan error, 1)
 	go func() {
 		err := a.executor.ExecuteStream(ctx, skills.ExecuteInput{
-			SkillName: skill,
-			UserInput: buildActionUserInput(req, chapter, "continue"),
-			Variables: map[string]any{"chapter": chapter, "context": contextText},
+			SkillName:   skill,
+			UserInput:   buildActionUserInput(req, chapter, "continue"),
+			SystemInput: a.buildActionSystemPrompt(ctx, req, chapter, contextText),
+			Variables:   map[string]any{"chapter": chapter, "context": contextText},
 		}, ch)
 		errCh <- err
 	}()
@@ -404,14 +423,57 @@ func (a *ChapterActions) callLLMSync(ctx context.Context, req ActionRequest, cha
 		return mockLLMOutput(skill, contextText), nil
 	}
 	result, err := a.executor.Execute(ctx, skills.ExecuteInput{
-		SkillName: skill,
-		UserInput: buildActionUserInput(req, chapter, skill),
-		Variables: map[string]any{"chapter": chapter, "context": contextText},
+		SkillName:   skill,
+		UserInput:   buildActionUserInput(req, chapter, skill),
+		SystemInput: a.buildActionSystemPrompt(ctx, req, chapter, contextText),
+		Variables:   map[string]any{"chapter": chapter, "context": contextText},
 	})
 	if err != nil {
+		// 失败时回退到 mock, 不阻断业务 (同 V0.29 行为)
 		return mockLLMOutput(skill, contextText), nil
 	}
 	return result.Content, nil
+}
+
+// buildActionSystemPrompt 拼 action 的 system prompt (Sprint 34).
+//
+// 拼接顺序 (与 handleStream 一致):
+//  1. 加载 5 层 memory (MemoryManager.LoadForWriting) → 拼到 system prompt
+//  2. 加载项目 settings (设定/文风.md + 创作设定.md)
+//  3. 加载细纲 (大纲/细纲_第NNN章.md) 作为 chapter context
+//
+// memMgr=nil 时降级到 "裸" prompt (无 memory, 同 V0.29 行为).
+//
+// 返回空 string 表示 memMgr 没配置 + 无 settings (executor 会单独用 skill body).
+func (a *ChapterActions) buildActionSystemPrompt(ctx context.Context, req ActionRequest, chapter int, contextText string) string {
+	var parts []string
+
+	// 1. Memory 5 层 (memMgr 不为 nil 时)
+	if a.memMgr != nil {
+		if mc, err := a.memMgr.LoadForWriting(ctx, chapter); err == nil {
+			parts = append(parts, mc.ToSystemSections()...)
+		}
+	}
+
+	// 2. Project settings (设定/文风.md + 创作设定.md)
+	settingMDs := []string{"设定/文风.md", "创作设定.md"}
+	for _, rel := range settingMDs {
+		fp := filepath.Join(req.ProjectRoot, rel)
+		if data, err := os.ReadFile(fp); err == nil {
+			parts = append(parts, "# "+rel+"\n"+string(data))
+		}
+	}
+
+	// 3. 细纲 (chapter context)
+	if outline, err := readOutline(req.ProjectRoot, chapter); err == nil && outline != "" {
+		parts = append(parts, "# 本章细纲\n"+outline)
+	}
+
+	result := strings.Join(parts, "\n\n---\n\n")
+	if len(result) > 32000 {
+		result = result[:32000] + "\n\n[... truncated ...]"
+	}
+	return result
 }
 
 func buildActionUserInput(req ActionRequest, chapter int, action string) string {
