@@ -19,7 +19,7 @@ type Deps struct {
 	Session *auth.SessionManager
 	Limiter *auth.RateLimiter
 	// Store 用于 project share API
-	Store   *store.DB
+	Store  *store.DB
 
 	// P1-F 切片 9: 运维可观测性
 	// Metrics 用于 /metrics + /debug/info
