@@ -19,11 +19,29 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/skills"
 )
 
+// action 名常量（避免 goconst）
+const (
+	actionExpand   = "expand"
+	actionRewrite  = "rewrite"
+	actionReview   = "review"
+	actionInsert   = "insert"
+	actionRollback = "rollback"
+)
+
+// skill 名常量
+const (
+	skillStoryExpand     = "story-expand"
+	skillStoryLongWrite  = "story-long-write"
+	skillStoryShortWrite = "story-short-write"
+	skillStoryReview     = "story-review"
+	skillStoryInsert     = "story-insert"
+)
+
 // ActionRequest 通用 body 字段
 type ActionRequest struct {
 	ProjectRoot string `json:"project_root"`
-	Instruction string `json:"instruction,omitempty"` // 扩写/重写/插入指令
-	Position    int    `json:"position,omitempty"`    // insert 起始行号 (1-based)
+	Instruction string `json:"instruction,omitempty"`
+	Position    int    `json:"position,omitempty"`
 }
 
 // ActionResponse 通用响应
@@ -59,8 +77,6 @@ type ReviewItem struct {
 }
 
 // ChapterActions 提供 LLM 操作（expand/rewrite/review/insert/rollback）
-//
-// 这是一个组件（不是独立 handler）— 被 ChapterHandler 嵌入并在内部分发到 actions
 type ChapterActions struct {
 	executor *skills.Executor
 }
@@ -70,27 +86,24 @@ func NewChapterActions(executor *skills.Executor) *ChapterActions {
 	return &ChapterActions{executor: executor}
 }
 
-// DispatchAction 分发到对应 action（被 ChapterHandler.handleAction 调用）
-//
-// chapter 章节号, action 是 expand/rewrite/review/insert/rollback
+// DispatchAction 分发到对应 action
 func (a *ChapterActions) DispatchAction(w http.ResponseWriter, r *http.Request, chapter int, action string) {
 	switch action {
-	case "expand":
+	case actionExpand:
 		a.expand(w, r, chapter)
-	case "rewrite":
+	case actionRewrite:
 		a.rewrite(w, r, chapter)
-	case "review":
+	case actionReview:
 		a.review(w, r, chapter)
-	case "insert":
+	case actionInsert:
 		a.insert(w, r, chapter)
-	case "rollback":
+	case actionRollback:
 		a.rollback(w, r, chapter)
 	default:
 		http.Error(w, `{"error":"unknown action"}`, http.StatusNotFound)
 	}
 }
 
-// expand 扩写
 func (a *ChapterActions) expand(w http.ResponseWriter, r *http.Request, chapter int) {
 	req := parseActionRequest(r)
 	start := time.Now()
@@ -107,7 +120,7 @@ func (a *ChapterActions) expand(w http.ResponseWriter, r *http.Request, chapter 
 		return
 	}
 
-	appended, err := a.callLLMAppend(r.Context(), req, chapter, "story-expand", string(before))
+	appended, err := a.callLLMAppend(r.Context(), req, chapter, skillStoryExpand, string(before))
 	if err != nil {
 		respondActionError(w, err, http.StatusInternalServerError)
 		return
@@ -121,7 +134,7 @@ func (a *ChapterActions) expand(w http.ResponseWriter, r *http.Request, chapter 
 
 	respondActionOK(w, ActionResponse{
 		Chapter:       chapter,
-		Action:        "expand",
+		Action:        actionExpand,
 		OutputPath:    prosePath,
 		BackupPath:    backupPath,
 		CharsBefore:   len([]rune(string(before))),
@@ -131,7 +144,6 @@ func (a *ChapterActions) expand(w http.ResponseWriter, r *http.Request, chapter 
 	})
 }
 
-// rewrite 整章重写
 func (a *ChapterActions) rewrite(w http.ResponseWriter, r *http.Request, chapter int) {
 	req := parseActionRequest(r)
 	start := time.Now()
@@ -148,7 +160,7 @@ func (a *ChapterActions) rewrite(w http.ResponseWriter, r *http.Request, chapter
 		return
 	}
 
-	rewritten, err := a.callLLMSync(r.Context(), req, chapter, "story-long-write", string(before))
+	rewritten, err := a.callLLMSync(r.Context(), req, chapter, skillStoryLongWrite, string(before))
 	if err != nil {
 		respondActionError(w, err, http.StatusInternalServerError)
 		return
@@ -161,7 +173,7 @@ func (a *ChapterActions) rewrite(w http.ResponseWriter, r *http.Request, chapter
 
 	respondActionOK(w, ActionResponse{
 		Chapter:     chapter,
-		Action:      "rewrite",
+		Action:      actionRewrite,
 		OutputPath:  prosePath,
 		BackupPath:  backupPath,
 		CharsBefore: len([]rune(string(before))),
@@ -170,7 +182,6 @@ func (a *ChapterActions) rewrite(w http.ResponseWriter, r *http.Request, chapter
 	})
 }
 
-// review
 func (a *ChapterActions) review(w http.ResponseWriter, r *http.Request, chapter int) {
 	req := parseActionRequest(r)
 	start := time.Now()
@@ -186,7 +197,7 @@ func (a *ChapterActions) review(w http.ResponseWriter, r *http.Request, chapter 
 		"请审查以下小说章节，从 plot/consistency/style 三维度找出 critical/major/minor 问题，给 quality_score (0-100)，最后给 overall_verdict (pass/needs_revision/fail)。\n输出严格 JSON。\n\n章节内容:\n%s",
 		string(content),
 	)
-	reviewJSON, err := a.callLLMSync(r.Context(), req, chapter, "story-review", prompt)
+	reviewJSON, err := a.callLLMSync(r.Context(), req, chapter, skillStoryReview, prompt)
 	if err != nil {
 		respondActionError(w, err, http.StatusInternalServerError)
 		return
@@ -201,7 +212,6 @@ func (a *ChapterActions) review(w http.ResponseWriter, r *http.Request, chapter 
 	_ = json.NewEncoder(w).Encode(result)
 }
 
-// insert
 func (a *ChapterActions) insert(w http.ResponseWriter, r *http.Request, chapter int) {
 	req := parseActionRequest(r)
 	if req.Position <= 0 {
@@ -223,7 +233,7 @@ func (a *ChapterActions) insert(w http.ResponseWriter, r *http.Request, chapter 
 	}
 
 	prompt := fmt.Sprintf("请根据指令插入新段落（保持 1-3 段，不要超过 200 字）：\n%s", req.Instruction)
-	inserted, err := a.callLLMSync(r.Context(), req, chapter, "story-insert", prompt)
+	inserted, err := a.callLLMSync(r.Context(), req, chapter, skillStoryInsert, prompt)
 	if err != nil {
 		respondActionError(w, err, http.StatusInternalServerError)
 		return
@@ -245,7 +255,7 @@ func (a *ChapterActions) insert(w http.ResponseWriter, r *http.Request, chapter 
 
 	respondActionOK(w, ActionResponse{
 		Chapter:       chapter,
-		Action:        "insert",
+		Action:        actionInsert,
 		OutputPath:    prosePath,
 		BackupPath:    backupPath,
 		CharsBefore:   len([]rune(string(before))),
@@ -256,7 +266,6 @@ func (a *ChapterActions) insert(w http.ResponseWriter, r *http.Request, chapter 
 	})
 }
 
-// rollback
 func (a *ChapterActions) rollback(w http.ResponseWriter, r *http.Request, chapter int) {
 	req := parseActionRequest(r)
 	projectRoot := req.ProjectRoot
@@ -302,7 +311,7 @@ func (a *ChapterActions) rollback(w http.ResponseWriter, r *http.Request, chapte
 
 	respondActionOK(w, ActionResponse{
 		Chapter:    chapter,
-		Action:     "rollback",
+		Action:     actionRollback,
 		OutputPath: prosePath,
 		BackupPath: latest,
 		CharsAfter: len([]rune(string(backupData))),
@@ -310,7 +319,6 @@ func (a *ChapterActions) rollback(w http.ResponseWriter, r *http.Request, chapte
 	})
 }
 
-// parseActionRequest 解析 body
 func parseActionRequest(r *http.Request) ActionRequest {
 	var req ActionRequest
 	if r.Body != nil {
@@ -336,14 +344,12 @@ func parseActionRequest(r *http.Request) ActionRequest {
 	return req
 }
 
-// respondActionOK 统一成功响应
 func respondActionOK(w http.ResponseWriter, resp ActionResponse) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// respondActionError 统一错误响应
 func respondActionError(w http.ResponseWriter, err error, status int) {
 	if errors.Is(err, fs.ErrNotExist) {
 		status = http.StatusNotFound
@@ -353,7 +359,6 @@ func respondActionError(w http.ResponseWriter, err error, status int) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 }
 
-// backupChapterFile 备份当前章节到 .bak.{timestamp}
 func backupChapterFile(projectRoot string, chapter int, content []byte) (string, error) {
 	prosePath := chapterProsePath(projectRoot, chapter)
 	backupPath := fmt.Sprintf("%s.bak.%d", prosePath, time.Now().Unix())
@@ -363,7 +368,6 @@ func backupChapterFile(projectRoot string, chapter int, content []byte) (string,
 	return backupPath, nil
 }
 
-// callLLMAppend 调 LLM 流式 + 累加
 func (a *ChapterActions) callLLMAppend(ctx context.Context, req ActionRequest, chapter int, skill, contextText string) (string, error) {
 	if a.executor == nil {
 		return mockLLMOutput(skill, contextText), nil
@@ -395,7 +399,6 @@ func (a *ChapterActions) callLLMAppend(ctx context.Context, req ActionRequest, c
 	return out.String(), nil
 }
 
-// callLLMSync 调 LLM 同步
 func (a *ChapterActions) callLLMSync(ctx context.Context, req ActionRequest, chapter int, skill, contextText string) (string, error) {
 	if a.executor == nil {
 		return mockLLMOutput(skill, contextText), nil
@@ -411,7 +414,6 @@ func (a *ChapterActions) callLLMSync(ctx context.Context, req ActionRequest, cha
 	return result.Content, nil
 }
 
-// buildActionUserInput 构造 user input
 func buildActionUserInput(req ActionRequest, chapter int, action string) string {
 	if req.Instruction != "" {
 		return req.Instruction
@@ -419,20 +421,18 @@ func buildActionUserInput(req ActionRequest, chapter int, action string) string 
 	return fmt.Sprintf("章节 %d - 操作 %s", chapter, action)
 }
 
-// mockLLMOutput LLM 调用失败时 mock 输出
 func mockLLMOutput(skill, contextText string) string {
 	switch skill {
-	case "story-expand":
+	case skillStoryExpand:
 		return "\n\n[AI 扩写] 在原有基础上，本章新增了角色互动、情节推进和场景描写，让故事更加生动。\n"
-	case "story-long-write", "story-short-write":
+	case skillStoryLongWrite, skillStoryShortWrite:
 		return fmt.Sprintf("\n\n[AI 重写] 本章重写完成（mock）。基于 %d 字原文。\n", len([]rune(contextText)))
-	case "story-insert":
+	case skillStoryInsert:
 		return "[AI 插入] 新段落补充了情节衔接。\n"
 	}
 	return "[AI 输出]（mock）\n"
 }
 
-// parseReviewJSON 尝试解析 review JSON
 func parseReviewJSON(chapter int, raw string, chars int, elapsedMS int64) (*ReviewResult, error) {
 	re := regexp.MustCompile("(?s)```(?:json)?\\s*(\\{.*?\\})\\s*```")
 	matches := re.FindStringSubmatch(raw)
@@ -461,8 +461,8 @@ func parseReviewJSON(chapter int, raw string, chars int, elapsedMS int64) (*Revi
 	}, nil
 }
 
-// mockReview mock review 结果
-func mockReview(chapter int, chars int, elapsedMS int64) *ReviewResult {
+// mockReview mock review 结果（同类型参数合并）
+func mockReview(chapter, chars int, elapsedMS int64) *ReviewResult {
 	return &ReviewResult{
 		Chapter: chapter,
 		CriticalIssues: []ReviewItem{

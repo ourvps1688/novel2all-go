@@ -63,12 +63,15 @@ type ChapterContent struct {
 	FirstLine string `json:"first_line"`
 }
 
-// ServeHTTP 路由分发
+// ServeHTTP 路由分发（CRUD + LLM actions）
 //
 // 注册路径：
 //
-//	/api/chapters       → list（精确）
-//	/api/chapter/       → subtree，匹配其他
+//	/api/chapters          → list（精确）
+//	/api/chapters/         → list（带 slash）
+//	/api/chapter/          → subtree，匹配其他
+//
+//nolint:gocyclo // 路由分发天然多分支（CRUD 5 个 action + LLM 5 个 action）
 func (h *ChapterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// /api/chapters (list) - 单独 path
 	if r.URL.Path == "/api/chapters" || r.URL.Path == "/api/chapters/" {
