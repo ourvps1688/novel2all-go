@@ -16,9 +16,18 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
+// shareTestCtx 测试 fixture（合并 6 个返回值为 struct，避免 tooManyResults）
+type shareTestCtx struct {
+	h        *ProjectShareHandler
+	db       *store.DB
+	adminTok string
+	userTok  string
+	adminID  int64
+	userID   int64
+}
+
 // setupShareTest 创建测试 fixtures：admin + user + 各自的 session
-// 返回 (handler, db, adminToken, userToken, adminID, userID)
-func setupShareTest(t *testing.T) (*ProjectShareHandler, *store.DB, string, string, int64, int64) {
+func setupShareTest(t *testing.T) *shareTestCtx {
 	t.Helper()
 	dir := t.TempDir()
 	db, err := store.Open(context.Background(), filepath.Join(dir, "test.db"))
@@ -32,34 +41,40 @@ func setupShareTest(t *testing.T) (*ProjectShareHandler, *store.DB, string, stri
 	}
 
 	fakeHash := "fake_hash_for_test_purposes_only"
-	adminID, err := db.CreateUser(ctx, "admin_share", fakeHash, "admin")
-	if err != nil {
-		t.Fatalf("create admin: %v", err)
+	adminID, errCreate := db.CreateUser(ctx, "admin_share", fakeHash, "admin")
+	if errCreate != nil {
+		t.Fatalf("create admin: %v", errCreate)
 	}
-	userID, err := db.CreateUser(ctx, "user_share", fakeHash, "user")
-	if err != nil {
-		t.Fatalf("create user: %v", err)
+	userID, errCreate2 := db.CreateUser(ctx, "user_share", fakeHash, "user")
+	if errCreate2 != nil {
+		t.Fatalf("create user: %v", errCreate2)
 	}
 
 	// 直接 INSERT sessions 表
-	_, err = db.ExecContext(ctx, `
+	adminTok := "admin_token_test"
+	if _, err := db.ExecContext(ctx, `
 		INSERT INTO sessions (token, user_id, expires_at, ip, user_agent)
 		VALUES (?, ?, datetime('now', '+1 day'), '127.0.0.1', 'test')
-	`, "admin_token_test", adminID)
-	if err != nil {
+	`, adminTok, adminID); err != nil {
 		t.Fatalf("insert admin session: %v", err)
 	}
-	_, err = db.ExecContext(ctx, `
+	userTok := "user_token_test"
+	if _, err := db.ExecContext(ctx, `
 		INSERT INTO sessions (token, user_id, expires_at, ip, user_agent)
 		VALUES (?, ?, datetime('now', '+1 day'), '127.0.0.1', 'test')
-	`, "user_token_test", userID)
-	if err != nil {
+	`, userTok, userID); err != nil {
 		t.Fatalf("insert user session: %v", err)
 	}
 
 	sm := auth.NewSessionManager(db, auth.DefaultSessionConfig())
-	h := NewProjectShareHandler(sm, db)
-	return h, db, "admin_token_test", "user_token_test", adminID, userID
+	return &shareTestCtx{
+		h:        NewProjectShareHandler(sm, db),
+		db:       db,
+		adminTok: adminTok,
+		userTok:  userTok,
+		adminID:  adminID,
+		userID:   userID,
+	}
 }
 
 func withCookie(req *http.Request, token string) *http.Request {
@@ -68,7 +83,11 @@ func withCookie(req *http.Request, token string) *http.Request {
 }
 
 func TestProjectShare_Grant(t *testing.T) {
-	h, _, adminToken, _, adminID, userID := setupShareTest(t)
+	ctx := setupShareTest(t)
+	h := ctx.h
+	adminToken := ctx.adminTok
+	adminID := ctx.adminID
+	userID := ctx.userID
 
 	form := url.Values{}
 	form.Set("user_id", fmtInt(userID))
@@ -115,7 +134,10 @@ func fmtInt(n int64) string {
 }
 
 func TestProjectShare_Grant_NonAdmin(t *testing.T) {
-	h, _, _, userToken, _, userID := setupShareTest(t)
+	ctx := setupShareTest(t)
+	h := ctx.h
+	userToken := ctx.userTok
+	userID := ctx.userID
 
 	form := url.Values{}
 	form.Set("user_id", fmtInt(userID))
@@ -134,7 +156,9 @@ func TestProjectShare_Grant_NonAdmin(t *testing.T) {
 }
 
 func TestProjectShare_Grant_NoAuth(t *testing.T) {
-	h, _, _, _, _, userID := setupShareTest(t)
+	ctx := setupShareTest(t)
+	h := ctx.h
+	userID := ctx.userID
 
 	form := url.Values{}
 	form.Set("user_id", fmtInt(userID))
@@ -151,7 +175,10 @@ func TestProjectShare_Grant_NoAuth(t *testing.T) {
 }
 
 func TestProjectShare_Grant_Duplicate(t *testing.T) {
-	h, _, adminToken, _, _, userID := setupShareTest(t)
+	ctx := setupShareTest(t)
+	h := ctx.h
+	adminToken := ctx.adminTok
+	userID := ctx.userID
 
 	form := url.Values{}
 	form.Set("user_id", fmtInt(userID))
@@ -182,7 +209,10 @@ func TestProjectShare_Grant_Duplicate(t *testing.T) {
 }
 
 func TestProjectShare_Grant_InvalidRole(t *testing.T) {
-	h, _, adminToken, _, _, userID := setupShareTest(t)
+	ctx := setupShareTest(t)
+	h := ctx.h
+	adminToken := ctx.adminTok
+	userID := ctx.userID
 
 	form := url.Values{}
 	form.Set("user_id", fmtInt(userID))
@@ -201,11 +231,15 @@ func TestProjectShare_Grant_InvalidRole(t *testing.T) {
 }
 
 func TestProjectShare_ListMembers(t *testing.T) {
-	h, db, adminToken, _, _, userID := setupShareTest(t)
-	ctx := context.Background()
+	ctx := setupShareTest(t)
+	h := ctx.h
+	db := ctx.db
+	adminToken := ctx.adminTok
+	userID := ctx.userID
+	bgCtx := context.Background()
 
 	// 显式 grant（保留前导 /）
-	_, err := db.GrantProjectAccess(ctx, userID, "/list-test", "editor", 1)
+	_, err := db.GrantProjectAccess(bgCtx, userID, "/list-test", "editor", 1)
 	if err != nil {
 		t.Fatalf("grant in test: %v", err)
 	}
@@ -230,10 +264,14 @@ func TestProjectShare_ListMembers(t *testing.T) {
 }
 
 func TestProjectShare_Revoke(t *testing.T) {
-	h, db, adminToken, _, _, userID := setupShareTest(t)
-	ctx := context.Background()
+	ctx := setupShareTest(t)
+	h := ctx.h
+	db := ctx.db
+	adminToken := ctx.adminTok
+	userID := ctx.userID
+	bgCtx := context.Background()
 
-	_, err := db.GrantProjectAccess(ctx, userID, "/revoke-test", "viewer", 1)
+	_, err := db.GrantProjectAccess(bgCtx, userID, "/revoke-test", "viewer", 1)
 	if err != nil {
 		t.Fatalf("grant: %v", err)
 	}
@@ -249,14 +287,16 @@ func TestProjectShare_Revoke(t *testing.T) {
 	}
 
 	// 验证已删除
-	_, err = db.GetProjectMembership(ctx, userID, "/revoke-test")
+	_, err = db.GetProjectMembership(bgCtx, userID, "/revoke-test")
 	if err == nil {
 		t.Error("membership should be deleted")
 	}
 }
 
 func TestProjectShare_Revoke_NotFound(t *testing.T) {
-	h, _, adminToken, _, _, _ := setupShareTest(t)
+	ctx := setupShareTest(t)
+	h := ctx.h
+	adminToken := ctx.adminTok
 
 	req := httptest.NewRequest(http.MethodDelete,
 		"/api/auth/projects/proj/share/9999/", http.NoBody)
@@ -270,11 +310,15 @@ func TestProjectShare_Revoke_NotFound(t *testing.T) {
 }
 
 func TestProjectShare_ListUserProjects(t *testing.T) {
-	h, db, _, userToken, _, userID := setupShareTest(t)
-	ctx := context.Background()
+	ctx := setupShareTest(t)
+	h := ctx.h
+	db := ctx.db
+	userToken := ctx.userTok
+	userID := ctx.userID
+	bgCtx := context.Background()
 
-	_, _ = db.GrantProjectAccess(ctx, userID, "/proj-a-list", "editor", 1)
-	_, _ = db.GrantProjectAccess(ctx, userID, "/proj-b-list", "viewer", 1)
+	_, _ = db.GrantProjectAccess(bgCtx, userID, "/proj-a-list", "editor", 1)
+	_, _ = db.GrantProjectAccess(bgCtx, userID, "/proj-b-list", "viewer", 1)
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/auth/users/"+fmtInt(userID)+"/projects/", http.NoBody)
@@ -296,7 +340,9 @@ func TestProjectShare_ListUserProjects(t *testing.T) {
 }
 
 func TestProjectShare_UnknownPath(t *testing.T) {
-	h, _, adminToken, _, _, _ := setupShareTest(t)
+	ctx := setupShareTest(t)
+	h := ctx.h
+	adminToken := ctx.adminTok
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/auth/something/", http.NoBody)
 	withCookie(req, adminToken)

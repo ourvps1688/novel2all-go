@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -55,7 +56,7 @@ func TestGrantProjectAccess_Duplicate(t *testing.T) {
 		t.Fatalf("first grant: %v", err)
 	}
 	_, err = db.GrantProjectAccess(ctx, normalID, "/proj", "editor", adminID)
-	if err != ErrMembershipExists {
+	if !errors.Is(err, ErrMembershipExists) {
 		t.Errorf("expected ErrMembershipExists, got %v", err)
 	}
 }
@@ -156,7 +157,7 @@ func TestUpdateProjectRole_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	err := db.UpdateProjectRole(ctx, normalID, "/nonexistent", "editor")
-	if err != ErrMembershipNotFound {
+	if !errors.Is(err, ErrMembershipNotFound) {
 		t.Errorf("expected not found, got %v", err)
 	}
 }
