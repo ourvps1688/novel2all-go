@@ -157,3 +157,117 @@ func TestPDFEscape(t *testing.T) {
 		}
 	}
 }
+
+func TestExportBookEPUB_Success(t *testing.T) {
+	metadata := DefaultBookMetadata("测试书", "作者")
+	chapters := []*Chapter{
+		{ChapterNum: 1, Title: "第一章", Content: "第一章内容"},
+		{ChapterNum: 2, Title: "第二章", Content: "第二章内容"},
+	}
+	result, err := ExportBookEPUB(metadata, chapters)
+	if err != nil {
+		t.Fatalf("ExportBookEPUB: %v", err)
+	}
+	if result.Size <= 0 {
+		t.Error("Size should be > 0")
+	}
+	if !strings.Contains(result.Filename, "测试书") {
+		t.Errorf("filename should contain title, got %s", result.Filename)
+	}
+	if !strings.Contains(string(result.Body), "mimetype") {
+		t.Error("body should contain mimetype entry")
+	}
+	if !strings.Contains(string(result.Body), "chapter_001.xhtml") {
+		t.Error("body should contain chapter 1 XHTML")
+	}
+	if !strings.Contains(string(result.Body), "chapter_002.xhtml") {
+		t.Error("body should contain chapter 2 XHTML")
+	}
+	if !strings.Contains(string(result.Body), "nav.xhtml") {
+		t.Error("body should contain nav.xhtml (EPUB 3 navigation)")
+	}
+}
+
+func TestExportBookEPUB_ChapterTooLarge(t *testing.T) {
+	metadata := DefaultBookMetadata("test", "author")
+	// 创建 >5MB 的章节
+	bigContent := strings.Repeat("x", MaxChapterBytes+1)
+	chapters := []*Chapter{
+		{ChapterNum: 1, Title: "ch1", Content: bigContent},
+	}
+	_, err := ExportBookEPUB(metadata, chapters)
+	if _, ok := err.(*ChapterTooLargeError); !ok {
+		t.Errorf("expected ChapterTooLargeError, got %T %v", err, err)
+	}
+}
+
+func TestExportBookEPUB_BookTooLarge(t *testing.T) {
+	metadata := DefaultBookMetadata("test", "author")
+	// 30 章 × ~4MB = ~120MB > MaxBookBytes 100MB
+	big := strings.Repeat("x", 4*1024*1024)
+	chapters := make([]*Chapter, 30)
+	for i := range chapters {
+		chapters[i] = &Chapter{ChapterNum: i + 1, Title: "ch", Content: big}
+	}
+	_, err := ExportBookEPUB(metadata, chapters)
+	if _, ok := err.(*BookTooLargeError); !ok {
+		t.Errorf("expected BookTooLargeError, got %T %v", err, err)
+	}
+}
+
+func TestExportBookEPUB_EmptyChapters(t *testing.T) {
+	metadata := DefaultBookMetadata("test", "author")
+	result, err := ExportBookEPUB(metadata, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Size <= 0 {
+		t.Error("empty book should still produce EPUB with structure")
+	}
+	if metadata.TotalChapters != 0 {
+		t.Errorf("TotalChapters = %d, want 0", metadata.TotalChapters)
+	}
+}
+
+func TestSanitizeFilename(t *testing.T) {
+	cases := map[string]string{
+		"正常名":  "正常名",
+		"a/b":  "a_b",
+		"a\\b": "a_b",
+		"a:b":  "a_b",
+		"a*b":  "a_b",
+		"a?b":  "a_b",
+	}
+	for in, want := range cases {
+		if got := sanitizeFilename(in); got != want {
+			t.Errorf("sanitizeFilename(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestXMLEscape_All(t *testing.T) {
+	// 简化测试: 只验证 xmlEscape 不 panic 且返回非空
+	// (详细 entity 转义在 TestXMLEscape 中覆盖)
+	in := "plain text with & and <>"
+	got := xmlEscape(in)
+	if len(got) == 0 {
+		t.Error("xmlEscape returned empty string")
+	}
+	// 纯文本 (无特殊字符) 应该原样返回
+	if got := xmlEscape("hello world"); got != "hello world" {
+		t.Errorf("plain text changed: %q", got)
+	}
+	// < 应该被转义 (长度 > 1)
+	if got := xmlEscape("<"); len(got) <= 1 {
+		t.Errorf("< not escaped, got %q", got)
+	}
+}
+
+func TestExportEPUB_TooLarge(t *testing.T) {
+	// 单章 exportEPUB 路径: 触发 ChapterTooLargeError
+	bigContent := strings.Repeat("x", MaxChapterBytes+1)
+	_, err := exportEPUB("title", bigContent, 1)
+	if _, ok := err.(*ChapterTooLargeError); !ok {
+		t.Errorf("expected ChapterTooLargeError, got %T %v", err, err)
+	}
+}
