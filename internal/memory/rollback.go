@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -132,6 +133,45 @@ func (rm *RollbackManager) Rollback(snap *WriteSnapshot, tracker *Tracker) (*Rol
 	}, nil
 }
 
+// RecordStateChange 记录 state 变化用于审计 (Sprint 30 helper).
+//
+// V0.27 简化: 仅 log 到 stderr (无持久化).
+func (rm *RollbackManager) RecordStateChange(chapter int, before, after *TrackingState) {
+	diff := computeStateDiff(before, after)
+	if diff == "" {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "[rollback] chapter=%d changes:\n%s\n", chapter, diff)
+}
+
+// computeStateDiff 计算两个 state 之间的差异 (Sprint 30 helper).
+func computeStateDiff(before, after *TrackingState) string {
+	if before == nil || after == nil {
+		return ""
+	}
+	var sb strings.Builder
+	if before.LastUpdatedChapter != after.LastUpdatedChapter {
+		fmt.Fprintf(&sb, "  LastUpdatedChapter: %d -> %d\n",
+			before.LastUpdatedChapter, after.LastUpdatedChapter)
+	}
+	if len(after.Characters) != len(before.Characters) {
+		fmt.Fprintf(&sb, "  Characters: %d -> %d\n",
+			len(before.Characters), len(after.Characters))
+	}
+	if len(after.Foreshadowing) != len(before.Foreshadowing) {
+		fmt.Fprintf(&sb, "  Foreshadowing: %d -> %d\n",
+			len(before.Foreshadowing), len(after.Foreshadowing))
+	}
+	if len(after.Timeline) != len(before.Timeline) {
+		fmt.Fprintf(&sb, "  Timeline: %d -> %d\n",
+			len(before.Timeline), len(after.Timeline))
+	}
+	if newSum, ok := after.RecentChapterSummaries[after.LastUpdatedChapter]; ok {
+		fmt.Fprintf(&sb, "  Chapter %d summary: %s\n", after.LastUpdatedChapter, newSum)
+	}
+	return sb.String()
+}
+
 // LoadSnapshot 从 disk 加载 snapshot.
 func (rm *RollbackManager) LoadSnapshot(chapter int) (*WriteSnapshot, error) {
 	fp := filepath.Join(rm.snapshotDir, fmt.Sprintf("ch%d.json", chapter))
@@ -195,4 +235,12 @@ func (rm *RollbackManager) cleanupOldBackups() error {
 		}
 	}
 	return nil
+}
+
+// CleanupOldBackups 删除保留 retention 个最新 snapshots (Sprint 30 helper, 公开版本).
+//
+// V0.27: 跟 unexported cleanupOldBackups 等价, 只是导出方便外部调用 (例如运维脚本).
+func (rm *RollbackManager) CleanupOldBackups(retention int) error {
+	rm.maxSnapshots = retention
+	return rm.cleanupOldBackups()
 }

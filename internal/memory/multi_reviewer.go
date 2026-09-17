@@ -12,7 +12,6 @@ package memory
 // 参考 Python V0.30.6 B3 core/memory/multi_reviewer.py.
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/ourvps1688/novel2all-go/internal/llm"
@@ -208,8 +207,13 @@ func buildRoleReviewPrompt(role string, chapter int, content string, state *Trac
 	if !ok {
 		base = "你是审稿员."
 	}
-	stateJSON, _ := json.Marshal(state)
-	return fmt.Sprintf("%s\n\n第 %d 章内容:\n%s\n\n当前状态:\n%s\n\n返回 JSON: {issues: [...], scores: {overall, style, plot, character, originality}}", base, chapter, content, string(stateJSON))
+	stateText := stateToText(state)
+	return fmt.Sprintf("%s\n\n第 %d 章内容:\n%s\n\n当前状态:\n%s\n\n返回 JSON: {issues: [...], scores: {overall, style, plot, character, originality}}", base, chapter, content, stateText)
+}
+
+// StateToText 暴露 stateToText 给外部 (Sprint 30 helper, 对齐 Python _state_to_text).
+func StateToText(state *TrackingState) string {
+	return stateToText(state)
 }
 
 // checkConsistency 一致性检查 (V0 简化: 不调 LLM, 仅检查 state 中已知冲突).

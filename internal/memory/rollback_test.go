@@ -4,6 +4,7 @@ package memory
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -147,5 +148,96 @@ func TestRollbackManager_RollbackNil(t *testing.T) {
 	_, err := rm.Rollback(nil, tracker)
 	if err == nil {
 		t.Error("nil snapshot should error")
+	}
+}
+
+func TestRollbackManager_RecordStateChange(t *testing.T) {
+	dir := t.TempDir()
+	rm := NewRollbackManager(dir, 5)
+
+	before := newEmptyState("p")
+	before.Characters = map[string]CharacterState{
+		"alice": {Name: "alice", Location: "town"},
+	}
+
+	after := newEmptyState("p")
+	after.Characters = map[string]CharacterState{
+		"alice": {Name: "alice", Location: "city"},
+		"bob":   {Name: "bob", Location: "town"},
+	}
+	after.Foreshadowing = map[string]ForeshadowingState{
+		"fs1": {ID: "fs1", Status: "active"},
+	}
+
+	// 调用 RecordStateChange 不应 panic, 输出到 stderr (V0 简化: 仅 log)
+	rm.RecordStateChange(1, before, after)
+}
+
+func TestRollbackManager_RecordStateChange_NilState(t *testing.T) {
+	dir := t.TempDir()
+	rm := NewRollbackManager(dir, 5)
+	// nil state 不应 panic, diff 为空
+	rm.RecordStateChange(1, nil, newEmptyState("p"))
+	rm.RecordStateChange(1, newEmptyState("p"), nil)
+}
+
+func TestComputeStateDiff(t *testing.T) {
+	before := newEmptyState("p")
+	after := newEmptyState("p")
+	after.LastUpdatedChapter = 5
+	after.Characters = map[string]CharacterState{
+		"alice": {Name: "alice"},
+		"bob":   {Name: "bob"},
+	}
+	after.Foreshadowing = map[string]ForeshadowingState{
+		"fs1": {ID: "fs1", Status: "active"},
+	}
+	after.Timeline = []TimelineEvent{{Chapter: 1, Event: "start"}}
+	after.RecentChapterSummaries[5] = "chapter 5 summary"
+
+	diff := computeStateDiff(before, after)
+	if diff == "" {
+		t.Error("diff should not be empty")
+	}
+	for _, want := range []string{"LastUpdatedChapter", "Characters", "Foreshadowing", "Timeline", "chapter 5"} {
+		if !strings.Contains(diff, want) {
+			t.Errorf("diff missing %q: %s", want, diff)
+		}
+	}
+}
+
+func TestComputeStateDiff_NilState(t *testing.T) {
+	if computeStateDiff(nil, nil) != "" {
+		t.Error("nil both should return empty diff")
+	}
+	if computeStateDiff(newEmptyState("p"), nil) != "" {
+		t.Error("nil after should return empty diff")
+	}
+}
+
+func TestRollbackManager_CleanupOldBackups_Exported(t *testing.T) {
+	dir := t.TempDir()
+	rm := NewRollbackManager(dir, 5)
+
+	// 创建 6 个 snapshots
+	for i := 1; i <= 6; i++ {
+		_, err := rm.Snapshot(i, newEmptyState("p"))
+		if err != nil {
+			t.Fatalf("snapshot %d: %v", i, err)
+		}
+	}
+
+	// 调 exported CleanupOldBackups(2) → 只保留 2 个
+	if err := rm.CleanupOldBackups(2); err != nil {
+		t.Fatal(err)
+	}
+
+	chapters, _ := rm.ListSnapshots()
+	if len(chapters) != 2 {
+		t.Errorf("after CleanupOldBackups(2): count = %d, want 2", len(chapters))
+	}
+	// 应该保留最新的 2 个 (ch 5, 6)
+	if chapters[0] != 5 || chapters[1] != 6 {
+		t.Errorf("kept wrong snapshots: %v", chapters)
 	}
 }

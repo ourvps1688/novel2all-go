@@ -131,3 +131,98 @@ func TestMemoryGraph_FromState(t *testing.T) {
 		t.Errorf("empty graph nodes = %d, want 0", nodes)
 	}
 }
+
+func TestMemoryGraph_NodeEdgeCount(t *testing.T) {
+	g := newTestGraph()
+	if g.NodeCount() != 4 {
+		t.Errorf("NodeCount = %d, want 4", g.NodeCount())
+	}
+	if g.EdgeCount() != 3 {
+		t.Errorf("EdgeCount = %d, want 3", g.EdgeCount())
+	}
+}
+
+func TestMemoryGraph_Neighbors(t *testing.T) {
+	g := newTestGraph()
+	// alice 有 2 个邻居 (bob + town), 但 alice-bob-edge 出现 1 次在 adj
+	nbrs := g.Neighbors("char:alice")
+	if len(nbrs) != 2 {
+		t.Errorf("alice neighbors = %d, want 2", len(nbrs))
+	}
+}
+
+func TestMemoryGraph_Subgraph(t *testing.T) {
+	g := newTestGraph()
+	sub := g.Subgraph([]string{"char:alice", "char:bob"})
+	if sub.NodeCount() != 2 {
+		t.Errorf("subgraph nodes = %d, want 2", sub.NodeCount())
+	}
+	// alice-bob edge 应该保留, 但 bob-carol 和 alice-town 不保留
+	if sub.EdgeCount() != 1 {
+		t.Errorf("subgraph edges = %d, want 1", sub.EdgeCount())
+	}
+}
+
+func TestMemoryGraph_MergeGraph(t *testing.T) {
+	g1 := NewMemoryGraph(nil)
+	g1.AddNode(GraphNode{ID: "char:a", Name: "A"})
+	g1.AddNode(GraphNode{ID: "char:b", Name: "B"}) // g1 也有 b (dup 测试)
+	g1.AddEdge(GraphEdge{FromID: "char:a", ToID: "char:b", Type: EdgeRelatedTo})
+
+	g2 := NewMemoryGraph(nil)
+	g2.AddNode(GraphNode{ID: "char:b", Name: "B"}) // dup
+	g2.AddNode(GraphNode{ID: "char:c", Name: "C"}) // new
+	g2.AddEdge(GraphEdge{FromID: "char:b", ToID: "char:c", Type: EdgeRelatedTo})
+
+	newNodes, newEdges := g1.MergeGraph(g2)
+	if newNodes != 1 {
+		t.Errorf("new nodes = %d, want 1 (only c)", newNodes)
+	}
+	if newEdges != 1 {
+		t.Errorf("new edges = %d, want 1", newEdges)
+	}
+	if g1.NodeCount() != 3 {
+		t.Errorf("after merge nodes = %d, want 3", g1.NodeCount())
+	}
+	if g1.EdgeCount() != 2 {
+		t.Errorf("after merge edges = %d, want 2", g1.EdgeCount())
+	}
+}
+
+func TestMemoryGraph_BFSPaths_Single(t *testing.T) {
+	g := newTestGraph()
+	paths := g.BFSPaths("char:alice", "char:carol", 0)
+	if len(paths) != 1 {
+		t.Errorf("alice→carol paths = %d, want 1", len(paths))
+	}
+	// path = alice → bob → carol
+	if len(paths) > 0 && len(paths[0]) != 3 {
+		t.Errorf("path length = %d, want 3", len(paths[0]))
+	}
+}
+
+func TestMemoryGraph_BFSPaths_Multiple(t *testing.T) {
+	// 构造: A - B, A - C, B - D, C - D (2 条 A→D 路径: A-B-D, A-C-D)
+	g := NewMemoryGraph(nil)
+	g.AddNode(GraphNode{ID: "A"})
+	g.AddNode(GraphNode{ID: "B"})
+	g.AddNode(GraphNode{ID: "C"})
+	g.AddNode(GraphNode{ID: "D"})
+	g.AddEdge(GraphEdge{FromID: "A", ToID: "B", Type: EdgeRelatedTo})
+	g.AddEdge(GraphEdge{FromID: "A", ToID: "C", Type: EdgeRelatedTo})
+	g.AddEdge(GraphEdge{FromID: "B", ToID: "D", Type: EdgeRelatedTo})
+	g.AddEdge(GraphEdge{FromID: "C", ToID: "D", Type: EdgeRelatedTo})
+
+	paths := g.BFSPaths("A", "D", 0)
+	if len(paths) != 2 {
+		t.Errorf("A→D paths = %d, want 2", len(paths))
+	}
+}
+
+func TestMemoryGraph_BFSPaths_NoPath(t *testing.T) {
+	g := newTestGraph()
+	paths := g.BFSPaths("char:alice", "char:nonexistent", 0)
+	if paths != nil {
+		t.Errorf("nonexistent should return nil, got %v", paths)
+	}
+}

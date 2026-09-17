@@ -165,6 +165,40 @@ func (s *ChapterSummarizer) ApplyToState(state *TrackingState, chapter int, cont
 }
 
 // maxInt 内置 max helper (Go 1.21+ built-in).
+// CompressRange 合并 [startCh, endCh] 范围的章节摘要为单一字符串 (Sprint 30 helper).
+//
+// 用于旧摘要压缩或跨章节上下文生成. 调 apply_to_state 累积 state, 然后取 RecentChapterSummaries 拼接.
+//
+// V0.27 简化: 直接拼接, 不调用 LLM.
+func (s *ChapterSummarizer) CompressRange(state *TrackingState, startCh, endCh int) string {
+	if state == nil || startCh > endCh {
+		return ""
+	}
+	var parts []string
+	for ch := startCh; ch <= endCh; ch++ {
+		if summary, ok := state.RecentChapterSummaries[ch]; ok && summary != "" {
+			parts = append(parts, fmt.Sprintf("第%d章: %s", ch, summary))
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// MergeBuckets 合并 TIER1/2/3 三档摘要 (Sprint 30 helper).
+//
+// buckets: [TIER1 summaries, TIER2 summaries, TIER3 summaries].
+// 返回拼接字符串 (用 \n\n 分隔 tier, 内部用 | 分隔 summaries).
+func (s *ChapterSummarizer) MergeBuckets(buckets [3][]string) string {
+	headers := []string{"[TIER1: 近期]", "[TIER2: 中期]", "[TIER3: 远期]"}
+	var parts []string
+	for i, bucket := range buckets {
+		if len(bucket) == 0 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s\n%s", headers[i], strings.Join(bucket, " | ")))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
 func maxInt(a, b int) int {
 	if a > b {
 		return a

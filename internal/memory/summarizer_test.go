@@ -107,3 +107,59 @@ func TestSplitSentences(t *testing.T) {
 		t.Errorf("split into %d, want 5: %v", len(got), got)
 	}
 }
+
+func TestSummarizer_CompressRange(t *testing.T) {
+	s := NewChapterSummarizer()
+	state := newEmptyState("p")
+	state.RecentChapterSummaries = map[int]string{
+		1: "ch1 summary",
+		2: "ch2 summary",
+		3: "ch3 summary",
+	}
+	got := s.CompressRange(state, 1, 3)
+	for _, want := range []string{"ch1", "ch2", "ch3"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in compressed: %s", want, got)
+		}
+	}
+}
+
+func TestSummarizer_CompressRange_Empty(t *testing.T) {
+	s := NewChapterSummarizer()
+	state := newEmptyState("p")
+	got := s.CompressRange(state, 1, 5)
+	if got != "" {
+		t.Errorf("empty range should return empty string, got %q", got)
+	}
+}
+
+func TestSummarizer_CompressRange_NilState(t *testing.T) {
+	s := NewChapterSummarizer()
+	got := s.CompressRange(nil, 1, 5)
+	if got != "" {
+		t.Errorf("nil state should return empty, got %q", got)
+	}
+}
+
+func TestSummarizer_MergeBuckets(t *testing.T) {
+	s := NewChapterSummarizer()
+	buckets := [3][]string{
+		{"recent1", "recent2"},
+		{"mid1"},
+		{"far1", "far2", "far3"},
+	}
+	got := s.MergeBuckets(buckets)
+	for _, want := range []string{"TIER1", "TIER2", "TIER3", "recent1", "mid1", "far1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in merged: %s", want, got)
+		}
+	}
+}
+
+func TestSummarizer_MergeBuckets_AllEmpty(t *testing.T) {
+	s := NewChapterSummarizer()
+	got := s.MergeBuckets([3][]string{})
+	if got != "" {
+		t.Errorf("all-empty should return empty, got %q", got)
+	}
+}

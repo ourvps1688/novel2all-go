@@ -57,6 +57,19 @@ func (c *MemoryContext) TotalTokens() int {
 	return total
 }
 
+// IterAll 返回所有 5 个 layer 的 items (Core/Character/Recent/Events/Graph),
+// 顺序固定, 方便统一遍历 (Sprint 30 helper).
+func (c *MemoryContext) IterAll() []MemoryItem {
+	total := len(c.Core) + len(c.Character) + len(c.Recent) + len(c.Events) + len(c.Graph)
+	out := make([]MemoryItem, 0, total)
+	out = append(out, c.Core...)
+	out = append(out, c.Character...)
+	out = append(out, c.Recent...)
+	out = append(out, c.Events...)
+	out = append(out, c.Graph...)
+	return out
+}
+
 // ToSystemSections 组装成 LLM system message 段落.
 //
 //nolint:gocyclo // 5 layer branches is natural for memory assembly
@@ -203,6 +216,29 @@ func (g *GraphData) EdgeExists(from, to string, edgeType EdgeType) bool {
 		}
 	}
 	return false
+}
+
+// NodeIndex 返回 node ID → slice index (Sprint 30 helper, 加速查找).
+//
+// 返回的 map 是新创建的, 不引用 g.Nodes 内部, 调用方负责 GC.
+func (g *GraphData) NodeIndex() map[string]int {
+	out := make(map[string]int, len(g.Nodes))
+	for i, n := range g.Nodes {
+		out[n.ID] = i
+	}
+	return out
+}
+
+// EdgeIndex 返回 (from|to|type) → slice index (Sprint 30 helper).
+//
+// key 格式: "{from}\x00{to}\x00{type}".
+func (g *GraphData) EdgeIndex() map[string]int {
+	out := make(map[string]int, len(g.Edges))
+	for i, e := range g.Edges {
+		key := e.FromID + "\x00" + e.ToID + "\x00" + string(e.Type)
+		out[key] = i
+	}
+	return out
 }
 
 // AddNode 添加 node (如已存在则忽略).

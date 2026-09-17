@@ -1,7 +1,11 @@
 // verifier_test.go 测试 Verifier 工具函数.
 package memory
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+)
 
 func TestHasBlockingIssues(t *testing.T) {
 	if HasBlockingIssues(nil) {
@@ -115,5 +119,64 @@ func TestCountIssuesBySeverity(t *testing.T) {
 	counts := CountIssuesBySeverity(issues)
 	if counts["critical"] != 2 || counts["warning"] != 1 {
 		t.Errorf("counts = %+v", counts)
+	}
+}
+
+func TestVerifier_PreWriteCheck_NilRouter(t *testing.T) {
+	v := NewVerifier(nil)
+	issues, err := v.PreWriteCheck(context.Background(), "outline", newEmptyState("p"))
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if issues != nil {
+		t.Errorf("nil router should return nil issues, got %v", issues)
+	}
+}
+
+func TestVerifier_PreWriteCheck_EmptyOutline(t *testing.T) {
+	v := NewVerifier(nil)
+	issues, err := v.PreWriteCheck(context.Background(), "", newEmptyState("p"))
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if issues != nil {
+		t.Errorf("empty outline should return nil issues, got %v", issues)
+	}
+}
+
+func TestVerifier_PostWriteCheck_Stub(t *testing.T) {
+	v := NewVerifier(nil)
+	issues, err := v.PostWriteCheck(context.Background(), "content")
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if issues != nil {
+		t.Errorf("PostWriteCheck stub should return nil, got %v", issues)
+	}
+}
+
+func TestStateToText(t *testing.T) {
+	state := newEmptyState("test")
+	state.Characters = map[string]CharacterState{
+		"alice": {Name: "alice", Location: "town"},
+	}
+	state.Foreshadowing = map[string]ForeshadowingState{
+		"fs1": {ID: "fs1", Status: "active", Description: "mystery"},
+	}
+	state.Timeline = []TimelineEvent{
+		{Chapter: 1, Event: "story begins"},
+	}
+	text := stateToText(state)
+	for _, want := range []string{"test", "alice", "town", "active", "mystery", "story begins"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("state text missing %q: %s", want, text)
+		}
+	}
+}
+
+func TestStateToText_NilState(t *testing.T) {
+	text := stateToText(nil)
+	if !strings.Contains(text, "无状态") {
+		t.Errorf("nil state should show placeholder, got: %s", text)
 	}
 }

@@ -77,6 +77,37 @@ func TestGraphData_AddNodeEdge(t *testing.T) {
 	}
 }
 
+func TestGraphData_NodeIndex(t *testing.T) {
+	g := &GraphData{}
+	g.AddNode(GraphNode{ID: "a"})
+	g.AddNode(GraphNode{ID: "b"})
+	g.AddNode(GraphNode{ID: "c"})
+
+	idx := g.NodeIndex()
+	if idx["a"] != 0 || idx["b"] != 1 || idx["c"] != 2 {
+		t.Errorf("NodeIndex wrong: %v", idx)
+	}
+	if _, ok := idx["nonexistent"]; ok {
+		t.Error("nonexistent should not be in index")
+	}
+}
+
+func TestGraphData_EdgeIndex(t *testing.T) {
+	g := &GraphData{}
+	g.AddEdge(GraphEdge{FromID: "a", ToID: "b", Type: EdgeRelatedTo})
+	g.AddEdge(GraphEdge{FromID: "b", ToID: "c", Type: EdgeLocatedIn})
+
+	idx := g.EdgeIndex()
+	if len(idx) != 2 {
+		t.Errorf("EdgeIndex size = %d, want 2", len(idx))
+	}
+	key1 := "a\x00b\x00" + string(EdgeRelatedTo)
+	key2 := "b\x00c\x00" + string(EdgeLocatedIn)
+	if idx[key1] != 0 || idx[key2] != 1 {
+		t.Errorf("EdgeIndex wrong: %v", idx)
+	}
+}
+
 func TestMemoryContext_JSONRoundTrip(t *testing.T) {
 	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
 	original := &MemoryContext{
@@ -97,5 +128,34 @@ func TestMemoryContext_JSONRoundTrip(t *testing.T) {
 	}
 	if decoded.Core[0].Timestamp == nil {
 		t.Error("timestamp lost in roundtrip")
+	}
+}
+
+func TestMemoryContext_IterAll(t *testing.T) {
+	c := &MemoryContext{
+		Core:      []MemoryItem{{Content: "c1"}, {Content: "c2"}},
+		Character: []MemoryItem{{Content: "ch1"}},
+		Recent:    []MemoryItem{{Content: "r1"}},
+		Events:    []MemoryItem{{Content: "e1"}},
+		Graph:     []MemoryItem{{Content: "g1"}},
+	}
+	all := c.IterAll()
+	if len(all) != 6 {
+		t.Errorf("IterAll length = %d, want 6", len(all))
+	}
+	// 验证顺序: Core → Character → Recent → Events → Graph
+	want := []string{"c1", "c2", "ch1", "r1", "e1", "g1"}
+	for i, item := range all {
+		if item.Content != want[i] {
+			t.Errorf("IterAll[%d] = %q, want %q", i, item.Content, want[i])
+		}
+	}
+}
+
+func TestMemoryContext_IterAll_Empty(t *testing.T) {
+	c := &MemoryContext{}
+	all := c.IterAll()
+	if len(all) != 0 {
+		t.Errorf("empty IterAll length = %d, want 0", len(all))
 	}
 }

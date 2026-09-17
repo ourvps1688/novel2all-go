@@ -3,6 +3,7 @@ package memory
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -92,5 +93,26 @@ func TestMultiAgentReviewer_ReviewIssuesHaveReviewer(t *testing.T) {
 		if issue.Reviewer == "" {
 			t.Error("issue missing reviewer tag")
 		}
+	}
+}
+
+func TestStateToText_Exported(t *testing.T) {
+	state := newEmptyState("test")
+	state.Characters = map[string]CharacterState{
+		"alice": {Name: "alice", Location: "town"},
+	}
+	text := StateToText(state)
+	if text == "" {
+		t.Error("StateToText should not return empty for non-nil state")
+	}
+	if !strings.Contains(text, "alice") {
+		t.Errorf("missing character in StateToText: %s", text)
+	}
+}
+
+func TestStateToText_NilState_Exported(t *testing.T) {
+	text := StateToText(nil)
+	if !strings.Contains(text, "无状态") {
+		t.Errorf("nil state should return placeholder, got: %s", text)
 	}
 }

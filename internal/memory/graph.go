@@ -214,6 +214,142 @@ func (mg *MemoryGraph) Count() (int, int) {
 	return len(mg.data.Nodes), len(mg.data.Edges)
 }
 
+// NodeCount 返回节点数 (Sprint 30 helper).
+func (mg *MemoryGraph) NodeCount() int {
+	return len(mg.data.Nodes)
+}
+
+// EdgeCount 返回边数 (Sprint 30 helper).
+func (mg *MemoryGraph) EdgeCount() int {
+	return len(mg.data.Edges)
+}
+
+// Neighbors 返回 node 的所有邻居 ID 列表 (按邻接边顺序).
+func (mg *MemoryGraph) Neighbors(nodeID string) []string {
+	indices := mg.adj[nodeID]
+	out := make([]string, 0, len(indices))
+	seen := make(map[string]bool)
+	for _, i := range indices {
+		e := mg.data.Edges[i]
+		var nbr string
+		if e.FromID == nodeID {
+			nbr = e.ToID
+		} else {
+			nbr = e.FromID
+		}
+		if !seen[nbr] {
+			seen[nbr] = true
+			out = append(out, nbr)
+		}
+	}
+	return out
+}
+
+// Subgraph 提取子图 (只含指定 nodes + 它们之间的 edges).
+func (mg *MemoryGraph) Subgraph(nodeIDs []string) *MemoryGraph {
+	keep := make(map[string]bool, len(nodeIDs))
+	for _, id := range nodeIDs {
+		keep[id] = true
+	}
+	out := &GraphData{Nodes: []GraphNode{}, Edges: []GraphEdge{}}
+	for _, n := range mg.data.Nodes {
+		if keep[n.ID] {
+			out.Nodes = append(out.Nodes, n)
+		}
+	}
+	for _, e := range mg.data.Edges {
+		if keep[e.FromID] && keep[e.ToID] {
+			out.Edges = append(out.Edges, e)
+		}
+	}
+	return NewMemoryGraph(out)
+}
+
+// MergeGraph 合并另一个 graph 的 nodes 和 edges (去重 ID).
+//
+// 修改 mg 的 data, 重建 adj. 返回新增的 nodes/edges 数.
+func (mg *MemoryGraph) MergeGraph(other *MemoryGraph) (newNodes, newEdges int) {
+	if other == nil {
+		return 0, 0
+	}
+	for _, n := range other.data.Nodes {
+		if !mg.data.NodeExists(n.ID) {
+			mg.data.Nodes = append(mg.data.Nodes, n)
+			newNodes++
+		}
+	}
+	for _, e := range other.data.Edges {
+		if !mg.data.EdgeExists(e.FromID, e.ToID, e.Type) {
+			mg.data.Edges = append(mg.data.Edges, e)
+			newEdges++
+		}
+	}
+	mg.rebuildAdj()
+	return
+}
+
+// BFSPaths 枚举 from → to 所有最短路径 (BFS, max_depth 限制).
+//
+// 返回每条路径的 node ID 序列 (含起终点).
+func (mg *MemoryGraph) BFSPaths(fromID, toID string, maxDepth int) [][]string {
+	if !mg.HasNode(fromID) || !mg.HasNode(toID) {
+		return nil
+	}
+	if fromID == toID {
+		return [][]string{{fromID}}
+	}
+
+	type frame struct {
+		path  []string
+		depth int
+	}
+	var results [][]string
+	queue := []frame{{path: []string{fromID}, depth: 0}}
+	visited := make(map[string]int) // node → 第一次到达时的深度 (避免环)
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+
+		if maxDepth > 0 && cur.depth > maxDepth {
+			continue
+		}
+
+		last := cur.path[len(cur.path)-1]
+		if last == toID {
+			// 找到一条路径
+			p := make([]string, len(cur.path))
+			copy(p, cur.path)
+			results = append(results, p)
+			continue
+		}
+
+		if minD, ok := visited[last]; ok && minD < cur.depth {
+			continue // 已经以更短深度访问过
+		}
+		visited[last] = cur.depth
+
+		for _, nbr := range mg.Neighbors(last) {
+			// 避免在路径中重复
+			visited2 := false
+			for _, p := range cur.path {
+				if p == nbr {
+					visited2 = true
+					break
+				}
+			}
+			if visited2 {
+				continue
+			}
+			newPath := make([]string, len(cur.path)+1)
+			copy(newPath, cur.path)
+			newPath[len(cur.path)] = nbr
+			queue = append(queue, frame{path: newPath, depth: cur.depth + 1})
+		}
+	}
+	return results
+}
+
 // ToDict 序列化为 dict (持久化用).
 func (mg *MemoryGraph) ToDict() map[string]any {
 	return map[string]any{
