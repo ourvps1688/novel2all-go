@@ -12,12 +12,12 @@ func TestSecurityHeaders_Defaults(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 
 	h := NewSecurityHeadersMiddleware(next, nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 
 	if !called {
 		t.Fatal("next handler not called")
@@ -41,11 +41,11 @@ func TestSecurityHeaders_CustomHeaders(t *testing.T) {
 		"X-Custom-Header": "custom-value",
 	}
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 	h := NewSecurityHeadersMiddleware(next, custom)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 
 	if got := rec.Header().Get("X-Custom-Header"); got != "custom-value" {
 		t.Errorf("custom header = %q, want custom-value", got)
@@ -65,11 +65,11 @@ func TestSecurityHeaders_NoDoubleInject(t *testing.T) {
 		// 再次 WriteHeader 不会重复注入
 		w.WriteHeader(http.StatusOK)
 		counter++
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 	h := NewSecurityHeadersMiddleware(next, nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 
 	if counter != 1 {
 		t.Errorf("next called %d times, want 1", counter)

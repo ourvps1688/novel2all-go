@@ -62,6 +62,8 @@ type CacheRecommendation struct {
 //
 // V0 简化版: 只检查 3 个字段 (backend / max_size / ttl_seconds),
 // 不依赖 stats 完整数据.
+//
+//nolint:gocyclo // cache 推荐的多种 if 分支 (backend × size × ttl × health 各自独立逻辑)
 func Recommend(stats CacheRecommendationStats) CacheRecommendation {
 	current := map[string]any{
 		"backend":     stats.Backend,
@@ -73,8 +75,9 @@ func Recommend(stats CacheRecommendationStats) CacheRecommendation {
 	var actions []map[string]any
 	var issues []string
 
-	// === 1. Backend 推荐 ===
-	if stats.Backend == "memory" || stats.Backend == "json" {
+	// === 1. Backend 推荐 (switch on backend type)
+	switch stats.Backend {
+	case "memory", "json":
 		recommended["backend"] = FieldRecommendation{
 			Current:     stats.Backend,
 			Recommended: "sqlite",
@@ -90,7 +93,7 @@ func Recommend(stats CacheRecommendationStats) CacheRecommendation {
 			"reason":   "sqlite 写性能 185x, 读 45x",
 		})
 		issues = append(issues, "backend_suboptimal")
-	} else {
+	default:
 		recommended["backend"] = FieldRecommendation{
 			Current:     stats.Backend,
 			Recommended: stats.Backend,

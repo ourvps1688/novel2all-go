@@ -73,7 +73,7 @@ func NewAdaptiveRouter(source RoutingDataSource, strategy AdaptiveStrategy, minS
 }
 
 // Record 记录一次 LLM 调用结果.
-func (r *AdaptiveRouter) Record(ctx context.Context, task TaskType, model string, success bool, latencyMS float64, quality float64) error {
+func (r *AdaptiveRouter) Record(ctx context.Context, task TaskType, model string, success bool, latencyMS, quality float64) error {
 	if r.source == nil {
 		return ErrNoStore
 	}
@@ -136,8 +136,6 @@ func (r *AdaptiveRouter) computeScore(s ModelStats) float64 {
 		return 0
 	case StrategyBestSuccess:
 		return s.SuccessRate
-	case StrategyBestAvg, "":
-		fallthrough
 	default:
 		// best_avg: success_rate * 100 (简化, V0 占位)
 		return s.SuccessRate * 100

@@ -21,7 +21,7 @@ func TestComputeSettingsHash_Empty(t *testing.T) {
 
 func TestComputeSettingsHash_StableForSameContent(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "创作设定.md"), []byte("magic system"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "创作设定.md"), []byte("magic system"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -38,13 +38,13 @@ func TestComputeSettingsHash_StableForSameContent(t *testing.T) {
 func TestComputeSettingsHash_ChangesWhenFileChanges(t *testing.T) {
 	dir := t.TempDir()
 	fp := filepath.Join(dir, "创作设定.md")
-	if err := os.WriteFile(fp, []byte("v1 content"), 0644); err != nil {
+	if err := os.WriteFile(fp, []byte("v1 content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	h1 := ComputeSettingsHash(dir)
 
 	// 修改文件
-	if err := os.WriteFile(fp, []byte("v2 content"), 0644); err != nil {
+	if err := os.WriteFile(fp, []byte("v2 content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	h2 := ComputeSettingsHash(dir)
@@ -56,14 +56,14 @@ func TestComputeSettingsHash_ChangesWhenFileChanges(t *testing.T) {
 
 func TestComputeSettingsHash_MultipleFiles(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "创作设定.md"), []byte("setting1"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "创作设定.md"), []byte("setting1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// 需要先建 设定/ 子目录, 否则 WriteFile 在 Windows 上失败
-	if err := os.MkdirAll(filepath.Join(dir, "设定"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "设定"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "设定", "文风.md"), []byte("style1"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "设定", "文风.md"), []byte("style1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,11 +77,11 @@ func TestComputeSettingsHash_RoleFilesOrderIndependent(t *testing.T) {
 	// 角色目录 glob 应按文件名排序, 与文件系统返回顺序无关
 	dir := t.TempDir()
 	rolesDir := filepath.Join(dir, DefaultRolesSubdir)
-	if err := os.MkdirAll(rolesDir, 0755); err != nil {
+	if err := os.MkdirAll(rolesDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"角色C.md", "角色A.md", "角色B.md"} {
-		if err := os.WriteFile(filepath.Join(rolesDir, name), []byte("content-"+name), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(rolesDir, name), []byte("content-"+name), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -89,7 +89,7 @@ func TestComputeSettingsHash_RoleFilesOrderIndependent(t *testing.T) {
 	h1 := ComputeSettingsHash(dir)
 	// 创建顺序不同, hash 应一致
 	for _, name := range []string{"角色B.md", "角色C.md", "角色A.md"} {
-		_ = os.WriteFile(filepath.Join(rolesDir, name), []byte("content-"+name), 0644)
+		_ = os.WriteFile(filepath.Join(rolesDir, name), []byte("content-"+name), 0o644)
 	}
 	h2 := ComputeSettingsHash(dir)
 
