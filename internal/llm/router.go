@@ -43,6 +43,9 @@ type Router struct {
 
 	// cache 钩子（Sprint 15 commit G，可选）
 	cache atomic.Pointer[Cache]
+
+	// adaptive 路由（Sprint 21，可选；不注入时用 routes 表默认）
+	adaptive atomic.Pointer[AdaptiveRouter]
 }
 
 type routeConfig struct {
@@ -235,6 +238,15 @@ func (r *Router) SetMetricsHook(h MetricsHook) {
 // nil 也允许（清除 cache），向后兼容。
 func (r *Router) SetCache(c *Cache) {
 	r.cache.Store(c)
+}
+
+// SetAdaptiveRouter 注入自适应路由（Sprint 21，可选）
+//
+// 调用后 router.resolve 会先调 AdaptiveRouter.Select(task) 选 model。
+// 如果样本不足 (冷启动), 仍用 routes 表默认路由。
+// nil 也允许（清除 adaptive routing），向后兼容。
+func (r *Router) SetAdaptiveRouter(ar *AdaptiveRouter) {
+	r.adaptive.Store(ar)
 }
 
 // promptFromRequest 从 Request.Messages 拼出完整 prompt 用于 cache key

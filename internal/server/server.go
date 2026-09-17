@@ -121,6 +121,15 @@ func Run(cfg *config.Config) error {
 	llmRouter.SetCache(llmCache)
 	logger.Info("llm_cache_ready", "l1_capacity", 1024, "l2_enabled", true)
 
+	// 5.4 Sprint 21: 自适应路由 (按历史 success_rate 动态选 model)
+	// 用 inline adapter 把 store.RoutingStore 注入到 llm.RoutingDataSource interface
+	// (避免 store → llm import cycle)
+	routingStore := store.NewRoutingStore(db)
+	routingDataSource := &routingDataSourceAdapter{store: routingStore}
+	adaptiveRouter := llm.NewAdaptiveRouter(routingDataSource, llm.StrategyBestAvg, 5)
+	llmRouter.SetAdaptiveRouter(adaptiveRouter)
+	logger.Info("adaptive_router_ready", "strategy", "best_avg", "min_samples", 5)
+
 	// 6. projects + state
 	projectsSQLStore := store.NewProjectsStore(db)
 	projectStore := api.NewSQLiteProjectsAdapter(projectsSQLStore)
@@ -159,6 +168,8 @@ func Run(cfg *config.Config) error {
 	deps.SetProjectStore(projectStore)
 	mux := api.Router(deps)
 	handler := api.LoggingMiddleware(logger, metrics, traces, mux)
+	// 套一层 security headers middleware (Sprint 21)
+	handler = api.NewSecurityHeadersMiddleware(handler, nil)
 
 	// 8. HTTP server
 	srv := &http.Server{
@@ -225,3 +236,38 @@ func (a *llmHookAdapter) RecordLLMTrace(provider, task, status string, duration 
 
 // 编译期断言: llmHookAdapter 实现 llm.MetricsHook 接口.
 var _ llm.MetricsHook = (*llmHookAdapter)(nil)
+
+// routingDataSourceAdapter 把 store.RoutingStore 适配成 llm.RoutingDataSource.
+//
+// 设计原因: llm 包不能直接 import store (避免 cmd/cli 循环: cli → llm → store → llm).
+// 在拼装层 (server 包) 做适配, 把 store.RoutingEntry 转换为 llm.ModelStats.
+type routingDataSourceAdapter struct {
+	store *store.RoutingStore
+}
+
+// 编译期断言: 必须实现 llm.RoutingDataSource 接口.
+var _ llm.RoutingDataSource = (*routingDataSourceAdapter)(nil)
+
+// RecordResult 适配 store.RecordResult (签名一致).
+func (a *routingDataSourceAdapter) RecordResult(ctx context.Context, task, model string, success bool) error {
+	return a.store.RecordResult(ctx, task, model, success)
+}
+
+// ListByTask 把 store.RoutingEntry 列表转换为 llm.ModelStats 列表.
+func (a *routingDataSourceAdapter) ListByTask(ctx context.Context, task string) ([]llm.ModelStats, error) {
+	entries, err := a.store.ListByTask(ctx, task)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]llm.ModelStats, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, llm.ModelStats{
+			Model:        e.Model,
+			Task:         llm.TaskType(e.Task),
+			Samples:      e.TotalCount,
+			SuccessCount: e.SuccessCount,
+			SuccessRate:  e.SuccessRate,
+		})
+	}
+	return out, nil
+}

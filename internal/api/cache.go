@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
 // CacheStats LLM cache 运行时统计
@@ -241,7 +243,7 @@ func (h *CacheHandler) handleMigrate(w http.ResponseWriter, r *http.Request) {
 	writeCacheResult(w, http.StatusOK, result)
 }
 
-// handleRecommend 推荐 cache 配置（基于当前 stats）
+// handleRecommend 推荐 cache 配置（基于当前 stats, Sprint 21 用 store.Recommend 替代 inline 逻辑）
 func (h *CacheHandler) handleRecommend(w http.ResponseWriter, _ *http.Request) {
 	hits := atomic.LoadInt64(&cacheHits)
 	misses := atomic.LoadInt64(&cacheMisses)
@@ -254,88 +256,60 @@ func (h *CacheHandler) handleRecommend(w http.ResponseWriter, _ *http.Request) {
 	maxSize := int(atomic.LoadInt64(&cacheMaxSize))
 	ttl := int(atomic.LoadInt64(&cacheTTLSec))
 
-	issues := []string{}
-	actions := []RecommendAction{}
-	notes := []string{}
-	healthScore := 1.0
+	// 调 store.Recommend (Sprint 21 实现的智能推荐)
+	// backend 固定 "sqlite": Sprint 15 之后 L2 SQLite 是默认持久层
+	// (L1 memory 是短期 cache, 不算 "cache backend")
+	rec := store.Recommend(store.CacheRecommendationStats{
+		Backend:    "sqlite",
+		MaxSize:    maxSize,
+		TTLSeconds: ttl,
+		Hits:       hits,
+		Misses:     misses,
+		Size:       size,
+		HitRate:    hitRate,
+	})
 
-	if total == 0 {
-		notes = append(notes, "数据不足（无 hit/miss 记录），置信度低")
-		healthScore = 0.5
-	} else if hitRate < 0.3 {
-		issues = append(issues, fmt.Sprintf("hit rate 偏低 (%.1f%%)", hitRate*100))
-		actions = append(actions, RecommendAction{
-			Action:      "increase_max_size",
-			Description: "增大 max_size 可减少 eviction，提升 hit rate",
-			Impact:      "高",
-			HowTo:       "POST /api/cache/migrate?max_size=5000 (增大到 5000)",
-		})
-		healthScore -= 0.3
-	}
-
-	if size >= maxSize*9/10 {
-		issues = append(issues, fmt.Sprintf("cache 接近满载 (%d/%d)", size, maxSize))
-		actions = append(actions, RecommendAction{
-			Action:      "increase_max_size",
-			Description: "cache 满了会触发 LRU eviction",
-			Impact:      "高",
-			HowTo:       "POST /api/cache/migrate?max_size=2000",
-		})
-		healthScore -= 0.2
-	}
-
-	if ttl > 0 && ttl < 600 {
-		issues = append(issues, "TTL 过短（< 10 分钟）")
-		actions = append(actions, RecommendAction{
-			Action:      "increase_ttl",
-			Description: "短 TTL 会频繁 expire",
-			Impact:      "中",
-			HowTo:       "POST /api/cache/migrate?ttl_seconds=3600",
-		})
-		healthScore -= 0.1
-	}
-
-	if len(actions) == 0 && len(issues) == 0 {
-		actions = append(actions, RecommendAction{
-			Action:      "no_action",
-			Description: "当前 cache 配置良好，无需调整",
-			Impact:      "无",
-			HowTo:       "持续观察 stats",
-		})
-	}
-
-	confidence := "high"
-	if total < 100 {
-		confidence = "low"
-	} else if total < 1000 {
-		confidence = "medium"
-	}
-	if healthScore < 0 {
-		healthScore = 0
-	}
-
+	// store.CacheRecommendation → api.RecommendResult 转换
 	result := RecommendResult{
-		Current: map[string]any{
-			"backend":     "memory",
-			"max_size":    maxSize,
-			"ttl_seconds": ttl,
-			"size":        size,
-			"hit_rate":    hitRate,
-		},
+		Current: rec.Current,
 		Recommended: map[string]any{
-			"backend":     "memory",
-			"max_size":    maxSize,
-			"ttl_seconds": ttl,
+			"backend":     rec.Recommended["backend"].Recommended,
+			"max_size":    rec.Recommended["max_size"].Recommended,
+			"ttl_seconds": rec.Recommended["ttl_seconds"].Recommended,
 		},
-		Actions:     actions,
-		HealthScore: healthScore,
-		Issues:      issues,
-		Confidence:  confidence,
-		Notes:       notes,
+		Actions:     convertRecommendActions(rec.Actions),
+		HealthScore: rec.HealthScore,
+		Issues:      rec.Issues,
+		Confidence:  rec.Confidence,
+		Notes:       rec.Notes,
 	}
+
+	// 补 size + hit_rate 到 current
+	result.Current["size"] = size
+	result.Current["hit_rate"] = hitRate
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(result)
+}
+
+// convertRecommendActions store.Recommend actions (map) → api.RecommendAction.
+//
+// store 的 actions 是 map[string]any (含 priority/action/from/to/reason),
+// api 的 RecommendAction 是 struct (action/description/impact/how_to).
+func convertRecommendActions(in []map[string]any) []RecommendAction {
+	out := make([]RecommendAction, 0, len(in))
+	for _, m := range in {
+		priority, _ := m["priority"].(string)
+		action, _ := m["action"].(string)
+		reason, _ := m["reason"].(string)
+		out = append(out, RecommendAction{
+			Action:      action,
+			Description: reason,
+			Impact:      priority, // 用 priority 字段填 impact (V0 简化)
+			HowTo:       fmt.Sprintf("see store.Recommend docs for action=%s", action),
+		})
+	}
+	return out
 }
 
 // handleReset 重置 cache（清空计数器 + 删除持久化文件）
