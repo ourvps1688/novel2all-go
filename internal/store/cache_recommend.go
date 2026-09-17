@@ -102,52 +102,8 @@ func Recommend(stats CacheRecommendationStats) CacheRecommendation {
 		}
 	}
 
-	// === 2. max_size 推荐 ===
-	// 规则: hit_rate < 0.6 → max_size 太小, 建议 2x
-	if stats.HitRate > 0 && stats.HitRate < 0.6 {
-		newSize := stats.MaxSize * 2
-		if stats.MaxSize == 0 {
-			newSize = 1024
-		}
-		recommended["max_size"] = FieldRecommendation{
-			Current:     stats.MaxSize,
-			Recommended: newSize,
-			Reason:      fmtFloat(stats.HitRate*100, 1) + "% hit rate 偏低, cache 满了",
-			Impact:      "预期 hit rate 提升到 70%+",
-			Confidence:  "medium",
-		}
-		actions = append(actions, map[string]any{
-			"priority": "medium",
-			"action":   "increase_max_size",
-			"to":       newSize,
-			"reason":   "hit rate 低, 建议扩容",
-		})
-		issues = append(issues, "size_too_small")
-	} else if stats.Size > 0 && stats.Size >= stats.MaxSize {
-		// cache 满了
-		newSize := stats.MaxSize * 2
-		recommended["max_size"] = FieldRecommendation{
-			Current:     stats.MaxSize,
-			Recommended: newSize,
-			Reason:      "cache 已满 (" + itoa(stats.Size) + "/" + itoa(stats.MaxSize) + ")",
-			Impact:      "避免 evict 热点",
-			Confidence:  "high",
-		}
-		actions = append(actions, map[string]any{
-			"priority": "high",
-			"action":   "increase_max_size",
-			"to":       newSize,
-			"reason":   "cache full",
-		})
-		issues = append(issues, "size_full")
-	} else {
-		recommended["max_size"] = FieldRecommendation{
-			Current:     stats.MaxSize,
-			Recommended: stats.MaxSize,
-			Reason:      "size 健康",
-			Confidence:  "high",
-		}
-	}
+	// === 2. max_size 推荐 (按 cache state 分类)
+	recommended["max_size"] = recommendMaxSize(stats, actions, &issues)
 
 	// === 3. ttl_seconds 推荐 ===
 	if stats.TTLSeconds == 0 {
@@ -246,4 +202,42 @@ func itoa(n int) string {
 		buf[i] = '-'
 	}
 	return string(buf[i:])
+}
+
+// recommendMaxSize 根据 cache state 推荐 max_size 配置.
+//
+// 返回 FieldRecommendation 同时 append actions + issues.
+func recommendMaxSize(stats CacheRecommendationStats, actions []map[string]any, issues *[]string) FieldRecommendation {
+	switch {
+	case stats.HitRate > 0 && stats.HitRate < 0.6:
+		newSize := stats.MaxSize * 2
+		if stats.MaxSize == 0 {
+			newSize = 1024
+		}
+		*issues = append(*issues, "size_too_small")
+		return FieldRecommendation{
+			Current:     stats.MaxSize,
+			Recommended: newSize,
+			Reason:      fmtFloat(stats.HitRate*100, 1) + "% hit rate 偏低, cache 满了",
+			Impact:      "预期 hit rate 提升到 70%+",
+			Confidence:  "medium",
+		}
+	case stats.Size > 0 && stats.Size >= stats.MaxSize:
+		newSize := stats.MaxSize * 2
+		*issues = append(*issues, "size_full")
+		return FieldRecommendation{
+			Current:     stats.MaxSize,
+			Recommended: newSize,
+			Reason:      "cache 已满 (" + itoa(stats.Size) + "/" + itoa(stats.MaxSize) + ")",
+			Impact:      "避免 evict 热点",
+			Confidence:  "high",
+		}
+	default:
+		return FieldRecommendation{
+			Current:     stats.MaxSize,
+			Recommended: stats.MaxSize,
+			Reason:      "size 健康",
+			Confidence:  "high",
+		}
+	}
 }
