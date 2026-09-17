@@ -51,6 +51,18 @@ type Check struct {
 // readinessTimeout 健康检查超时（避免 probe hang）
 const readinessTimeout = 2 * time.Second
 
+// Check status 常量（goconst: 避免硬编码字符串重复）
+const (
+	checkStatusOK   = "ok"
+	checkStatusFail = "fail"
+)
+
+// Health status 常量（goconst: 避免硬编码字符串重复）
+const (
+	healthStatusOK   = "ok"
+	healthStatusDown = "down"
+)
+
 // HealthReadyHandler 提供 /health/ready + /health/live
 //
 // 注入 DB 和 LLMRouter 用于依赖检查。
@@ -117,12 +129,12 @@ func (h *HealthReadyHandler) handleReady(w http.ResponseWriter, r *http.Request)
 		defer cancel()
 		if err := h.db.PingContext(ctx); err != nil {
 			checks["database"] = Check{
-				Status: "fail",
+				Status: checkStatusFail,
 				Error:  err.Error(),
 			}
 		} else {
 			checks["database"] = Check{
-				Status: "ok",
+				Status: checkStatusOK,
 				Detail: "ping succeeded",
 			}
 		}
@@ -133,23 +145,23 @@ func (h *HealthReadyHandler) handleReady(w http.ResponseWriter, r *http.Request)
 		providers := h.router.AvailableProviders()
 		if len(providers) == 0 {
 			checks["llm"] = Check{
-				Status: "fail",
+				Status: checkStatusFail,
 				Error:  "no LLM providers available (check API keys)",
 			}
 		} else {
 			checks["llm"] = Check{
-				Status: "ok",
+				Status: checkStatusOK,
 				Detail: formatProviders(providers),
 			}
 		}
 	}
 
 	// 聚合状态：所有 ok → ok, 任意 fail → down
-	status := "ok"
+	status := healthStatusOK
 	httpCode := http.StatusOK
 	for _, c := range checks {
 		if c.Status == "fail" {
-			status = "down"
+			status = healthStatusDown
 			httpCode = http.StatusServiceUnavailable
 			break
 		}

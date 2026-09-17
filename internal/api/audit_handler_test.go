@@ -55,7 +55,7 @@ func newTestAuditHandler(t *testing.T) (*AuditHandler, *store.DB) {
 func TestAudit_List_RequiresAuth(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -67,7 +67,7 @@ func TestAudit_List_RequiresAuth(t *testing.T) {
 func TestAudit_List_RequiresAdmin(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "user-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -80,7 +80,7 @@ func TestAudit_List_RequiresAdmin(t *testing.T) {
 func TestAudit_List_AdminSuccess(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -105,7 +105,7 @@ func TestAudit_List_AdminSuccess(t *testing.T) {
 func TestAudit_List_FilterByEvent(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit?event=login_fail", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit?event=login_fail", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -131,7 +131,7 @@ func TestAudit_List_FilterByEvent(t *testing.T) {
 func TestAudit_List_FilterBySuccess(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit?success=false", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit?success=false", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -151,7 +151,7 @@ func TestAudit_List_LimitAndOffset(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
 	// limit=2 offset=0
-	req := httptest.NewRequest(http.MethodGet, "/api/audit?limit=2&offset=0", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit?limit=2&offset=0", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -163,7 +163,7 @@ func TestAudit_List_LimitAndOffset(t *testing.T) {
 	firstID := resp.Entries[0].ID
 
 	// limit=2 offset=2
-	req = httptest.NewRequest(http.MethodGet, "/api/audit?limit=2&offset=2", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/audit?limit=2&offset=2", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -180,7 +180,7 @@ func TestAudit_Get_Success(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
 	// 取最新一条（最大 ID）
-	listReq := httptest.NewRequest(http.MethodGet, "/api/audit?limit=1", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/audit?limit=1", http.NoBody)
 	listReq.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	listRR := httptest.NewRecorder()
 	h.ServeHTTP(listRR, listReq)
@@ -189,7 +189,7 @@ func TestAudit_Get_Success(t *testing.T) {
 	targetID := listResp.Entries[0].ID
 
 	// GET /api/audit/{id}
-	req := httptest.NewRequest(http.MethodGet, "/api/audit/"+intToStr(targetID), nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit/"+intToStr(targetID), http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -209,7 +209,7 @@ func TestAudit_Get_Success(t *testing.T) {
 func TestAudit_Get_NotFound(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit/999999", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit/999999", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -222,7 +222,7 @@ func TestAudit_Get_NotFound(t *testing.T) {
 func TestAudit_Get_InvalidID(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit/abc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit/abc", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -235,7 +235,7 @@ func TestAudit_Get_InvalidID(t *testing.T) {
 func TestAudit_MethodNotAllowed(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/audit", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/audit", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -253,7 +253,7 @@ func TestAudit_NilSessionReturns503(t *testing.T) {
 
 	h := NewAuditHandler(db, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
