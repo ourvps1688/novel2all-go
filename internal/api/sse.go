@@ -30,17 +30,36 @@ var sseWriteMu sync.Mutex
 
 // writeSSEEvent 写一个 SSE event 到 w (格式: "event: <name>\ndata: <data>\n\n").
 //
-// 自动调 Flush() (需要 http.Flusher). 持 sseWriteMu 保证并发安全.
+// 自动调 flushSSE (持 sseWriteMu 保证并发安全).
 func writeSSEEvent(w http.ResponseWriter, event, data string) error {
 	sseWriteMu.Lock()
 	defer sseWriteMu.Unlock()
 	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data); err != nil {
 		return err
 	}
+	flushSSE(w)
+	return nil
+}
+
+// flushSSE 强制 Flush w (如果 w 实现 http.Flusher).
+//
+// 持 sseWriteMu 保证并发安全 — 必须从 writeSSEEvent 或其他 sseWriteMu 持锁处调用.
+//
+// 直接暴露此函数前请确认 caller 已持 sseWriteMu (避免 race).
+func flushSSE(w http.ResponseWriter) {
 	if flusher, ok := w.(http.Flusher); ok {
 		flusher.Flush()
 	}
-	return nil
+}
+
+// sseFlush 安全 flush w (外部调用入口, 自动持锁).
+//
+// 任何 SSE handler 内部任何 goroutine 想 Flush 都应该用这个, 而不是直接
+// sseFlush(w) — 后者会绕开 sseWriteMu 导致 race.
+func sseFlush(w http.ResponseWriter) {
+	sseWriteMu.Lock()
+	defer sseWriteMu.Unlock()
+	flushSSE(w)
 }
 
 // writeSSEJSON 写 SSE event (data 是 JSON 编码).
@@ -93,7 +112,6 @@ func (h *WriteHandler) handleWriteStream(w http.ResponseWriter, r *http.Request)
 	}
 
 	setSSEHeaders(w)
-	flusher, _ := w.(http.Flusher)
 
 	// 启动 task
 	task := h.taskMgr.Start(r.Context(), chapter, projectRoot, skill)
@@ -124,9 +142,7 @@ func (h *WriteHandler) handleWriteStream(w http.ResponseWriter, r *http.Request)
 			"phase":  "pre_write_check",
 			"status": "ok",
 		})
-		if flusher != nil {
-			flusher.Flush()
-		}
+		sseFlush(w)
 		// 推 chunks
 		for _, chunk := range mockChunks {
 			task.ChunkCh <- chunk
@@ -137,9 +153,7 @@ func (h *WriteHandler) handleWriteStream(w http.ResponseWriter, r *http.Request)
 			"status":    "completed",
 			"min_chars": minChars,
 		})
-		if flusher != nil {
-			flusher.Flush()
-		}
+		sseFlush(w)
 		// progress: post_write check
 		_ = writeSSEJSON(w, "post_write", map[string]any{
 			"issues": []string{},
@@ -150,9 +164,7 @@ func (h *WriteHandler) handleWriteStream(w http.ResponseWriter, r *http.Request)
 			"output_path": "正文/第001章.md",
 			"char_count":  2500,
 		})
-		if flusher != nil {
-			flusher.Flush()
-		}
+		sseFlush(w)
 		closeIfOpen(task.Done)
 	}()
 
@@ -226,22 +238,17 @@ func (h *SkillsHandler) handleSkillStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	setSSEHeaders(w)
-	flusher, _ := w.(http.Flusher)
 
 	// 推当前状态
 	_ = writeSSEJSON(w, "status", skillTaskToView(task))
-	if flusher != nil {
-		flusher.Flush()
-	}
+	sseFlush(w)
 
 	// 如果已完成, 立即结束
 	if task.Status != TaskStatusRunning {
 		_ = writeSSEJSON(w, "done", map[string]any{
 			"output": task.Output,
 		})
-		if flusher != nil {
-			flusher.Flush()
-		}
+		sseFlush(w)
 		return
 	}
 
@@ -258,9 +265,7 @@ func (h *SkillsHandler) handleSkillStatus(w http.ResponseWriter, r *http.Request
 				return
 			}
 			_ = writeSSEJSON(w, "status", skillTaskToView(t))
-			if flusher != nil {
-				flusher.Flush()
-			}
+			sseFlush(w)
 			if t.Status != TaskStatusRunning {
 				_ = writeSSEJSON(w, "done", map[string]any{"output": t.Output})
 				return
@@ -320,7 +325,6 @@ func (h *WriteHandler) handleWriteStreamModel(w http.ResponseWriter, r *http.Req
 //
 // V0 简化: 推 3 个 fake chunk + done. 真实实现会调 writingPipeline.
 func (h *WriteHandler) mockSSEWrite(w http.ResponseWriter, r *http.Request, task *PipelineTask, minChars int) {
-	flusher, _ := w.(http.Flusher)
 	mockChunks := []string{"chunk 1 ", "chunk 2 ", "chunk 3 done"}
 	go func() {
 		for _, chunk := range mockChunks {
@@ -332,9 +336,7 @@ func (h *WriteHandler) mockSSEWrite(w http.ResponseWriter, r *http.Request, task
 			"char_count":  2500,
 			"min_chars":   minChars,
 		})
-		if flusher != nil {
-			flusher.Flush()
-		}
+		sseFlush(w)
 		closeIfOpen(task.Done)
 	}()
 	for {
