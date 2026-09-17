@@ -30,7 +30,7 @@ import (
 //   - refLoader: 调 LoadForSkill 注入 reference sections 到 system prompt
 type WriteHandler struct {
 	tasks    *TaskManager
-	executor *skills.Executor
+	executor skills.ExecutorRunner
 	loader   *skills.Loader
 	taskMgr  *PipelineTaskManager // Sprint 28 SSE 流式
 
@@ -50,7 +50,7 @@ type ReferencesLoader interface {
 }
 
 // NewWriteHandler 创建
-func NewWriteHandler(executor *skills.Executor, loader *skills.Loader) *WriteHandler {
+func NewWriteHandler(executor skills.ExecutorRunner, loader *skills.Loader) *WriteHandler {
 	return &WriteHandler{
 		tasks:    NewTaskManager(),
 		executor: executor,
@@ -70,7 +70,7 @@ func NewWriteHandler(executor *skills.Executor, loader *skills.Loader) *WriteHan
 //     可为 nil → 跳过 5 层 memory 自动加载 (行为等同 NewWriteHandler)
 //   - refLoader: references 加载器 (LoadForSkill). 可为 nil → 跳过 references 注入
 func NewWriteHandlerWithMemory(
-	executor *skills.Executor,
+	executor skills.ExecutorRunner,
 	loader *skills.Loader,
 	memMgr *memory.MemoryManager,
 	refLoader ReferencesLoader,
@@ -144,6 +144,18 @@ func (h *WriteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //   - cancelled: 取消
 //   - error: 失败
 //
+// HandleStreamForTest 是 handleStream 的公开测试包装 (Sprint 36).
+//
+// 用法:
+//
+//	w := httptest.NewRecorder()
+//	h.HandleStreamForTest(w, r)
+//
+// 与 handleStream 等价, 只是导出供 internal/testfixtures/ 跨包调用.
+func (h *WriteHandler) HandleStreamForTest(w http.ResponseWriter, r *http.Request) {
+	h.handleStream(w, r)
+}
+
 //nolint:gocyclo // SSE handler 天然多分支（started/pre-check/chunks/progress/done/error/cancel）
 func (h *WriteHandler) handleStream(w http.ResponseWriter, r *http.Request) {
 	// 解析 query
@@ -243,6 +255,7 @@ func (h *WriteHandler) handleStream(w http.ResponseWriter, r *http.Request) {
 	ch := make(chan llm.Chunk, 32)
 	streamErrCh := make(chan error, 1)
 	go func() {
+		defer close(ch) // Sprint 36: caller 关闭 channel (mock + real LLM 都期望 close)
 		err := h.executor.ExecuteStream(ctx, skills.ExecuteInput{
 			SkillName:   skill,
 			UserInput:   userPrompt,
