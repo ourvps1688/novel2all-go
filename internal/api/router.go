@@ -93,6 +93,15 @@ func Router(deps Deps) *http.ServeMux {
 		mux.Handle("/api/chapter/", chaptersHandler)
 	}
 
+	// Characters / Relationships / Foreshadows API（P1-F 切片 6：JSON 文件持久化）
+	charactersHandler := NewCharactersHandler()
+	mux.Handle("/api/characters", charactersHandler)
+	mux.Handle("/api/characters/", charactersHandler)
+	mux.Handle("/api/relationships", charactersHandler)
+	mux.Handle("/api/relationships/", charactersHandler)
+	mux.Handle("/api/foreshadows", charactersHandler)
+	mux.Handle("/api/foreshadows/", charactersHandler)
+
 	// 根路径提示
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
