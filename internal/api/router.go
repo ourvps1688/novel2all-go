@@ -46,7 +46,7 @@ type Deps struct {
 	// projectStore 共享 ProjectStore（切片 10 让 State 持久化 projects）
 	// 未导出避免 main.go 误用（应该只通过 State 间接访问）
 	// 用 SetProjectStore 方法设置（main.go 在外部构造 Deps）
-	projectStore *ProjectStore
+	projectStore ProjectsRepo
 }
 
 // SetProjectStore 设置共享 ProjectStore（P1-F 切片 10 用）
@@ -55,7 +55,7 @@ type Deps struct {
 // router.go 用 projectStore 给 ProjectsHandler 共享同一个 store。
 //
 // 参数名 ps 避免 shadow 'store' package 名（gocritic importShadow）。
-func (d *Deps) SetProjectStore(ps *ProjectStore) {
+func (d *Deps) SetProjectStore(ps ProjectsRepo) {
 	d.projectStore = ps
 }
 
@@ -163,7 +163,7 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 	// Projects API（内存版）
 	// 共享 ProjectStore: 切片 10 让 StatePersistor 可以持久化 projects
-	mux.Handle("/api/projects/", NewProjectsHandlerWithStore(deps.projectStore))
+	mux.Handle("/api/projects/", NewProjectsHandlerWithRepo(deps.projectStore))
 
 	// Write + Tracking API（流式写作）
 	if deps.Loader != nil && deps.Router != nil {

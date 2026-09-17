@@ -61,7 +61,7 @@ type StateInfo struct {
 // 启动时调用 Load() 恢复，运维调用 Save() 持久化。
 type StatePersistor struct {
 	path     string
-	projects *ProjectStore
+	projects ProjectsRepo
 	mu       sync.Mutex
 	// lastSaveAt 最后一次 Save 成功时间
 	lastSaveAt time.Time
@@ -73,7 +73,7 @@ type StatePersistor struct {
 //
 // path 持久化文件路径（一般 data/state.json）
 // projects 项目存储引用（用来读 snapshot 和 restore）
-func NewStatePersistor(path string, projects *ProjectStore) *StatePersistor {
+func NewStatePersistor(path string, projects ProjectsRepo) *StatePersistor {
 	return &StatePersistor{
 		path:     path,
 		projects: projects,

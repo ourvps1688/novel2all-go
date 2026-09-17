@@ -124,8 +124,12 @@ func run() error {
 	llmRouter.SetMetricsHook(&llmHookAdapter{m: metrics, t: traces})
 
 	// 5.6 P1-F 切片 10：state 持久化
-	// 创建共享 ProjectStore（ProjectsHandler 和 StatePersistor 共用）
-	projectStore := api.NewProjectStore()
+	// Sprint 15：projectStore 用 SQLiteProjectsAdapter 替代内存版
+	// - store.ProjectsStore 直接读 projects 表
+	// - 启动时如果 SQLite 有数据, 直接加载 (跳过 JSON state.json 的 projects 部分)
+	// - state.json 仍存 cache counters + env metadata
+	projectsSQLStore := store.NewProjectsStore(db)
+	projectStore := api.NewSQLiteProjectsAdapter(projectsSQLStore)
 	statePersistor := api.NewStatePersistor("data/state.json", projectStore)
 	// 启动时加载（如果 state.json 不存在,静默返回 nil）
 	if err := statePersistor.Load(); err != nil {

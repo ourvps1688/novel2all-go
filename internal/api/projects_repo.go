@@ -16,6 +16,7 @@ type ProjectsRepo interface {
 	Create(name, slug, desc string, ownerID int64, genre string) (*Project, error)
 	Update(id int64, name, desc, genre string) (*Project, error)
 	Delete(id int64) error
+	RestoreAll(projects []*Project) error // state persistence 用
 }
 
 // SQLiteProjectsAdapter 把 store.ProjectsStore 包成 ProjectsRepo 接口
@@ -83,6 +84,28 @@ func (a *SQLiteProjectsAdapter) Delete(id int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return a.s.Delete(ctx, id)
+}
+
+// RestoreAll state persistence 用（清空表 + 重新插入）
+//
+// 实现 ProjectsRepo interface 要求；用于 /api/state/reload 恢复 projects 表
+func (a *SQLiteProjectsAdapter) RestoreAll(projects []*Project) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// 1. 清空表
+	if err := a.s.DeleteAll(ctx); err != nil {
+		return err
+	}
+
+	// 2. 重新插入
+	for _, p := range projects {
+		_, err := a.s.Create(ctx, p.Name, p.Slug, p.Description, p.Genre, p.OwnerID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // projectStoreToAPI store.Project → api.Project

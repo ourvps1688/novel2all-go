@@ -195,3 +195,13 @@ func parseTime(s string) time.Time {
 
 // ErrNotFound not found
 var ErrNotFound = errors.New("not found")
+
+// DeleteAll 清空 projects 表（state persistence 用）
+//
+// CASCADE 自动删除 chapters + chapter_reviews。
+func (s *ProjectsStore) DeleteAll(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM projects"); err != nil {
+		return fmt.Errorf("delete all projects: %w", err)
+	}
+	return nil
+}
