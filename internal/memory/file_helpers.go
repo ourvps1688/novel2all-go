@@ -4,19 +4,13 @@ package memory
 import "os"
 
 // readFileOS 默认 os.ReadFile (测试时可覆盖).
-var readFileOS = func(fp string) ([]byte, error) {
-	return os.ReadFile(fp)
-}
+var readFileOS = os.ReadFile
 
 // writeFileOS 默认 os.WriteFile (测试时可覆盖).
-var writeFileOS = func(fp string, data []byte) error {
-	return os.WriteFile(fp, data, 0o644)
-}
+var writeFileOS = func(fp string, data []byte) error { return os.WriteFile(fp, data, 0o644) }
 
 // mkdirOS 默认 os.MkdirAll (测试时可覆盖).
-var mkdirOS = func(dir string) error {
-	return os.MkdirAll(dir, 0o755)
-}
+var mkdirOS = func(dir string) error { return os.MkdirAll(dir, 0o755) }
 
 // DefaultSettingFiles 默认纳入 memory core 的项目级文件 (相对 project root).
 //

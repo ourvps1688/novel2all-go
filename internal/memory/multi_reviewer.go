@@ -73,8 +73,8 @@ func (r *MultiAgentReviewer) Review(ctx context.Context, chapter int, content st
 	for _, role := range ReviewerRoles {
 		// V0 简化: 每个 role 生成自己的 issues (mock 用 LLM 调, 无 LLM 则 fallback)
 		issues, score := r.reviewByRole(ctx, role, chapter, content, state)
-		for _, issue := range issues {
-			report.Issues = append(report.Issues, issue)
+		if len(issues) > 0 {
+			report.Issues = append(report.Issues, issues...)
 		}
 		if score != nil {
 			report.Scores = append(report.Scores, *score)

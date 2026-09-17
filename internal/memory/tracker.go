@@ -171,7 +171,7 @@ func (t *Tracker) Init(projectName string) (*TrackingState, error) {
 //
 // 当前实现: 全量覆盖 LastUpdatedChapter + 添加新 characters/foreshadowing/timeline/summaries.
 // 注: 不做 deep merge (e.g. character fields merge), Sprint 23 Extractor.ApplyToState 处理.
-func (t *Tracker) Merge(current *TrackingState, extracted *TrackingState) *TrackingState {
+func (t *Tracker) Merge(current, extracted *TrackingState) *TrackingState {
 	// TODO Sprint 24 用 Extractor.ApplyToState 实现精细 merge
 	// 当前简化为: 直接覆盖 extracted 字段
 	current.LastUpdatedChapter = extracted.LastUpdatedChapter

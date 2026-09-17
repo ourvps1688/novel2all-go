@@ -11,6 +11,8 @@ package memory
 import "time"
 
 // MemoryLayer 5 层记忆层级.
+//
+//nolint:revive // type name stutters but matches Python source
 type MemoryLayer string
 
 const (
@@ -22,6 +24,8 @@ const (
 )
 
 // MemoryItem 一条记忆.
+//
+//nolint:revive // type name stutters but matches Python source
 type MemoryItem struct {
 	Content    string      `json:"content"`
 	Source     string      `json:"source"`
@@ -32,6 +36,8 @@ type MemoryItem struct {
 }
 
 // MemoryContext 一次写作任务加载的完整 memory.
+//
+//nolint:revive // type name stutters but matches Python source
 type MemoryContext struct {
 	Core      []MemoryItem `json:"core"`
 	Character []MemoryItem `json:"character"`
@@ -52,62 +58,36 @@ func (c *MemoryContext) TotalTokens() int {
 }
 
 // ToSystemSections 组装成 LLM system message 段落.
+//
+//nolint:gocyclo // 5 layer branches is natural for memory assembly
 func (c *MemoryContext) ToSystemSections() []string {
 	var sections []string
-	if len(c.Core) > 0 {
-		s := "# 核心设定\n"
-		for i, item := range c.Core {
-			if i > 0 {
-				s += "\n\n"
-			}
-			s += item.Content
-		}
-		sections = append(sections, s)
-	}
-	if len(c.Character) > 0 {
-		s := "# 角色状态\n"
-		for i, item := range c.Character {
-			if i > 0 {
-				s += "\n\n"
-			}
-			s += item.Content
-		}
-		sections = append(sections, s)
-	}
-	if len(c.Recent) > 0 {
-		s := "# 最近章节\n"
-		for i, item := range c.Recent {
-			if i > 0 {
-				s += "\n\n"
-			}
-			s += item.Content
-		}
-		sections = append(sections, s)
-	}
-	if len(c.Events) > 0 {
-		s := "# 相关历史事件\n"
-		for i, item := range c.Events {
-			if i > 0 {
-				s += "\n\n"
-			}
-			s += item.Content
-		}
-		sections = append(sections, s)
-	}
-	if len(c.Graph) > 0 {
-		s := "# 知识图谱片段\n"
-		for i, item := range c.Graph {
-			if i > 0 {
-				s += "\n\n"
-			}
-			s += item.Content
-		}
-		sections = append(sections, s)
-	}
+	sections = appendSection(sections, "# 核心设定", c.Core)
+	sections = appendSection(sections, "# 角色状态", c.Character)
+	sections = appendSection(sections, "# 最近章节", c.Recent)
+	sections = appendSection(sections, "# 相关历史事件", c.Events)
+	sections = appendSection(sections, "# 知识图谱片段", c.Graph)
 	return sections
 }
 
+// appendSection append 1 section (header + items).
+func appendSection(sections []string, header string, items []MemoryItem) []string {
+	if len(items) == 0 {
+		return sections
+	}
+	s := header + "\n"
+	for i, item := range items {
+		if i > 0 {
+			s += "\n\n"
+		}
+		s += item.Content
+	}
+	return append(sections, s)
+}
+
 // MemoryConfig memory 加载策略.
+//
+//nolint:revive // type name stutters but matches Python source
 type MemoryConfig struct {
 	CoreTokenBudget       int  `json:"core_token_budget"`        // 默认 3000
 	CharacterTokenBudget  int  `json:"character_token_budget"`   // 默认 4000

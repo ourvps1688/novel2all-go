@@ -6,18 +6,26 @@ import (
 	"testing"
 )
 
+// 常量定义避免 goconst lint.
+const (
+	charAlice = "char:alice"
+	charBob   = "char:bob"
+	charCarol = "char:carol"
+	locTown   = "loc:town"
+)
+
 func newTestGraph() *MemoryGraph {
 	return NewMemoryGraph(&GraphData{
 		Nodes: []GraphNode{
-			{ID: "char:alice", Type: NodeCharacter, Name: "Alice"},
-			{ID: "char:bob", Type: NodeCharacter, Name: "Bob"},
-			{ID: "char:carol", Type: NodeCharacter, Name: "Carol"},
-			{ID: "loc:town", Type: NodeLocation, Name: "Town"},
+			{ID: charAlice, Type: NodeCharacter, Name: "Alice"},
+			{ID: charBob, Type: NodeCharacter, Name: "Bob"},
+			{ID: charCarol, Type: NodeCharacter, Name: "Carol"},
+			{ID: locTown, Type: NodeLocation, Name: "Town"},
 		},
 		Edges: []GraphEdge{
-			{FromID: "char:alice", ToID: "char:bob", Type: EdgeRelatedTo},
-			{FromID: "char:bob", ToID: "char:carol", Type: EdgeRelatedTo},
-			{FromID: "char:alice", ToID: "loc:town", Type: EdgeLocatedIn},
+			{FromID: charAlice, ToID: charBob, Type: EdgeRelatedTo},
+			{FromID: charBob, ToID: charCarol, Type: EdgeRelatedTo},
+			{FromID: charAlice, ToID: locTown, Type: EdgeLocatedIn},
 		},
 	})
 }

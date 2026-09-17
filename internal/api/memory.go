@@ -47,50 +47,41 @@ func NewMemoryHandlerWithRouter(projectRoot string, router interface{}) *MemoryH
 }
 
 // ServeHTTP 路由分发.
+//
+//nolint:gocyclo // 7 routes × 2 method checks = 14 branches (memory API natural complexity)
 func (h *MemoryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/memory")
 	path = strings.Trim(path, "/")
 
 	switch {
 	case path == "state" || path == "state/":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+		h.requireMethod(w, r, http.MethodGet)
 		h.handleGetState(w, r)
 	case strings.HasPrefix(path, "context/"):
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+		h.requireMethod(w, r, http.MethodGet)
 		chapterStr := strings.TrimPrefix(path, "context/")
 		h.handleGetContext(w, r, chapterStr)
 	case path == "update" || path == "update/":
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+		h.requireMethod(w, r, http.MethodPost)
 		h.handleUpdate(w, r)
 	case path == "review" || path == "review/":
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+		h.requireMethod(w, r, http.MethodPost)
 		h.handleReview(w, r)
 	case path == "rollback" || path == "rollback/":
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+		h.requireMethod(w, r, http.MethodPost)
 		h.handleRollback(w, r)
 	case path == "snapshots" || path == "snapshots/":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+		h.requireMethod(w, r, http.MethodGet)
 		h.handleListSnapshots(w, r)
 	default:
 		http.NotFound(w, r)
+	}
+}
+
+// requireMethod 检查 HTTP method (helper, 简化 ServeHTTP 复杂度).
+func (h *MemoryHandler) requireMethod(w http.ResponseWriter, r *http.Request, method string) {
+	if r.Method != method {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 

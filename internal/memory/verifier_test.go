@@ -21,7 +21,8 @@ func TestHasBlockingIssues(t *testing.T) {
 
 	withCritical := append(warnings, ContinuityIssue{
 		Severity: "critical", Category: "character", Description: "dead character alive",
-	})
+	},
+	)
 	if !HasBlockingIssues(withCritical) {
 		t.Error("with critical should return true")
 	}

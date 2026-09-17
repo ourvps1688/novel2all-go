@@ -30,7 +30,7 @@ func HasBlockingIssues(issues []ContinuityIssue) bool {
 //   - 都为空 → 返回所有
 //
 // 返回符合条件的 issues.
-func FilterIssues(issues []ContinuityIssue, categories []string, severities []string) []ContinuityIssue {
+func FilterIssues(issues []ContinuityIssue, categories, severities []string) []ContinuityIssue {
 	if len(categories) == 0 && len(severities) == 0 {
 		return issues
 	}

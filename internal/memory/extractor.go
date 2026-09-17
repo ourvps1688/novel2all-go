@@ -14,7 +14,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 )
@@ -340,9 +339,4 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
-}
-
-// now 简单 time.Now 包装 (便于 test mock).
-func now() time.Time {
-	return time.Now()
 }

@@ -18,6 +18,8 @@ import (
 )
 
 // MemoryGraph 业务图谱 (character/timeline/foreshadowing 等).
+//
+//nolint:revive // matches Python
 type MemoryGraph struct {
 	data *GraphData
 	// adj adjacency list: node_id → []edge index (for BFS/Dijkstra)

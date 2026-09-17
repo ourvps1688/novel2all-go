@@ -21,6 +21,8 @@ import (
 )
 
 // MemoryManager 长记忆系统统一入口.
+//
+//nolint:revive // matches Python
 type MemoryManager struct {
 	projectRoot string
 	config      MemoryConfig
@@ -38,6 +40,7 @@ type MemoryManager struct {
 func NewMemoryManager(projectRoot string, llmRouter *llm.Router, config MemoryConfig) *MemoryManager {
 	if llmRouter == nil {
 		// 允许 nil (V0 简化: manager 可仅用 tracker + summarizer)
+		_ = llmRouter // explicitly silence unused warning
 	}
 	return &MemoryManager{
 		projectRoot: projectRoot,

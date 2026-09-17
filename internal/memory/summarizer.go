@@ -128,7 +128,7 @@ func (s *ChapterSummarizer) CountTokens(text string) int {
 		return 0
 	}
 	// 简化: len/3 (Python len/3 兜底)
-	return max(1, len(text)/3)
+	return maxInt(1, len(text)/3)
 }
 
 // ApplyToState 把 chapter 摘要按档位合并到 state.
@@ -164,16 +164,8 @@ func (s *ChapterSummarizer) ApplyToState(state *TrackingState, chapter int, cont
 	return state
 }
 
-// maxInt 内置 max (避免 import conflicts with Go 1.21+ built-in).
+// maxInt 内置 max helper (Go 1.21+ built-in).
 func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// max 内置 max helper.
-func max(a, b int) int {
 	if a > b {
 		return a
 	}

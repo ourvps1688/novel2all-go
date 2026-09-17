@@ -147,7 +147,7 @@ func (h *ChapterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.export(w, r, chapter)
-	case "expand", "rewrite", "review", "insert", "rollback":
+	case "expand", "rewrite", "review", "insert", actionRollback:
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed (POST required)", http.StatusMethodNotAllowed)
 			return
