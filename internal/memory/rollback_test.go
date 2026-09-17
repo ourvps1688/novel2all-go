@@ -61,7 +61,7 @@ func TestRollbackManager_Rollback(t *testing.T) {
 	alice := state.Characters["alice"]
 	alice.Location = "modified"
 	state.Characters["alice"] = alice
-	_, _ = tracker.Write(state)
+	if err := tracker.Write(state); err != nil { t.Fatal(err) }
 
 	// verify modification
 	current, _ := tracker.Read()
