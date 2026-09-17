@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"errors"
 	"math"
 	"sort"
 	"testing"
@@ -78,7 +79,7 @@ func TestGraph_Neighbors(t *testing.T) {
 func TestGraph_Neighbors_NotFound(t *testing.T) {
 	g := NewGraph()
 	_, err := g.Neighbors("nonexistent")
-	if err != ErrNodeNotFound {
+	if !errors.Is(err, ErrNodeNotFound) {
 		t.Errorf("expected ErrNodeNotFound, got %v", err)
 	}
 }
@@ -156,7 +157,7 @@ func TestBFS_Until(t *testing.T) {
 func TestBFS_NotFound(t *testing.T) {
 	g := NewGraph()
 	_, err := g.BFS("nonexistent")
-	if err != ErrNodeNotFound {
+	if !errors.Is(err, ErrNodeNotFound) {
 		t.Errorf("expected ErrNodeNotFound, got %v", err)
 	}
 }
@@ -214,7 +215,7 @@ func TestDijkstra_AllDistances(t *testing.T) {
 func TestDijkstra_NotFound(t *testing.T) {
 	g := NewGraph()
 	_, err := g.Dijkstra("nonexistent", "")
-	if err != ErrNodeNotFound {
+	if !errors.Is(err, ErrNodeNotFound) {
 		t.Errorf("expected ErrNodeNotFound, got %v", err)
 	}
 }
@@ -236,7 +237,7 @@ func TestReconstructPath_NotFound(t *testing.T) {
 	g := NewGraph()
 	_ = g.AddEdge("a", "b", 0)
 	r, _ := g.BFSUntil("a", "z") // z 不存在
-	if r.Path != nil && len(r.Path) > 0 {
+	if r.Path != nil {
 		t.Errorf("expected no path, got %v", r.Path)
 	}
 }

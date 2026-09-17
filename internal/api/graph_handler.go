@@ -21,6 +21,19 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/graph"
 )
 
+// route 名称常量 (goconst: 避免 "stats" 等字面量重复)
+const routeStats = "stats"
+
+const (
+	routeNode     = "node"
+	routeEdge     = "edge"
+	routeBFS      = "bfs"
+	routeShortest = "shortest"
+	routeClear    = "clear"
+	routeNodes    = "nodes"
+	routeEdges    = "edges"
+)
+
 // GraphHandler /api/graph/* handler
 type GraphHandler struct {
 	g *graph.Graph
@@ -32,64 +45,55 @@ func NewGraphHandler(g *graph.Graph) *GraphHandler {
 }
 
 // ServeHTTP 路由分发
+//
+// 用 expectedMethodFor 拆分方法校验逻辑 → gocyclo 降低
 func (h *GraphHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/graph")
 	path = strings.Trim(path, "/")
 
-	switch path {
-	case "":
+	if path == "" {
 		http.NotFound(w, r)
-	case "node":
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+		return
+	}
+
+	// 校验 HTTP 方法（goconst: 405 而非 404）
+	expected := expectedMethodFor(path)
+	if expected != "" && r.Method != expected {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	switch path {
+	case routeNode:
 		h.handleAddNode(w, r)
-	case "edge":
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	case routeEdge:
 		h.handleAddEdge(w, r)
-	case "bfs":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	case routeBFS:
 		h.handleBFS(w, r)
-	case "shortest":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	case routeShortest:
 		h.handleShortest(w, r)
-	case "stats":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	case routeStats:
 		h.handleStats(w, r)
-	case "clear":
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	case routeClear:
 		h.handleClear(w, r)
-	case "nodes":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	case routeNodes:
 		h.handleNodes(w, r)
-	case "edges":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	case routeEdges:
 		h.handleEdges(w, r)
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// expectedMethodFor 返回 route 的预期 HTTP 方法（gocyclo 拆分 helper）
+func expectedMethodFor(path string) string {
+	switch path {
+	case routeNode, routeEdge, routeClear:
+		return http.MethodPost
+	case routeBFS, routeShortest, routeStats, routeNodes, routeEdges:
+		return http.MethodGet
+	}
+	return ""
 }
 
 // AddNodeRequest POST /api/graph/node

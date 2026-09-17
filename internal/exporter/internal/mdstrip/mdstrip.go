@@ -32,7 +32,7 @@ var (
 	// 数字列表：1. xx
 	orderedItem = regexp.MustCompile(`(?m)^\s*\d+\.\s+`)
 	// 水平线：--- 或 *** 或 ___
-	hr = regexp.MustCompile(`(?m)^[\s]*(---|\*\*\*|___)[\s]*$`)
+	hr = regexp.MustCompile(`(?m)^\s*(---|\*{3}|___)\s*$`)
 	// 多个连续空行合并
 	multiNewline = regexp.MustCompile(`\n{3,}`)
 )

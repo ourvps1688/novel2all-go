@@ -54,7 +54,7 @@ func TestChroma_Stats(t *testing.T) {
 	h := newTestChromaHandler(t)
 
 	// 初始 stats
-	req := httptest.NewRequest(http.MethodGet, "/api/chroma/stats", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/chroma/stats", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -73,7 +73,7 @@ func TestChroma_Stats(t *testing.T) {
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
-	req = httptest.NewRequest(http.MethodGet, "/api/chroma/stats", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/chroma/stats", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	_ = json.NewDecoder(rr.Body).Decode(&stats)
@@ -93,7 +93,7 @@ func TestChroma_Get(t *testing.T) {
 	h.ServeHTTP(rr, req)
 
 	// Get
-	req = httptest.NewRequest(http.MethodGet, "/api/chroma/my-doc", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/chroma/my-doc", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -106,7 +106,7 @@ func TestChroma_Get(t *testing.T) {
 	}
 
 	// Get nonexistent
-	req = httptest.NewRequest(http.MethodGet, "/api/chroma/nonexistent", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/chroma/nonexistent", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {
@@ -125,7 +125,7 @@ func TestChroma_Delete(t *testing.T) {
 	h.ServeHTTP(rr, req)
 
 	// Delete
-	req = httptest.NewRequest(http.MethodDelete, "/api/chroma/del-me", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/api/chroma/del-me", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNoContent {
@@ -133,7 +133,7 @@ func TestChroma_Delete(t *testing.T) {
 	}
 
 	// Get → 404
-	req = httptest.NewRequest(http.MethodGet, "/api/chroma/del-me", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/chroma/del-me", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {
@@ -141,7 +141,7 @@ func TestChroma_Delete(t *testing.T) {
 	}
 
 	// Delete again → 404
-	req = httptest.NewRequest(http.MethodDelete, "/api/chroma/del-me", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/api/chroma/del-me", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {
@@ -160,7 +160,7 @@ func TestChroma_Clear(t *testing.T) {
 	h.ServeHTTP(rr, req)
 
 	// Clear
-	req = httptest.NewRequest(http.MethodPost, "/api/chroma/clear", nil)
+	req = httptest.NewRequest(http.MethodPost, "/api/chroma/clear", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -168,7 +168,7 @@ func TestChroma_Clear(t *testing.T) {
 	}
 
 	// Verify empty
-	req = httptest.NewRequest(http.MethodGet, "/api/chroma/stats", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/chroma/stats", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	var stats chroma.Stats
@@ -182,7 +182,7 @@ func TestChroma_MethodNotAllowed(t *testing.T) {
 	h := newTestChromaHandler(t)
 
 	// GET /api/chroma/upsert → 405
-	req := httptest.NewRequest(http.MethodGet, "/api/chroma/upsert", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/chroma/upsert", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusMethodNotAllowed {
@@ -190,7 +190,7 @@ func TestChroma_MethodNotAllowed(t *testing.T) {
 	}
 
 	// POST /api/chroma/stats → 405
-	req = httptest.NewRequest(http.MethodPost, "/api/chroma/stats", nil)
+	req = httptest.NewRequest(http.MethodPost, "/api/chroma/stats", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusMethodNotAllowed {
@@ -214,7 +214,7 @@ func TestChroma_NotFoundOnBasePath(t *testing.T) {
 	h := newTestChromaHandler(t)
 
 	// /api/chroma (no subpath) → 404
-	req := httptest.NewRequest(http.MethodGet, "/api/chroma", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/chroma", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {

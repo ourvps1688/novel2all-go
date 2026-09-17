@@ -57,7 +57,7 @@ func (h *ChromaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.handleSearch(w, r)
-	case "stats":
+	case routeStats:
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return

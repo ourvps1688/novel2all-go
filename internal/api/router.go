@@ -175,48 +175,85 @@ func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 }
 
 // registerOpsRoutes 注册 metrics + debug（切片 9）+ state + metrics admin（切片 10）+ audit（切片 11）
+// + backup（切片 12）+ AI 基础设施（chroma + graph, P1-C）+ exporter（P1-D）
+//
+// 注：拆分为多个子函数降低 gocyclo（每个 if 一行）
 func registerOpsRoutes(mux *http.ServeMux, deps Deps) {
-	// /metrics 无鉴权（Prometheus 惯例；用 firewall/reverse-proxy 限制）
-	if deps.Metrics != nil {
-		mux.Handle("/metrics", NewMetricsHandler(deps.Metrics))
+	registerMetricsRoute(mux, deps)
+	registerDebugRoute(mux, deps)
+	registerStateRoute(mux, deps)
+	registerMetricsAdminRoute(mux, deps)
+	registerAuditRoute(mux, deps)
+	registerBackupRoute(mux, deps)
+	registerAIRoutes(mux, deps)     // P1-C: chroma + graph
+	registerExportRoutes(mux, deps) // P1-D: exporter
+}
+
+// registerMetricsRoute /metrics 无鉴权
+func registerMetricsRoute(mux *http.ServeMux, deps Deps) {
+	if deps.Metrics == nil {
+		return
 	}
-	// /debug/* 需要 admin 鉴权
-	if deps.Session != nil && (deps.Metrics != nil || deps.Traces != nil) {
-		debugHandler := NewDebugHandler(deps.Session, deps.Metrics, deps.Traces)
-		mux.Handle("/debug/", debugHandler)
+	mux.Handle("/metrics", NewMetricsHandler(deps.Metrics))
+}
+
+// registerDebugRoute /debug/* 需要 admin 鉴权
+func registerDebugRoute(mux *http.ServeMux, deps Deps) {
+	if deps.Session == nil || (deps.Metrics == nil && deps.Traces == nil) {
+		return
 	}
-	// /api/state/* state 持久化（admin only）
-	if deps.Session != nil && deps.State != nil {
-		stateHandler := NewStateHandler(deps.State, deps.Session)
-		mux.Handle("/api/state/", stateHandler)
+	debugHandler := NewDebugHandler(deps.Session, deps.Metrics, deps.Traces)
+	mux.Handle("/debug/", debugHandler)
+}
+
+// registerStateRoute /api/state/* admin only
+func registerStateRoute(mux *http.ServeMux, deps Deps) {
+	if deps.Session == nil || deps.State == nil {
+		return
 	}
-	// /api/metrics/reset metrics admin（admin only）
-	if deps.Session != nil && deps.Metrics != nil {
-		metricsAdminHandler := NewMetricsAdminHandler(deps.Metrics, deps.Session)
-		mux.Handle("/api/metrics/reset", metricsAdminHandler)
+	mux.Handle("/api/state/", NewStateHandler(deps.State, deps.Session))
+}
+
+// registerMetricsAdminRoute /api/metrics/reset admin only
+func registerMetricsAdminRoute(mux *http.ServeMux, deps Deps) {
+	if deps.Session == nil || deps.Metrics == nil {
+		return
 	}
-	// /api/audit/* 审计日志查询（admin only，require DB）
-	if deps.Session != nil && deps.Store != nil {
-		auditHandler := NewAuditHandler(deps.Store, deps.Session)
-		mux.Handle("/api/audit", auditHandler)
+	mux.Handle("/api/metrics/reset", NewMetricsAdminHandler(deps.Metrics, deps.Session))
+}
+
+// registerAuditRoute /api/audit admin only
+func registerAuditRoute(mux *http.ServeMux, deps Deps) {
+	if deps.Session == nil || deps.Store == nil {
+		return
 	}
-	// /api/backup/* 备份管理（admin only，require BackupManager）
-	if deps.Session != nil && deps.Backup != nil {
-		backupHandler := NewBackupHandler(deps.Backup, deps.Session)
-		mux.Handle("/api/backup", backupHandler)
+	mux.Handle("/api/audit", NewAuditHandler(deps.Store, deps.Session))
+}
+
+// registerBackupRoute /api/backup admin only
+func registerBackupRoute(mux *http.ServeMux, deps Deps) {
+	if deps.Session == nil || deps.Backup == nil {
+		return
 	}
-	// P1-C: /api/chroma/* 向量存储 (RAG)
+	mux.Handle("/api/backup", NewBackupHandler(deps.Backup, deps.Session))
+}
+
+// registerAIRoutes P1-C: chroma + graph（无 admin 鉴权）
+func registerAIRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Chroma != nil {
 		mux.Handle("/api/chroma/", NewChromaHandler(deps.Chroma))
 	}
-	// P1-C: /api/graph/* 图算法 (BFS/Dijkstra)
 	if deps.Graph != nil {
 		mux.Handle("/api/graph/", NewGraphHandler(deps.Graph))
 	}
-	// P1-D: /api/exporter/* 多格式导出 (md/txt/epub/pdf)
-	if deps.Session != nil {
-		mux.Handle("/api/exporter/", NewExporterHandler(deps.Session))
+}
+
+// registerExportRoutes P1-D: exporter (admin 鉴权)
+func registerExportRoutes(mux *http.ServeMux, deps Deps) {
+	if deps.Session == nil {
+		return
 	}
+	mux.Handle("/api/exporter/", NewExporterHandler(deps.Session))
 }
 
 // registerRootHandler 注册根路径提示

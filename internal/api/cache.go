@@ -98,7 +98,7 @@ func (h *CacheHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/cache/")
 	path = strings.Trim(path, "/")
 	switch path {
-	case "stats":
+	case routeStats:
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return

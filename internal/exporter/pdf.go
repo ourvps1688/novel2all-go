@@ -35,11 +35,11 @@ func exportPDF(title, content string, chapterNum int) (*ExportResult, error) {
 		// 2: Pages
 		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
 		// 3: Page
-		fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>"),
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
 		// 4: Contents
 		fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(streamData), streamData),
 		// 5: Font
-		fmt.Sprintf("<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>"),
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
 		// 6: Info
 		fmt.Sprintf("<< /Title (%s) /Producer (novel2all-go exporter) /CreationDate (%s) >>", pdfEscape(title), now),
 	}

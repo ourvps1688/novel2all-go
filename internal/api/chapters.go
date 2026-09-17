@@ -38,6 +38,9 @@ const (
 	formatTXT = "txt"
 )
 
+// mimeTypeMD 是导出时的 Content-Type（goconst 避免字面量重复）
+const mimeTypeMD = "text/markdown; charset=utf-8"
+
 // NewChapterHandler 创建（无 LLM 操作）
 func NewChapterHandler() *ChapterHandler { return &ChapterHandler{} }
 
@@ -301,7 +304,7 @@ func (h *ChapterHandler) export(w http.ResponseWriter, r *http.Request, chapter 
 
 	switch format {
 	case formatMD:
-		mimeType = "text/markdown; charset=utf-8"
+		mimeType = mimeTypeMD
 		body = []byte(content)
 		ext = formatMD
 	case formatTXT:

@@ -49,19 +49,8 @@ func (g *Graph) Dijkstra(source, target string) (*DijkstraResult, error) {
 	// 简单实现：每轮遍历所有未访问节点找最小
 	// 适合小图（< 10K 节点），P2 阶段可换 heap
 	for {
-		// 找最小未访问节点
-		cur := ""
-		minDist := math.Inf(1)
-		for id, d := range dist {
-			if visited[id] {
-				continue
-			}
-			if d < minDist {
-				minDist = d
-				cur = id
-			}
-		}
-		if cur == "" {
+		cur, ok := g.findMinUnvisited(dist, visited)
+		if !ok {
 			break // 所有可达节点都访问完
 		}
 		visited[cur] = true
@@ -70,24 +59,52 @@ func (g *Graph) Dijkstra(source, target string) (*DijkstraResult, error) {
 			break
 		}
 
-		// 松弛邻居
-		neighbors := make([]string, 0, len(g.nodes[cur]))
-		for to := range g.nodes[cur] {
-			if !visited[to] {
-				neighbors = append(neighbors, to)
-			}
-		}
-		sort.Strings(neighbors)
-		for _, to := range neighbors {
-			w := g.nodes[cur][to]
-			newDist := dist[cur] + w
-			if old, ok := dist[to]; !ok || newDist < old {
-				dist[to] = newDist
-				parent[to] = cur
-			}
-		}
+		g.relaxNeighbors(cur, dist, parent, visited)
 	}
 
+	return g.buildDijkstraResult(target, dist, parent), nil
+}
+
+// findMinUnvisited 找 dist 中未访问的最小距离节点
+func (g *Graph) findMinUnvisited(dist map[string]float64, visited map[string]bool) (string, bool) {
+	cur := ""
+	minDist := math.Inf(1)
+	for id, d := range dist {
+		if visited[id] {
+			continue
+		}
+		if d < minDist {
+			minDist = d
+			cur = id
+		}
+	}
+	if cur == "" {
+		return "", false
+	}
+	return cur, true
+}
+
+// relaxNeighbors 松弛 cur 的所有未访问邻居
+func (g *Graph) relaxNeighbors(cur string, dist map[string]float64, parent map[string]string, visited map[string]bool) {
+	neighbors := make([]string, 0, len(g.nodes[cur]))
+	for to := range g.nodes[cur] {
+		if !visited[to] {
+			neighbors = append(neighbors, to)
+		}
+	}
+	sort.Strings(neighbors)
+	for _, to := range neighbors {
+		w := g.nodes[cur][to]
+		newDist := dist[cur] + w
+		if old, ok := dist[to]; !ok || newDist < old {
+			dist[to] = newDist
+			parent[to] = cur
+		}
+	}
+}
+
+// buildDijkstraResult 构造响应
+func (g *Graph) buildDijkstraResult(target string, dist map[string]float64, parent map[string]string) *DijkstraResult {
 	result := &DijkstraResult{
 		Dist:   dist,
 		Parent: parent,
@@ -98,5 +115,5 @@ func (g *Graph) Dijkstra(source, target string) (*DijkstraResult, error) {
 			result.TotalWeight = dist[target]
 		}
 	}
-	return result, nil
+	return result
 }
