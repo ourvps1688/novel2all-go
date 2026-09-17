@@ -78,6 +78,12 @@ func Router(deps Deps) *http.ServeMux {
 	}
 	mux.Handle("/api/tracking", NewTrackingHandler())
 
+	// Chapters API（P1-F 切片 4：文件系统存储）
+	chaptersHandler := NewChapterHandler()
+	mux.Handle("/api/chapters", chaptersHandler)
+	mux.Handle("/api/chapters/", chaptersHandler)
+	mux.Handle("/api/chapter/", chaptersHandler)
+
 	// 根路径提示
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -85,7 +91,7 @@ func Router(deps Deps) *http.ServeMux {
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("novel2all-go v0.6.0 — see /health, /version, /api/auth, /api/skills, /api/roles, /api/cache, /api/status, /api/models, /api/projects, /api/write, /api/tracking\n"))
+		_, _ = w.Write([]byte("novel2all-go v0.6.0 — see /health, /version, /api/auth, /api/skills, /api/roles, /api/cache, /api/status, /api/models, /api/projects, /api/write, /api/tracking, /api/chapters, /api/chapter\n"))
 	})
 
 	return mux
