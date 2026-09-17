@@ -394,14 +394,22 @@ func (h *WriteHandler) handleTask(w http.ResponseWriter, _ *http.Request, taskID
 	_ = json.NewEncoder(w).Encode(t)
 }
 
-// sendWriteSSE 发送一条写章节相关的 SSE 事件（与 skills.go sendSSE 不同 schema）
+// sendWriteSSE 发送一条写章节相关的 SSE 事件（与 skills.go sendSSE 不同 schema）.
+//
+// Sprint 32 race fix: 加 sseWriteMu 锁, 与 sse.go writeSSEEvent 保持一致.
+// 之前的 race 原因: write.go 自己的 sendWriteSSE 没持 sseWriteMu,
+// test goroutine 调 w.Body.String() 时 handleStream goroutine 还在写 w.Body.
 func sendWriteSSE(w http.ResponseWriter, flusher http.Flusher, event string, data any) {
+	sseWriteMu.Lock()
+	defer sseWriteMu.Unlock()
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		jsonData = []byte(`{"error":"marshal failed"}`)
 	}
 	_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, string(jsonData))
-	flusher.Flush()
+	if flusher != nil {
+		flusher.Flush()
+	}
 }
 
 // buildSystemPrompt Sprint 32: 拼 system prompt (memory + references + settings).
