@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,11 +12,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
 // ChapterHandler 提供 /api/chapters + /api/chapter/* (CRUD + content + save + export)
 //
 // P1-F 切片 4：基于文件系统的章节管理（项目目录下 prose/第NNN章.md）
+// Sprint 15 commit F：filesystem 是 content primary storage，SQLite 加 metadata 索引（list fast + 重启恢复）
 //
 // 端点：
 //
@@ -30,7 +35,16 @@ import (
 //	POST   /api/chapter/{N}/insert/            → LLM 插入
 //	POST   /api/chapter/{N}/rollback/          → 从 .bak 恢复
 type ChapterHandler struct {
-	actions *ChapterActions // LLM 操作组件（可为 nil）
+	actions *ChapterActions      // LLM 操作组件（可为 nil）
+	meta    *store.ChaptersStore // SQLite metadata index（可为 nil，纯 filesystem 模式）
+}
+
+// SetMetaStore 注入 SQLite metadata index（Sprint 15 commit F）
+//
+// 注入后 list 优先查 SQLite metadata；save/delete 同步更新 metadata。
+// nil 表示纯 filesystem 模式（向后兼容）。
+func (h *ChapterHandler) SetMetaStore(s *store.ChaptersStore) {
+	h.meta = s
 }
 
 const (
@@ -149,25 +163,72 @@ func (h *ChapterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // list 列出项目下所有章节
+//
+// Sprint 15 commit F: 如果 SQLite metadata 存在 (SetMetaStore 已注入),
+// 优先查 SQLite metadata index (fast + 重启可恢复); 否则 fallback 到 filesystem scan.
 func (h *ChapterHandler) list(w http.ResponseWriter, r *http.Request) {
 	projectRoot := r.URL.Query().Get("project_root")
 	if projectRoot == "" {
 		projectRoot = "."
 	}
+
+	// SQLite metadata path (Sprint 15 commit F)
+	if h.meta != nil && r.URL.Query().Get("project_id") != "" {
+		pid, _ := strconv.ParseInt(r.URL.Query().Get("project_id"), 10, 64)
+		if pid > 0 {
+			chapters, err := h.listFromMeta(r.Context(), pid)
+			if err == nil {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"chapters": chapters,
+					"count":    len(chapters),
+				})
+				return
+			}
+			// fall through to filesystem on error
+		}
+	}
+
+	chapters, err := h.listFromFS(projectRoot)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"chapters": chapters,
+		"count":    len(chapters),
+	})
+}
+
+// listFromMeta 从 SQLite metadata 取章节列表
+func (h *ChapterHandler) listFromMeta(ctx context.Context, projectID int64) ([]ChapterInfo, error) {
+	rows, err := h.meta.List(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ChapterInfo, 0, len(rows))
+	for _, r := range rows {
+		// 查 filesystem first_line（content_path 存的相对路径, projectRoot 由 query 决定）
+		// 这里 first_line 不查 filesystem（Sprint 15 list 不读文件内容, 性能考虑）
+		out = append(out, ChapterInfo{
+			Chapter:   r.N,
+			Filename:  fmt.Sprintf("第%03d章.md", r.N),
+			CharCount: r.CharCount,
+		})
+	}
+	return out, nil
+}
+
+// listFromFS 从 filesystem 扫 第NNN章.md
+func (h *ChapterHandler) listFromFS(projectRoot string) ([]ChapterInfo, error) {
 	proseDir := chapterProseDir(projectRoot)
 	entries, err := os.ReadDir(proseDir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			// 项目未初始化 → 空列表
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"chapters": []ChapterInfo{},
-				"count":    0,
-			})
-			return
+			return []ChapterInfo{}, nil
 		}
-		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
 	re := regexp.MustCompile(`^第(\d+)章\.md$`)
@@ -196,12 +257,7 @@ func (h *ChapterHandler) list(w http.ResponseWriter, r *http.Request) {
 			FirstLine: firstLine,
 		})
 	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"chapters": chapters,
-		"count":    len(chapters),
-	})
+	return chapters, nil
 }
 
 // content 读取完整章节
@@ -238,10 +294,14 @@ func (h *ChapterHandler) content(w http.ResponseWriter, r *http.Request, chapter
 }
 
 // save 保存（手动编辑）
+//
+// Sprint 15 commit F: filesystem 写 content + SQLite 同步 upsert metadata
 func (h *ChapterHandler) save(w http.ResponseWriter, r *http.Request, chapter int) {
 	var req struct {
 		Content     string `json:"content"`
 		ProjectRoot string `json:"project_root"`
+		ProjectID   int64  `json:"project_id,omitempty"`
+		Title       string `json:"title,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
@@ -260,9 +320,18 @@ func (h *ChapterHandler) save(w http.ResponseWriter, r *http.Request, chapter in
 		return
 	}
 
+	// SQLite metadata upsert (Sprint 15 commit F)
+	// 如果 ProjectID > 0 + h.meta 已注入, 同步 metadata
+	charCount := len([]rune(req.Content))
+	if h.meta != nil && req.ProjectID > 0 {
+		// content_path 是相对 projectRoot 的相对路径 (chapterProsePath 返回绝对, 转相对)
+		relPath := relChapterPath(req.ProjectRoot, chapter)
+		_, _ = h.meta.Upsert(r.Context(), req.ProjectID, chapter, req.Title, relPath, charCount)
+	}
+
 	resp := map[string]any{
 		"chapter":     chapter,
-		"char_count":  len([]rune(req.Content)),
+		"char_count":  charCount,
 		"output_path": prosePath,
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -333,8 +402,37 @@ func (h *ChapterHandler) delete(w http.ResponseWriter, r *http.Request, chapter 
 		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
 		return
 	}
+
+	// Sprint 15 commit F: SQLite metadata 同步删除
+	if h.meta != nil {
+		pid, _ := strconv.ParseInt(r.URL.Query().Get("project_id"), 10, 64)
+		if pid > 0 {
+			_ = h.meta.DeleteByNumber(r.Context(), pid, chapter)
+		}
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// relChapterPath 返回 chapter 相对 projectRoot 的路径
+//
+// 例: chapterProsePath("/tmp/p", 1) → "/tmp/p/prose/第001章.md"
+//
+//	relChapterPath("/tmp/p", 1)     → "prose/第001章.md"
+func relChapterPath(projectRoot string, chapter int) string {
+	abs := chapterProsePath(projectRoot, chapter)
+	if projectRoot == "" || projectRoot == "." {
+		return filepath.Join("prose", fmt.Sprintf("第%03d章.md", chapter))
+	}
+	rel, err := filepath.Rel(projectRoot, abs)
+	if err != nil {
+		return abs
+	}
+	return rel
+}
+
+// _ silences unused imports for time package when no meta usage
+var _ = time.Time{}
 
 // chapterProseDir 返回项目下 prose/ 目录
 func chapterProseDir(projectRoot string) string {

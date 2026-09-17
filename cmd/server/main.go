@@ -139,6 +139,9 @@ func run() error {
 	projectsSQLStore := store.NewProjectsStore(db)
 	projectStore := api.NewSQLiteProjectsAdapter(projectsSQLStore)
 	statePersistor := api.NewStatePersistor("data/state.json", projectStore)
+
+	// Sprint 15 commit F: chapters metadata index (filesystem 仍 primary storage)
+	chaptersSQLStore := store.NewChaptersStore(db)
 	// 启动时加载（如果 state.json 不存在,静默返回 nil）
 	if err := statePersistor.Load(); err != nil {
 		logger.Warn("state_load_failed", "error", err.Error(), "action", "starting with empty state")
@@ -155,18 +158,19 @@ func run() error {
 
 	// 6. 装配 router
 	deps := api.Deps{
-		Store:   db,
-		Logger:  logger,
-		Loader:  skillLoader,
-		Router:  llmRouter,
-		Session: sessionManager,
-		Limiter: limiter,
-		Metrics: metrics,
-		Traces:  traces,
-		State:   statePersistor,
-		Backup:  store.NewBackupManager("data/backups", "data/state.json", cfg.DB.DSN, 10),
-		Chroma:  chroma.NewClient(128), // P1-C 向量存储 (128 维 hash embedding)
-		Graph:   graph.NewGraph(),      // P1-C 图算法 (BFS/Dijkstra)
+		Store:        db,
+		Logger:       logger,
+		Loader:       skillLoader,
+		Router:       llmRouter,
+		Session:      sessionManager,
+		Limiter:      limiter,
+		Metrics:      metrics,
+		Traces:       traces,
+		State:        statePersistor,
+		Backup:       store.NewBackupManager("data/backups", "data/state.json", cfg.DB.DSN, 10),
+		Chroma:       chroma.NewClient(128), // P1-C 向量存储 (128 维 hash embedding)
+		Graph:        graph.NewGraph(),      // P1-C 图算法 (BFS/Dijkstra)
+		ChaptersMeta: chaptersSQLStore,      // Sprint 15 commit F: chapters metadata index
 	}
 	// 共享 ProjectStore 给 ProjectsHandler 和 StatePersistor (切片 10)
 	deps.SetProjectStore(projectStore)

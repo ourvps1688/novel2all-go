@@ -43,6 +43,10 @@ type Deps struct {
 	// Graph 用于 /api/graph/* (人物关系图谱)
 	Graph *graph.Graph
 
+	// Sprint 15 commit F: chapters SQLite metadata index (filesystem 仍 primary)
+	// 可选, nil 时 ChapterHandler 走纯 filesystem 模式 (向后兼容)
+	ChaptersMeta *store.ChaptersStore
+
 	// projectStore 共享 ProjectStore（切片 10 让 State 持久化 projects）
 	// 未导出避免 main.go 误用（应该只通过 State 间接访问）
 	// 用 SetProjectStore 方法设置（main.go 在外部构造 Deps）
@@ -139,11 +143,17 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 		executor := skills.NewExecutor(deps.Loader, deps.Router)
 		actions := NewChapterActions(executor)
 		chaptersHandler := NewChapterHandlerWithActions(actions)
+		if deps.ChaptersMeta != nil {
+			chaptersHandler.SetMetaStore(deps.ChaptersMeta)
+		}
 		mux.Handle("/api/chapters", chaptersHandler)
 		mux.Handle("/api/chapters/", chaptersHandler)
 		mux.Handle("/api/chapter/", chaptersHandler)
 	} else {
 		chaptersHandler := NewChapterHandler()
+		if deps.ChaptersMeta != nil {
+			chaptersHandler.SetMetaStore(deps.ChaptersMeta)
+		}
 		mux.Handle("/api/chapters", chaptersHandler)
 		mux.Handle("/api/chapters/", chaptersHandler)
 		mux.Handle("/api/chapter/", chaptersHandler)
