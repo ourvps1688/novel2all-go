@@ -26,6 +26,11 @@ import (
 //	DELETE /api/chapter/{N}/                   → 删除章节文件
 type ChapterHandler struct{}
 
+const (
+	formatMD  = "md"
+	formatTXT = "txt"
+)
+
 // NewChapterHandler 创建
 func NewChapterHandler() *ChapterHandler { return &ChapterHandler{} }
 
@@ -240,9 +245,9 @@ func (h *ChapterHandler) save(w http.ResponseWriter, r *http.Request, chapter in
 func (h *ChapterHandler) export(w http.ResponseWriter, r *http.Request, chapter int) {
 	format := strings.ToLower(r.URL.Query().Get("format"))
 	if format == "" {
-		format = "md"
+		format = formatMD
 	}
-	if format != "md" && format != "txt" {
+	if format != formatMD && format != "txt" {
 		http.Error(w, fmt.Sprintf(`{"error":"unsupported format: %s (only md/txt in P1-F)"}`, format), http.StatusBadRequest)
 		return
 	}
@@ -270,14 +275,14 @@ func (h *ChapterHandler) export(w http.ResponseWriter, r *http.Request, chapter 
 	)
 
 	switch format {
-	case "md":
+	case formatMD:
 		mimeType = "text/markdown; charset=utf-8"
 		body = []byte(content)
-		ext = "md"
-	case "txt":
+		ext = formatMD
+	case formatTXT:
 		mimeType = "text/plain; charset=utf-8"
 		body = []byte(stripMarkdown(content))
-		ext = "txt"
+		ext = formatTXT
 	}
 
 	w.Header().Set("Content-Type", mimeType)
