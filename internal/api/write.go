@@ -188,9 +188,8 @@ func (h *WriteHandler) handleStream(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-ctx.Done():
 			// 客户端断开 / 取消
+			task.UpdateProgress(len([]rune(accumulated.String())), accumulated.String())
 			task.MarkCancelled()
-			task.Content = accumulated.String()
-			task.CharsWritten = len([]rune(accumulated.String()))
 			sendWriteSSE(w, flusher, "cancelled", map[string]any{
 				"task_id":         task.ID,
 				"chars_so_far":    task.CharsWritten,
@@ -241,8 +240,7 @@ func (h *WriteHandler) handleStream(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// 5. done
-	task.Content = accumulated.String()
-	task.CharsWritten = len([]rune(accumulated.String()))
+	task.UpdateProgress(len([]rune(accumulated.String())), accumulated.String())
 	task.MarkCompleted()
 
 	sendWriteSSE(w, flusher, "done", map[string]any{

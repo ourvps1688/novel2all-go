@@ -101,19 +101,23 @@ func (m *PipelineTaskManager) Start(ctx context.Context, chapter int, projectRoo
 // Cancel 取消任务 (标记 cancelled + 调 task.Cancel + 关闭 ChunkCh/Done).
 //
 // 返回 ErrPipelineTaskNotFound 如果 task 不存在.
+//
+// 并发安全: 全程持锁, 避免 task.Status 与 Complete/Fail 竞态.
 func (m *PipelineTaskManager) Cancel(taskID string) error {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	task, ok := m.tasks[taskID]
-	m.mu.Unlock()
 	if !ok {
 		return ErrPipelineTaskNotFound
 	}
-	task.Cancel()
-	m.mu.Lock()
+	// 已完成的任务不能被 cancel 覆盖
+	if task.Status != TaskStatusRunning {
+		return nil
+	}
+	task.Cancel() // context.CancelFunc, 内部并发安全
 	task.Status = TaskStatusCancelled
 	now := time.Now().UTC()
 	task.FinishedAt = &now
-	m.mu.Unlock()
 	// 关闭 channel (通知 SSE handler 退出)
 	closeIfOpen(task.Done)
 	return nil

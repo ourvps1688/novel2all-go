@@ -24,6 +24,13 @@ const (
 //
 // P1-F 切片 3: 内存存储 + goroutine 执行；P2 阶段会持久化到 SQLite。
 type WriteTask struct {
+	// mu 保护 Status/UpdatedAt/CompletedAt/CharsWritten/Content 等可变字段
+	// 配合 TaskManager.mu (保护 tasks map) 提供双层并发安全.
+	//   - 改 map 用 TaskManager.mu
+	//   - 改 task 字段用 task.mu
+	//   - 同时改两者: 先 TaskManager.mu 再 task.mu (避免死锁)
+	mu sync.Mutex
+
 	ID           string          `json:"task_id"`
 	Status       WriteTaskStatus `json:"status"`
 	Chapter      int             `json:"chapter"`
@@ -140,6 +147,8 @@ func (m *TaskManager) Remove(id string) {
 
 // UpdateProgress 更新进度（线程安全）
 func (t *WriteTask) UpdateProgress(chars int, content string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.CharsWritten = chars
 	t.Content = content
 	t.UpdatedAt = time.Now()
@@ -147,12 +156,16 @@ func (t *WriteTask) UpdateProgress(chars int, content string) {
 
 // MarkRunning 标记任务为 running
 func (t *WriteTask) MarkRunning() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.Status = WriteTaskRunning
 	t.UpdatedAt = time.Now()
 }
 
 // MarkCompleted 标记任务完成
 func (t *WriteTask) MarkCompleted() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.Status = WriteTaskCompleted
 	t.UpdatedAt = time.Now()
 	now := time.Now()
@@ -161,6 +174,8 @@ func (t *WriteTask) MarkCompleted() {
 
 // MarkFailed 标记任务失败
 func (t *WriteTask) MarkFailed() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.Status = WriteTaskFailed
 	t.UpdatedAt = time.Now()
 	now := time.Now()
@@ -169,6 +184,8 @@ func (t *WriteTask) MarkFailed() {
 
 // MarkCancelled 标记任务取消
 func (t *WriteTask) MarkCancelled() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.Status = WriteTaskCancelled
 	t.UpdatedAt = time.Now()
 	now := time.Now()

@@ -86,10 +86,8 @@ func (h *WriteHandler) handleWriteStream(w http.ResponseWriter, r *http.Request)
 	// 启动 task
 	task := h.taskMgr.Start(r.Context(), chapter, projectRoot, skill)
 	defer func() {
-		// 如果客户端断开, 标记 cancelled
-		if task.Status == TaskStatusRunning {
-			_ = h.taskMgr.Cancel(task.ID)
-		}
+		// 如果客户端断开, 标记 cancelled (Cancel 内部会检查状态避免覆盖已完成任务)
+		_ = h.taskMgr.Cancel(task.ID)
 	}()
 
 	// 1. started event
@@ -292,9 +290,8 @@ func (h *WriteHandler) handleWriteStreamModel(w http.ResponseWriter, r *http.Req
 	setSSEHeaders(w)
 	task := h.taskMgr.Start(r.Context(), req.Chapter, req.ProjectRoot, req.Skill)
 	defer func() {
-		if task.Status == TaskStatusRunning {
-			_ = h.taskMgr.Cancel(task.ID)
-		}
+		// 如果客户端断开, 标记 cancelled (Cancel 内部会检查状态避免覆盖已完成任务)
+		_ = h.taskMgr.Cancel(task.ID)
 	}()
 
 	_ = writeSSEJSON(w, "started", map[string]any{
