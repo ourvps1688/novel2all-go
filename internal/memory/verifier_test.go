@@ -19,10 +19,10 @@ func TestHasBlockingIssues(t *testing.T) {
 		t.Error("no critical should return false")
 	}
 
-	withCritical := append(warnings, ContinuityIssue{
+	warnings = append(warnings, ContinuityIssue{
 		Severity: "critical", Category: "character", Description: "dead character alive",
-	},
-	)
+	})
+	withCritical := warnings
 	if !HasBlockingIssues(withCritical) {
 		t.Error("with critical should return true")
 	}

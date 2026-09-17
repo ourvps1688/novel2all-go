@@ -48,7 +48,9 @@ func TestRollbackManager_Rollback(t *testing.T) {
 	// init state
 	state, _ := tracker.Read()
 	state.Characters["alice"] = CharacterState{Name: "alice"}
-	tracker.Write(state)
+	if err := tracker.Write(state); err != nil {
+		t.Fatal(err)
+	}
 
 	// snapshot before modification
 	snap, err := rm.Snapshot(1, state)
@@ -61,7 +63,9 @@ func TestRollbackManager_Rollback(t *testing.T) {
 	alice := state.Characters["alice"]
 	alice.Location = "modified"
 	state.Characters["alice"] = alice
-	if err := tracker.Write(state); err != nil { t.Fatal(err) }
+	if err := tracker.Write(state); err != nil {
+		t.Fatal(err)
+	}
 
 	// verify modification
 	current, _ := tracker.Read()

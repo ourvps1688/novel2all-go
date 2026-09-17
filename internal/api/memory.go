@@ -55,23 +55,33 @@ func (h *MemoryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case path == "state" || path == "state/":
-		h.requireMethod(w, r, http.MethodGet)
+		if !h.requireMethod(w, r, http.MethodGet) {
+			return
+		}
 		h.handleGetState(w, r)
 	case strings.HasPrefix(path, "context/"):
 		h.requireMethod(w, r, http.MethodGet)
 		chapterStr := strings.TrimPrefix(path, "context/")
 		h.handleGetContext(w, r, chapterStr)
 	case path == "update" || path == "update/":
-		h.requireMethod(w, r, http.MethodPost)
+		if !h.requireMethod(w, r, http.MethodPost) {
+			return
+		}
 		h.handleUpdate(w, r)
 	case path == "review" || path == "review/":
-		h.requireMethod(w, r, http.MethodPost)
+		if !h.requireMethod(w, r, http.MethodPost) {
+			return
+		}
 		h.handleReview(w, r)
 	case path == "rollback" || path == "rollback/":
-		h.requireMethod(w, r, http.MethodPost)
+		if !h.requireMethod(w, r, http.MethodPost) {
+			return
+		}
 		h.handleRollback(w, r)
 	case path == "snapshots" || path == "snapshots/":
-		h.requireMethod(w, r, http.MethodGet)
+		if !h.requireMethod(w, r, http.MethodGet) {
+			return
+		}
 		h.handleListSnapshots(w, r)
 	default:
 		http.NotFound(w, r)
@@ -79,10 +89,12 @@ func (h *MemoryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // requireMethod 检查 HTTP method (helper, 简化 ServeHTTP 复杂度).
-func (h *MemoryHandler) requireMethod(w http.ResponseWriter, r *http.Request, method string) {
+func (h *MemoryHandler) requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
 	if r.Method != method {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return false
 	}
+	return true
 }
 
 // MemoryStateResponse GET /api/memory/state 响应.

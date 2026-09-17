@@ -103,7 +103,7 @@ func (r *MultiAgentReviewer) reviewByRole(ctx context.Context, role string, chap
 }
 
 // checkConsistency 一致性检查 (V0 简化: 不调 LLM, 仅检查 state 中已知冲突).
-func (r *MultiAgentReviewer) checkConsistency(_ context.Context, role string, _ string, state *TrackingState) []ReviewIssue {
+func (r *MultiAgentReviewer) checkConsistency(_ context.Context, role, _ string, state *TrackingState) []ReviewIssue {
 	if state == nil {
 		return nil
 	}

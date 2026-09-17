@@ -320,14 +320,14 @@ func mergeStrSlice(a, b []string) []string {
 }
 
 // replacePlaceholder 简单占位符替换 (避免 import strings).
-func replacePlaceholder(s, old, new string) string {
+func replacePlaceholder(s, old, newStr string) string {
 	// strings.Replace all occurrences
 	for {
 		idx := indexOf(s, old)
 		if idx < 0 {
 			return s
 		}
-		s = s[:idx] + new + s[idx+len(old):]
+		s = s[:idx] + newStr + s[idx+len(old):]
 	}
 }
 
