@@ -121,8 +121,26 @@ func run() error {
 	// 注入 LLM metrics 钩子（adapter 把 metrics + traces 桥接到 llm.MetricsHook 接口）
 	llmRouter.SetMetricsHook(&llmHookAdapter{m: metrics, t: traces})
 
+	// 5.6 P1-F 切片 10：state 持久化
+	// 创建共享 ProjectStore（ProjectsHandler 和 StatePersistor 共用）
+	projectStore := api.NewProjectStore()
+	statePersistor := api.NewStatePersistor("data/state.json", projectStore)
+	// 启动时加载（如果 state.json 不存在,静默返回 nil）
+	if err := statePersistor.Load(); err != nil {
+		logger.Warn("state_load_failed", "error", err.Error(), "action", "starting with empty state")
+	} else {
+		info := statePersistor.Info()
+		logger.Info("state_loaded",
+			"path", info.Path,
+			"exists", info.Exists,
+			"projects", info.Projects,
+			"cache_hits", info.CacheHits,
+			"last_load_at", info.LastLoadAt,
+		)
+	}
+
 	// 6. 装配 router
-	mux := api.Router(api.Deps{
+	deps := api.Deps{
 		Store:   db,
 		Logger:  logger,
 		Loader:  skillLoader,
@@ -131,7 +149,11 @@ func run() error {
 		Limiter: limiter,
 		Metrics: metrics,
 		Traces:  traces,
-	})
+		State:   statePersistor,
+	}
+	// 共享 ProjectStore 给 ProjectsHandler 和 StatePersistor (切片 10)
+	deps.SetProjectStore(projectStore)
+	mux := api.Router(deps)
 	handler := api.LoggingMiddleware(logger, metrics, traces, mux)
 
 	// 5. HTTP server

@@ -134,6 +134,36 @@ func (s *ProjectStore) Delete(id int64) error {
 	return nil
 }
 
+// RestoreAll 用 projects 列表替换内存数据（P1-F 切片 10 state load 用）
+//
+// 行为：
+//   - projects == nil 或 len == 0 → 清空内存（等价 reset）
+//   - 否则 → 清空后重新插入 + 重建 next id 计数器
+//
+// 线程安全：持有 write lock。
+func (s *ProjectStore) RestoreAll(projects []*Project) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 清空现有数据
+	s.data = make(map[int64]*Project)
+	s.bySlug = make(map[string]int64)
+	s.next = 0
+
+	for _, p := range projects {
+		if p == nil {
+			continue
+		}
+		cp := *p // 拷贝避免外部修改影响内存
+		s.data[cp.ID] = &cp
+		s.bySlug[cp.Slug] = cp.ID
+		if cp.ID > s.next {
+			s.next = cp.ID
+		}
+	}
+	return nil
+}
+
 // ErrNotFound 通用 not-found 错误
 var ErrNotFound = errors.New("not found")
 
@@ -145,6 +175,13 @@ type ProjectsHandler struct {
 // NewProjectsHandler 创建
 func NewProjectsHandler() *ProjectsHandler {
 	return &ProjectsHandler{store: NewProjectStore()}
+}
+
+// NewProjectsHandlerWithStore 用已有 store 创建（P1-F 切片 10 state 持久化用）
+//
+// 让 main.go 创建共享 ProjectStore 实例给 ProjectsHandler 和 StatePersistor。
+func NewProjectsHandlerWithStore(store *ProjectStore) *ProjectsHandler {
+	return &ProjectsHandler{store: store}
 }
 
 // ServeHTTP 路由分发

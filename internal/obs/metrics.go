@@ -135,6 +135,46 @@ func (m *Metrics) IncDBSessions() { m.dbSessionsActive.Add(1) }
 // DecDBSessions DB sessions -1。
 func (m *Metrics) DecDBSessions() { m.dbSessionsActive.Add(-1) }
 
+// Reset 重置所有 metrics counters 到零（admin 用，P1-F 切片 10）。
+//
+// 行为：
+//   - HTTP requests + duration sum/count → 0
+//   - LLM calls + tokens → 0
+//   - SSE active streams → 0
+//   - Cache hits/misses → 0
+//   - DB sessions active → 0
+//
+// 不重置：
+//   - Version / Commit / GoVersion（构建信息）
+//   - UptimeSeconds / GoRoutines（runtime 信息）
+//
+// 注意：cache counters 和 cache.go 中的 cacheHits/cacheMisses 全局变量是分开的
+// 两套状态。Metrics 重置只影响 obs.Metrics（HTTP/LLM 等），不影响 cache.go 内部缓存。
+func (m *Metrics) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, c := range m.httpRequests {
+		c.Store(0)
+	}
+	for _, c := range m.httpDurationSum {
+		c.Store(0)
+	}
+	for _, c := range m.httpDurationCount {
+		c.Store(0)
+	}
+	for _, c := range m.llmCalls {
+		c.Store(0)
+	}
+	for _, c := range m.llmTokens {
+		c.Store(0)
+	}
+	m.sseActiveStreams.Store(0)
+	m.cacheHitsTotal.Store(0)
+	m.cacheMissesTotal.Store(0)
+	m.dbSessionsActive.Store(0)
+}
+
 // Snapshot 返回当前所有指标的不可变快照（线程安全）。
 type Snapshot struct {
 	HTTPRequests      map[string]int64

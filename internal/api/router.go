@@ -26,6 +26,23 @@ type Deps struct {
 	Metrics *obs.Metrics
 	// Traces 用于 /debug/traces
 	Traces *obs.TraceRecorder
+
+	// P1-F 切片 10: state 持久化
+	// State 用于 /api/state/* (save/load/reset)
+	State *StatePersistor
+
+	// projectStore 共享 ProjectStore（切片 10 让 State 持久化 projects）
+	// 未导出避免 main.go 误用（应该只通过 State 间接访问）
+	// 用 SetProjectStore 方法设置（main.go 在外部构造 Deps）
+	projectStore *ProjectStore
+}
+
+// SetProjectStore 设置共享 ProjectStore（P1-F 切片 10 用）
+//
+// main.go 在外部构造 ProjectStore + StatePersistor, 然后用此方法注入。
+// router.go 用 projectStore 给 ProjectsHandler 共享同一个 store。
+func (d *Deps) SetProjectStore(store *ProjectStore) {
+	d.projectStore = store
 }
 
 // Router 返回配置好的 http.ServeMux
@@ -126,7 +143,8 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 // registerProjectRoutes 注册 projects + write + tracking
 func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 	// Projects API（内存版）
-	mux.Handle("/api/projects/", NewProjectsHandler())
+	// 共享 ProjectStore: 切片 10 让 StatePersistor 可以持久化 projects
+	mux.Handle("/api/projects/", NewProjectsHandlerWithStore(deps.projectStore))
 
 	// Write + Tracking API（流式写作）
 	if deps.Loader != nil && deps.Router != nil {
@@ -137,7 +155,7 @@ func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("/api/tracking", NewTrackingHandler())
 }
 
-// registerOpsRoutes 注册 metrics + debug（切片 9）
+// registerOpsRoutes 注册 metrics + debug（切片 9）+ state + metrics admin（切片 10）
 func registerOpsRoutes(mux *http.ServeMux, deps Deps) {
 	// /metrics 无鉴权（Prometheus 惯例；用 firewall/reverse-proxy 限制）
 	if deps.Metrics != nil {
@@ -147,6 +165,16 @@ func registerOpsRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Session != nil && (deps.Metrics != nil || deps.Traces != nil) {
 		debugHandler := NewDebugHandler(deps.Session, deps.Metrics, deps.Traces)
 		mux.Handle("/debug/", debugHandler)
+	}
+	// /api/state/* state 持久化（admin only）
+	if deps.Session != nil && deps.State != nil {
+		stateHandler := NewStateHandler(deps.State, deps.Session)
+		mux.Handle("/api/state/", stateHandler)
+	}
+	// /api/metrics/reset metrics admin（admin only）
+	if deps.Session != nil && deps.Metrics != nil {
+		metricsAdminHandler := NewMetricsAdminHandler(deps.Metrics, deps.Session)
+		mux.Handle("/api/metrics/reset", metricsAdminHandler)
 	}
 }
 
