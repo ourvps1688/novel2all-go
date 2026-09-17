@@ -89,6 +89,16 @@ type Provider interface {
 	// Chat 非流式调用
 	Chat(ctx context.Context, req Request) (*Response, error)
 
+	// ChatWithTools 一次调用 (Sprint 34).
+	//
+	// LLM 决定是否调 tool (返回 []ToolCall) 或直接答 (返回 Content).
+	// Multi-turn 循环 (调 tool → 把结果塞回 → 再次请求) 由 Router.ChatWithTools 控制.
+	// Provider 只暴露"一次 raw 调用"能力.
+	//
+	// provider 不知道 Tool.Handler, 拿到的 args (JSON string) 由 Router 解析并执行.
+	// 返回的 Content (assistant 文本) + ToolCalls (LLM 决策) 给 Router 处理.
+	ChatWithTools(ctx context.Context, req ChatWithToolsRequest) (*ChatWithToolsResponse, error)
+
 	// Available 检查 API key 是否配置
 	Available() bool
 }

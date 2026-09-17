@@ -12,6 +12,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -230,6 +231,128 @@ func (r *Router) Chat(ctx context.Context, req Request) (*Response, error) {
 // SetMetricsHook 注入 metrics 钩子（可选；不注入时 metrics 调用为 no-op）。
 func (r *Router) SetMetricsHook(h MetricsHook) {
 	r.hook.Store(&h)
+}
+
+// ChatWithTools multi-turn tool call 调用 (Sprint 34).
+//
+// 流程 (每轮):
+//  1. Router 调 Provider.ChatWithTools (一次 LLM 调用)
+//  2. 如果 LLM 返回 ToolCalls → 调对应 Tool.Handler, 收集 ToolResults
+//  3. 把 tool_results 塞回 messages, 重复
+//  4. 直到 LLM 返回空 ToolCalls (final answer) 或达到 MaxToolRounds
+//
+// Sprint 34 简化: 文本格式 tool result (assistant 决策 + tool result 拼文本进 messages).
+// 后续 Sprint 35+ 再做结构化 tool result format (按 provider 协议).
+func (r *Router) ChatWithTools(ctx context.Context, req ChatWithToolsRequest) (*ChatWithToolsResponse, error) {
+	if len(req.Tools) == 0 {
+		return nil, fmt.Errorf("ChatWithTools: no tools provided")
+	}
+
+	// tool name → handler 索引
+	toolIndex := make(map[string]Tool, len(req.Tools))
+	for _, t := range req.Tools {
+		toolIndex[t.Name] = t
+	}
+
+	maxRounds := req.MaxToolRounds
+	if maxRounds == 0 {
+		maxRounds = 5
+	}
+
+	messages := make([]Message, len(req.Messages))
+	copy(messages, req.Messages)
+
+	allCalls := make([]ExecutedToolCall, 0)
+	totalTokensIn := 0
+	totalTokensOut := 0
+	// resolve() 需要 Request 类型, 传 Task + OverrideProvider 即可
+	provider, model, err := r.resolve(Request{
+		Task:             req.Task,
+		OverrideProvider: req.OverrideProvider,
+		OverrideModel:    req.OverrideModel,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var providerName ProviderName
+	if req.OverrideProvider != "" {
+		providerName = req.OverrideProvider
+	} else {
+		providerName = provider.Name()
+	}
+
+	for round := 0; round < maxRounds; round++ {
+		// 1. 调一次 LLM
+		stepReq := req
+		stepReq.Messages = messages
+		stepReq.OverrideProvider = providerName
+		stepReq.OverrideModel = model
+
+		resp, err := provider.ChatWithTools(ctx, stepReq)
+		if err != nil {
+			return nil, fmt.Errorf("round %d: %w", round, err)
+		}
+		totalTokensIn += resp.TokensIn
+		totalTokensOut += resp.TokensOut
+
+		// 2. 如果 LLM 不调 tool, 终止 (返回 final answer)
+		if len(resp.ToolCalls) == 0 {
+			return &ChatWithToolsResponse{
+				Content:   resp.Content,
+				ToolCalls: allCalls,
+				Provider:  providerName,
+				Model:     resp.Model,
+				TokensIn:  totalTokensIn,
+				TokensOut: totalTokensOut,
+			}, nil
+		}
+
+		// 3. 处理每个 tool call
+		var toolResults []map[string]any
+		for _, ec := range resp.ToolCalls {
+			tool, ok := toolIndex[ec.Call.Name]
+			var result ToolResult
+			result.CallID = ec.Call.ID
+			if !ok {
+				result.Error = (&ErrToolNotFound{Name: ec.Call.Name}).Error()
+			} else {
+				val, err := tool.Handler(ctx, ec.Call.Arguments)
+				if err != nil {
+					result.Error = err.Error()
+				} else {
+					result.Result = val
+				}
+			}
+			ec.Result = result
+			allCalls = append(allCalls, ec)
+			toolResults = append(toolResults, result.ToToolResultJSON())
+		}
+
+		// 4. 拼 tool_results 进 messages (Sprint 34 简化: 文本格式)
+		assistantMsg := "[assistant decided to call tools]\n"
+		for _, ec := range resp.ToolCalls {
+			argsJSON, _ := json.Marshal(ec.Call.Arguments)
+			assistantMsg += fmt.Sprintf("- %s(%s): pending\n", ec.Call.Name, string(argsJSON))
+		}
+		messages = append(messages, Message{Role: "assistant", Content: assistantMsg})
+
+		resultsMsg := "[tool results]\n"
+		for _, tr := range toolResults {
+			resJSON, _ := json.Marshal(tr)
+			resultsMsg += string(resJSON) + "\n"
+		}
+		messages = append(messages, Message{Role: "user", Content: resultsMsg})
+	}
+
+	// 达到 maxRounds 还没收敛
+	return &ChatWithToolsResponse{
+		Content:   fmt.Sprintf("max tool rounds (%d) reached without final answer", maxRounds),
+		ToolCalls: allCalls,
+		Provider:  providerName,
+		Model:     model,
+		TokensIn:  totalTokensIn,
+		TokensOut: totalTokensOut,
+	}, nil
 }
 
 // SetCache 注入 LLM cache（Sprint 15 commit G，可选）

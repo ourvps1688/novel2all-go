@@ -71,6 +71,48 @@ type antResponse struct {
 	} `json:"usage"`
 }
 
+// antRequestWithTools 含 tools 字段 (Sprint 34)
+type antRequestWithTools struct {
+	Model     string       `json:"model"`
+	MaxTokens int          `json:"max_tokens"`
+	System    string       `json:"system,omitempty"`
+	Messages  []antToolMsg `json:"messages"`
+	Tools     []antTool    `json:"tools,omitempty"`
+}
+
+// antTool tool 定义 (Anthropic 用 input_schema 而非 parameters)
+type antTool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"input_schema"`
+}
+
+// antToolMsg 消息体支持 content blocks (Sprint 34)
+type antToolMsg struct {
+	Role    string          `json:"role"`
+	Content []antContentBlk `json:"content"`
+}
+
+// antContentBlk content block (text 或 tool_use/tool_result)
+type antContentBlk struct {
+	Type      string          `json:"type"` // "text" | "tool_use" | "tool_result"
+	Text      string          `json:"text,omitempty"`
+	ID        string          `json:"id,omitempty"`          // tool_use
+	Name      string          `json:"name,omitempty"`        // tool_use
+	Input     json.RawMessage `json:"input,omitempty"`       // tool_use
+	ToolUseID string          `json:"tool_use_id,omitempty"` // tool_result
+	Content2  any             `json:"content,omitempty"`     // tool_result
+}
+
+// antResponseWithTools response 含 tool_use (Sprint 34)
+type antResponseWithTools struct {
+	Content []antContentBlk `json:"content"`
+	Usage   struct {
+		InputTokens  int `json:"input_tokens"`
+		OutputTokens int `json:"output_tokens"`
+	} `json:"usage"`
+}
+
 // 流式事件分片（多 event type，我们只关心 content_block_delta）
 type antStreamEvent struct {
 	Type  string `json:"type"`
@@ -194,6 +236,102 @@ func (p *AnthropicCompat) ChatStream(ctx context.Context, req Request, ch chan<-
 	}
 }
 
+// ChatWithTools 一次调用 LLM (Anthropic 协议), 返回 assistant 文本 + 可能调用的 tool 列表.
+//
+// Sprint 34: 同 OpenAI.ChatWithTools, 但用 Anthropic tool_use 协议.
+// Multi-turn 循环由 Router.ChatWithTools 控制.
+func (p *AnthropicCompat) ChatWithTools(ctx context.Context, req ChatWithToolsRequest) (*ChatWithToolsResponse, error) {
+	if p.apiKey == "" {
+		return nil, fmt.Errorf("anthropic compat %s: API key not configured", p.name)
+	}
+	model := p.model
+	if req.OverrideModel != "" {
+		model = req.OverrideModel
+	}
+
+	// 1. 拆 Messages: system → ar.System, user/assistant → ar.Messages
+	var systemPrompt string
+	toolMsgs := make([]antToolMsg, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		if m.Role == "system" {
+			systemPrompt += m.Content + "\n"
+			continue
+		}
+		toolMsgs = append(toolMsgs, antToolMsg{
+			Role:    m.Role,
+			Content: []antContentBlk{{Type: "text", Text: m.Content}},
+		})
+	}
+
+	// 2. 转换 Tools
+	tools := make([]antTool, 0, len(req.Tools))
+	for _, t := range req.Tools {
+		var schema json.RawMessage = t.Parameters
+		if len(schema) == 0 {
+			schema = json.RawMessage(`{"type":"object","properties":{}}`)
+		}
+		tools = append(tools, antTool{
+			Name:        t.Name,
+			Description: t.Description,
+			InputSchema: schema,
+		})
+	}
+
+	maxTokens := req.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+
+	body := antRequestWithTools{
+		Model:     model,
+		MaxTokens: maxTokens,
+		System:    systemPrompt,
+		Messages:  toolMsgs,
+		Tools:     tools,
+	}
+
+	resp, err := p.doWithTools(ctx, body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("%s: HTTP %d: %s", p.name, resp.StatusCode, string(b))
+	}
+
+	var data antResponseWithTools
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("%s: decode: %w", p.name, err)
+	}
+
+	out := &ChatWithToolsResponse{
+		Provider:  p.name,
+		Model:     model,
+		TokensIn:  data.Usage.InputTokens,
+		TokensOut: data.Usage.OutputTokens,
+	}
+
+	// 解析 content blocks
+	for _, blk := range data.Content {
+		switch blk.Type {
+		case "text":
+			out.Content += blk.Text
+		case "tool_use":
+			out.ToolCalls = append(out.ToolCalls, ExecutedToolCall{
+				Call: ToolCall{
+					ID:        blk.ID,
+					Name:      blk.Name,
+					Arguments: blk.Input,
+				},
+			})
+		}
+	}
+
+	return out, nil
+}
+
 func (p *AnthropicCompat) do(ctx context.Context, body antRequest, stream bool) (*http.Response, error) {
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -210,6 +348,23 @@ func (p *AnthropicCompat) do(ctx context.Context, body antRequest, stream bool) 
 	if stream {
 		req.Header.Set("Accept", "text/event-stream")
 	}
+	return p.client.Do(req)
+}
+
+// doWithTools 调 Anthropic Messages API 含 tools (Sprint 34)
+func (p *AnthropicCompat) doWithTools(ctx context.Context, body antRequestWithTools) (*http.Response, error) {
+	data, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("%s: marshal: %w", p.name, err)
+	}
+	url := p.baseURL + "/v1/messages"
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", p.apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
 	return p.client.Do(req)
 }
 

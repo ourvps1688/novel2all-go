@@ -69,6 +69,55 @@ type oaiChatResponse struct {
 	} `json:"usage"`
 }
 
+// oaiToolCall OpenAI tool call 字段
+type oaiToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"` // "function"
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"` // JSON string
+	} `json:"function"`
+}
+
+// oaiToolDefinition OpenAI tool 定义 (Sprint 34)
+type oaiToolDefinition struct {
+	Type     string `json:"type"` // "function"
+	Function struct {
+		Name        string          `json:"name"`
+		Description string          `json:"description"`
+		Parameters  json.RawMessage `json:"parameters"`
+	} `json:"function"`
+}
+
+// oaiMessageWithToolCalls message 支持 tool_calls 字段 (Sprint 34)
+type oaiMessageWithToolCalls struct {
+	Role       string        `json:"role"`
+	Content    string        `json:"content,omitempty"`
+	ToolCalls  []oaiToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string        `json:"tool_call_id,omitempty"` // for tool role messages
+}
+
+// oaiChatRequestWithTools request body 含 tools (Sprint 34)
+type oaiChatRequestWithTools struct {
+	Model       string                    `json:"model"`
+	Messages    []oaiMessageWithToolCalls `json:"messages"`
+	Tools       []oaiToolDefinition       `json:"tools,omitempty"`
+	ToolChoice  any                       `json:"tool_choice,omitempty"`
+	MaxTokens   int                       `json:"max_tokens,omitempty"`
+	Temperature float64                   `json:"temperature,omitempty"`
+}
+
+// oaiChatResponseWithTools response 含 tool_calls (Sprint 34)
+type oaiChatResponseWithTools struct {
+	Choices []struct {
+		Message oaiMessageWithToolCalls `json:"message"`
+	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+	} `json:"usage"`
+}
+
 // oaiStreamChunk OpenAI 流式响应的一个分片
 type oaiStreamChunk struct {
 	Choices []struct {
@@ -197,6 +246,117 @@ func (p *OpenAICompat) ChatStream(ctx context.Context, req Request, ch chan<- Ch
 	}
 }
 
+// ChatWithTools 一次调用 LLM, 返回 assistant 文本 + 可能调用的 tool 列表.
+//
+// Sprint 34: LLM 决定是否调 tool (返回 []ToolCall) 或直接答 (返回 Content).
+// Multi-turn 循环由 Router.ChatWithTools 控制, provider 只暴露单次 raw 调用.
+func (p *OpenAICompat) ChatWithTools(ctx context.Context, req ChatWithToolsRequest) (*ChatWithToolsResponse, error) {
+	if p.apiKey == "" {
+		return nil, fmt.Errorf("openai compat %s: API key not configured", p.name)
+	}
+	model := p.model
+	if req.OverrideModel != "" {
+		model = req.OverrideModel
+	}
+
+	// 1. 转换 Tools → oaiToolDefinition
+	tools := make([]oaiToolDefinition, 0, len(req.Tools))
+	for _, t := range req.Tools {
+		var params json.RawMessage = t.Parameters
+		if len(params) == 0 {
+			params = json.RawMessage(`{"type":"object","properties":{}}`)
+		}
+		tools = append(tools, oaiToolDefinition{
+			Type: "function",
+			Function: struct {
+				Name        string          `json:"name"`
+				Description string          `json:"description"`
+				Parameters  json.RawMessage `json:"parameters"`
+			}{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  params,
+			},
+		})
+	}
+
+	// 2. 转换 Messages
+	messages := make([]oaiMessageWithToolCalls, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		messages = append(messages, oaiMessageWithToolCalls{
+			Role:    m.Role,
+			Content: m.Content,
+		})
+	}
+
+	// 3. tool_choice
+	toolChoice := any("auto")
+	switch req.ToolChoice {
+	case "", "auto":
+		// already "auto"
+	case "any":
+		toolChoice = "any"
+	case "none":
+		toolChoice = "none"
+	default:
+		toolChoice = map[string]any{
+			"type":     "function",
+			"function": map[string]string{"name": req.ToolChoice},
+		}
+	}
+
+	body := oaiChatRequestWithTools{
+		Model:       model,
+		Messages:    messages,
+		Tools:       tools,
+		ToolChoice:  toolChoice,
+		MaxTokens:   req.MaxTokens,
+		Temperature: req.Temperature,
+	}
+
+	resp, err := p.doWithTools(ctx, body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("openai compat %s: HTTP %d: %s", p.name, resp.StatusCode, string(b))
+	}
+
+	var oaiResp oaiChatResponseWithTools
+	if err := json.NewDecoder(resp.Body).Decode(&oaiResp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if len(oaiResp.Choices) == 0 {
+		return nil, fmt.Errorf("openai compat %s: no choices in response", p.name)
+	}
+
+	choice := oaiResp.Choices[0].Message
+	out := &ChatWithToolsResponse{
+		Content:   choice.Content,
+		Provider:  p.name,
+		Model:     model,
+		TokensIn:  oaiResp.Usage.PromptTokens,
+		TokensOut: oaiResp.Usage.CompletionTokens,
+	}
+
+	// 解析 tool_calls
+	for _, tc := range choice.ToolCalls {
+		out.ToolCalls = append(out.ToolCalls, ExecutedToolCall{
+			Call: ToolCall{
+				ID:        tc.ID,
+				Name:      tc.Function.Name,
+				Arguments: json.RawMessage(tc.Function.Arguments),
+			},
+		})
+	}
+
+	return out, nil
+}
+
 func (p *OpenAICompat) do(ctx context.Context, body oaiChatRequest, stream bool) (*http.Response, error) {
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -212,6 +372,23 @@ func (p *OpenAICompat) do(ctx context.Context, body oaiChatRequest, stream bool)
 	if stream {
 		req.Header.Set("Accept", "text/event-stream")
 	}
+	return p.client.Do(req)
+}
+
+// doWithTools 调 OpenAI 兼容 API (Sprint 34).
+// 与 do 区别: request body 含 tools 字段.
+func (p *OpenAICompat) doWithTools(ctx context.Context, body oaiChatRequestWithTools) (*http.Response, error) {
+	data, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("%s: marshal: %w", p.name, err)
+	}
+	url := p.baseURL + "/chat/completions"
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	return p.client.Do(req)
 }
 
