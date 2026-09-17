@@ -16,7 +16,7 @@ import (
 func TestHealthReady_Live(t *testing.T) {
 	// 用 nil db + nil router 也应该 200 (liveness 不检查依赖)
 	h := NewHealthReadyHandler(nil, nil)
-	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health/live", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -42,7 +42,7 @@ func TestHealthReady_Live(t *testing.T) {
 // TestHealthReady_Ready_NilDeps 没有依赖时只返回基础响应
 func TestHealthReady_Ready_NilDeps(t *testing.T) {
 	h := NewHealthReadyHandler(nil, nil)
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -72,7 +72,7 @@ func TestHealthReady_Ready_DBOpen(t *testing.T) {
 	router := llm.NewRouter(llm.Config{}) // no API keys → 0 providers
 	h := NewHealthReadyHandler(db, router)
 
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -112,7 +112,7 @@ func TestHealthReady_Ready_DBClosed(t *testing.T) {
 	router := llm.NewRouter(llm.Config{DeepSeekAPIKey: "fake-key-for-test"})
 	h := NewHealthReadyHandler(db, router)
 
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -142,7 +142,7 @@ func TestHealthReady_Ready_LLMProviders(t *testing.T) {
 	})
 	h := NewHealthReadyHandler(db, router)
 
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -160,7 +160,7 @@ func TestHealthReady_Ready_LLMProviders(t *testing.T) {
 // TestHealthReady_UnknownPath 未知子路径 404
 func TestHealthReady_UnknownPath(t *testing.T) {
 	h := NewHealthReadyHandler(nil, nil)
-	req := httptest.NewRequest(http.MethodGet, "/health/unknown", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health/unknown", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -173,7 +173,7 @@ func TestHealthReady_UnknownPath(t *testing.T) {
 func TestHealthReady_LiveUptimeNonZero(t *testing.T) {
 	h := NewHealthReadyHandler(nil, nil)
 	// 等待 10ms
-	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health/live", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 

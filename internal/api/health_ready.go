@@ -160,7 +160,7 @@ func (h *HealthReadyHandler) handleReady(w http.ResponseWriter, r *http.Request)
 	status := healthStatusOK
 	httpCode := http.StatusOK
 	for _, c := range checks {
-		if c.Status == "fail" {
+		if c.Status == checkStatusFail {
 			status = healthStatusDown
 			httpCode = http.StatusServiceUnavailable
 			break
