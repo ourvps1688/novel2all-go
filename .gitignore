@@ -76,6 +76,7 @@ cache/
 __pycache__/
 *.pyc
 *.pyo
+*.zip
 
 # --- Skill artifacts (if user generates local-only) ---
 *.bak
