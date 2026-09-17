@@ -45,6 +45,8 @@ func main() {
 }
 
 // run 解析 flags + 执行迁移.
+//
+//nolint:gocyclo // migrate 流程多步骤 (flags/validation/source/target/insert 各有 if 分支)
 func run(args []string) error {
 	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
