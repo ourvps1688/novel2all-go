@@ -58,10 +58,12 @@ func (d *Deps) SetProjectStore(ps *ProjectStore) {
 //   - /api/model, /api/models, /api/projects, /api/write, /api/tracking
 //   - /api/chapters, /api/chapter, /api/characters, /api/relationships, /api/foreshadows
 //   - /metrics, /debug/* (切片 9)
+//   - /health/live, /health/ready (切片 11)
+//   - /api/audit/* (切片 11)
 func Router(deps Deps) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	registerSystemRoutes(mux)
+	registerSystemRoutes(mux, deps)
 	registerAuthRoutes(mux, deps)
 	registerContentRoutes(mux, deps)
 	registerProjectRoutes(mux, deps)
@@ -71,10 +73,13 @@ func Router(deps Deps) *http.ServeMux {
 	return mux
 }
 
-// registerSystemRoutes 注册 /health + /version
-func registerSystemRoutes(mux *http.ServeMux) {
+// registerSystemRoutes 注册 /health + /version + /health/live + /health/ready
+func registerSystemRoutes(mux *http.ServeMux, deps Deps) {
+	// 基础 /health（保留向后兼容）
 	mux.Handle("/health", NewHealthHandler())
 	mux.Handle("/version", NewVersionHandler())
+	// /health/live + /health/ready（切片 11 深度健康检查）
+	mux.Handle("/health/", NewHealthReadyHandler(deps.Store, deps.Router))
 }
 
 // registerAuthRoutes 注册 auth + project share 路由
@@ -157,7 +162,7 @@ func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("/api/tracking", NewTrackingHandler())
 }
 
-// registerOpsRoutes 注册 metrics + debug（切片 9）+ state + metrics admin（切片 10）
+// registerOpsRoutes 注册 metrics + debug（切片 9）+ state + metrics admin（切片 10）+ audit（切片 11）
 func registerOpsRoutes(mux *http.ServeMux, deps Deps) {
 	// /metrics 无鉴权（Prometheus 惯例；用 firewall/reverse-proxy 限制）
 	if deps.Metrics != nil {
@@ -177,6 +182,11 @@ func registerOpsRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Session != nil && deps.Metrics != nil {
 		metricsAdminHandler := NewMetricsAdminHandler(deps.Metrics, deps.Session)
 		mux.Handle("/api/metrics/reset", metricsAdminHandler)
+	}
+	// /api/audit/* 审计日志查询（admin only，require DB）
+	if deps.Session != nil && deps.Store != nil {
+		auditHandler := NewAuditHandler(deps.Store, deps.Session)
+		mux.Handle("/api/audit", auditHandler)
 	}
 }
 
