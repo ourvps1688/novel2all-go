@@ -97,7 +97,7 @@ func TestRevokeProjectAccess(t *testing.T) {
 		t.Fatalf("revoke: %v", err)
 	}
 	// 再撤销应该返回 not found
-	if err := db.RevokeProjectAccess(ctx, normalID, "/proj"); err != ErrMembershipNotFound {
+	if err := db.RevokeProjectAccess(ctx, normalID, "/proj"); !errors.Is(err, ErrMembershipNotFound) {
 		t.Errorf("expected not found, got %v", err)
 	}
 }
