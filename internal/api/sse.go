@@ -120,6 +120,11 @@ func (h *WriteHandler) handleWriteStream(w http.ResponseWriter, r *http.Request)
 		_ = h.taskMgr.Cancel(task.ID)
 	}()
 
+	// Sprint 32 race fix (CI #103): 用 WaitGroup 跟踪所有内部 goroutine,
+	// defer 中等待所有 writer 退出后才让 handler return.
+	// 这样 test 调 w.Body.String() 时不会有 race (writer 已全部退出).
+	var writerWG sync.WaitGroup
+
 	// 1. started event
 	_ = writeSSEJSON(w, "started", map[string]any{
 		"task_id": task.ID,
@@ -136,6 +141,7 @@ func (h *WriteHandler) handleWriteStream(w http.ResponseWriter, r *http.Request)
 		"继续写第 2 段内容，",
 		"第 3 段结束。",
 	}
+	writerWG.Add(1)
 	go func() {
 		// progress: pre_write check
 		_ = writeSSEJSON(w, "progress", map[string]any{
@@ -166,6 +172,7 @@ func (h *WriteHandler) handleWriteStream(w http.ResponseWriter, r *http.Request)
 		})
 		sseFlush(w)
 		closeIfOpen(task.Done)
+		writerWG.Done()
 	}()
 
 	// 3. 主循环: 从 task.ChunkCh 读 chunk + 推到 SSE
@@ -179,9 +186,12 @@ func (h *WriteHandler) handleWriteStream(w http.ResponseWriter, r *http.Request)
 				return
 			}
 		case <-task.Done:
+			// 等所有 writer 退出, 避免 race with test/客户端读 w.Body
+			writerWG.Wait()
 			return
 		case <-r.Context().Done():
 			// 客户端断开
+			writerWG.Wait()
 			return
 		}
 	}
@@ -326,6 +336,8 @@ func (h *WriteHandler) handleWriteStreamModel(w http.ResponseWriter, r *http.Req
 // V0 简化: 推 3 个 fake chunk + done. 真实实现会调 writingPipeline.
 func (h *WriteHandler) mockSSEWrite(w http.ResponseWriter, r *http.Request, task *PipelineTask, minChars int) {
 	mockChunks := []string{"chunk 1 ", "chunk 2 ", "chunk 3 done"}
+	var writerWG sync.WaitGroup
+	writerWG.Add(1)
 	go func() {
 		for _, chunk := range mockChunks {
 			task.ChunkCh <- chunk
@@ -338,18 +350,22 @@ func (h *WriteHandler) mockSSEWrite(w http.ResponseWriter, r *http.Request, task
 		})
 		sseFlush(w)
 		closeIfOpen(task.Done)
+		writerWG.Done()
 	}()
 	for {
 		select {
 		case chunk, ok := <-task.ChunkCh:
 			if !ok {
+				writerWG.Wait()
 				return
 			}
 			_ = writeSSEJSON(w, "chunk", map[string]any{"text": chunk})
 		case <-task.Done:
+			writerWG.Wait()
 			return
 		case <-r.Context().Done():
 			_ = writeSSEJSON(w, "cancelled", map[string]any{"task_id": task.ID})
+			writerWG.Wait()
 			return
 		}
 	}
