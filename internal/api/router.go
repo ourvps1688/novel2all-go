@@ -175,6 +175,12 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("/api/relationships/", charactersHandler)
 	mux.Handle("/api/foreshadows", charactersHandler)
 	mux.Handle("/api/foreshadows/", charactersHandler)
+
+	// Sprint 25: Memory API (长记忆系统)
+	// 注: projectRoot = 当前目录, Sprint 26+ 改成从 cfg 读
+	memoryHandler := NewMemoryHandler(".")
+	mux.Handle("/api/memory", memoryHandler)
+	mux.Handle("/api/memory/", memoryHandler)
 }
 
 // registerProjectRoutes 注册 projects + write + tracking
