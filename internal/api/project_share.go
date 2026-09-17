@@ -250,7 +250,7 @@ func (h *ProjectShareHandler) requireAdmin(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return nil, false
 	}
-	if user.Role != "admin" {
+	if user.Role != roleAdmin {
 		http.Error(w, `{"error":"admin required"}`, http.StatusForbidden)
 		return nil, false
 	}

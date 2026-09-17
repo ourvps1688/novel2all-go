@@ -80,7 +80,9 @@ func loginAs(t *testing.T, mux http.Handler, username, password string) *http.Co
 	if rec.Code != http.StatusOK {
 		t.Fatalf("登录 %s 失败: %d body=%s", username, rec.Code, rec.Body.String())
 	}
-	cookies := rec.Result().Cookies()
+	result := rec.Result()
+	defer func() { _ = result.Body.Close() }()
+	cookies := result.Cookies()
 	if len(cookies) == 0 {
 		t.Fatalf("登录 %s 未返回 cookie", username)
 	}
