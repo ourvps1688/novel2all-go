@@ -41,8 +41,10 @@ type Deps struct {
 //
 // main.go 在外部构造 ProjectStore + StatePersistor, 然后用此方法注入。
 // router.go 用 projectStore 给 ProjectsHandler 共享同一个 store。
-func (d *Deps) SetProjectStore(store *ProjectStore) {
-	d.projectStore = store
+//
+// 参数名 ps 避免 shadow 'store' package 名（gocritic importShadow）。
+func (d *Deps) SetProjectStore(ps *ProjectStore) {
+	d.projectStore = ps
 }
 
 // Router 返回配置好的 http.ServeMux
