@@ -26,6 +26,6 @@ func (h *MetricsHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
+	// 不显式 WriteHeader(http.StatusOK)：默认 status 就是 200
 	_, _ = w.Write([]byte(h.metrics.PrometheusText()))
 }
