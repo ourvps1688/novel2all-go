@@ -24,15 +24,27 @@ import (
 //	POST   /api/chapter/{N}/save/              → 保存（手动编辑）
 //	GET    /api/chapter/{N}/export/            → 导出 (md/txt)
 //	DELETE /api/chapter/{N}/                   → 删除章节文件
-type ChapterHandler struct{}
+//	POST   /api/chapter/{N}/expand/            → LLM 扩写
+//	POST   /api/chapter/{N}/rewrite/           → LLM 重写
+//	POST   /api/chapter/{N}/review/            → LLM review
+//	POST   /api/chapter/{N}/insert/            → LLM 插入
+//	POST   /api/chapter/{N}/rollback/          → 从 .bak 恢复
+type ChapterHandler struct {
+	actions *ChapterActions // LLM 操作组件（可为 nil）
+}
 
 const (
 	formatMD  = "md"
 	formatTXT = "txt"
 )
 
-// NewChapterHandler 创建
+// NewChapterHandler 创建（无 LLM 操作）
 func NewChapterHandler() *ChapterHandler { return &ChapterHandler{} }
+
+// NewChapterHandlerWithActions 创建（含 LLM 操作）
+func NewChapterHandlerWithActions(actions *ChapterActions) *ChapterHandler {
+	return &ChapterHandler{actions: actions}
+}
 
 // ChapterInfo 章节元信息（列表项）
 type ChapterInfo struct {
@@ -115,6 +127,16 @@ func (h *ChapterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.export(w, r, chapter)
+	case "expand", "rewrite", "review", "insert", "rollback":
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed (POST required)", http.StatusMethodNotAllowed)
+			return
+		}
+		if h.actions == nil {
+			http.Error(w, `{"error":"LLM actions not configured"}`, http.StatusServiceUnavailable)
+			return
+		}
+		h.actions.DispatchAction(w, r, chapter, action)
 	default:
 		http.NotFound(w, r)
 	}

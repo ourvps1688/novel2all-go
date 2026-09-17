@@ -78,11 +78,20 @@ func Router(deps Deps) *http.ServeMux {
 	}
 	mux.Handle("/api/tracking", NewTrackingHandler())
 
-	// Chapters API（P1-F 切片 4：文件系统存储）
-	chaptersHandler := NewChapterHandler()
-	mux.Handle("/api/chapters", chaptersHandler)
-	mux.Handle("/api/chapters/", chaptersHandler)
-	mux.Handle("/api/chapter/", chaptersHandler)
+	// Chapters API（P1-F 切片 4+5：文件系统存储 + LLM 操作）
+	if deps.Loader != nil && deps.Router != nil {
+		executor := skills.NewExecutor(deps.Loader, deps.Router)
+		actions := NewChapterActions(executor)
+		chaptersHandler := NewChapterHandlerWithActions(actions)
+		mux.Handle("/api/chapters", chaptersHandler)
+		mux.Handle("/api/chapters/", chaptersHandler)
+		mux.Handle("/api/chapter/", chaptersHandler)
+	} else {
+		chaptersHandler := NewChapterHandler()
+		mux.Handle("/api/chapters", chaptersHandler)
+		mux.Handle("/api/chapters/", chaptersHandler)
+		mux.Handle("/api/chapter/", chaptersHandler)
+	}
 
 	// 根路径提示
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
