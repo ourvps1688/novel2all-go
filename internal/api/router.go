@@ -8,6 +8,7 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/chroma"
 	"github.com/ourvps1688/novel2all-go/internal/graph"
 	"github.com/ourvps1688/novel2all-go/internal/llm"
+	"github.com/ourvps1688/novel2all-go/internal/memory"
 	"github.com/ourvps1688/novel2all-go/internal/obs"
 	"github.com/ourvps1688/novel2all-go/internal/skills"
 	"github.com/ourvps1688/novel2all-go/internal/store"
@@ -47,6 +48,11 @@ type Deps struct {
 	// 可选, nil 时 ChapterHandler 走纯 filesystem 模式 (向后兼容)
 	ChaptersMeta *store.ChaptersStore
 
+	// Sprint 32: MemoryManager (5 层 memory 子系统)
+	// 注入到 WriteHandler 让 handleStream 调 LoadForWriting / UpdateAfterWriting.
+	// 可选, nil = 走 V0.29 mock 路径 (向后兼容).
+	MemoryMgr *memory.MemoryManager
+
 	// projectStore 共享 ProjectStore（切片 10 让 State 持久化 projects）
 	// 未导出避免 main.go 误用（应该只通过 State 间接访问）
 	// 用 SetProjectStore 方法设置（main.go 在外部构造 Deps）
@@ -61,6 +67,17 @@ type Deps struct {
 // 参数名 ps 避免 shadow 'store' package 名（gocritic importShadow）。
 func (d *Deps) SetProjectStore(ps ProjectsRepo) {
 	d.projectStore = ps
+}
+
+// SetMemoryManager 设置 MemoryManager (Sprint 32).
+//
+// 注入到 WriteHandler 让 handleStream 调 LoadForWriting + UpdateAfterWriting
+// (5 层 memory 子系统自动加载到 prompt).
+//
+// nil 时 WriteHandler 走 V0.29 mock 路径 (pre-write/post-write 假 SSE event,
+// chunk 直接 mock, 不调真 LLM).
+func (d *Deps) SetMemoryManager(mm *memory.MemoryManager) {
+	d.MemoryMgr = mm
 }
 
 // Router 返回配置好的 http.ServeMux
@@ -198,7 +215,13 @@ func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 	// Write + Tracking API（流式写作）
 	if deps.Loader != nil && deps.Router != nil {
 		executor := skills.NewExecutor(deps.Loader, deps.Router)
-		writeHandler := NewWriteHandler(executor, deps.Loader)
+		var writeHandler *WriteHandler
+		// Sprint 32: 用 NewWriteHandlerWithMemory 注入 MemoryManager (5 层 memory 自动加载)
+		if deps.MemoryMgr != nil {
+			writeHandler = NewWriteHandlerWithMemory(executor, deps.Loader, deps.MemoryMgr, nil /* refLoader Sprint 35 */)
+		} else {
+			writeHandler = NewWriteHandler(executor, deps.Loader)
+		}
 		// Sprint 28: 注入 PipelineTaskManager 支持 SSE 流式
 		writeHandler.taskMgr = NewPipelineTaskManager()
 		mux.Handle("/api/write/", writeHandler)

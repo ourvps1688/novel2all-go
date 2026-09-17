@@ -651,10 +651,35 @@ docs/p1-completion-plan.md         [Sprint 36: P2 链接]
 - **CI**：从 9/9 → 11/11 jobs（+ e2e_smoke + e2e_real optional）
 - **生产就绪**：Sprint 36 完成 → V1.0.0
 
-## 决策点（开工前确认）
+## 决策点（已确认 2026-09-17）
 
-1. ✅ 是否按 Sprint 顺序执行（32 → 33 + 34 → 35 → 36）？
-2. ✅ Sprint 33 是否可以与 32 并行（文档改动独立）？
-3. ✅ E2E 测试是否需要 mock + 真 LLM 双跑（推荐）？
-4. ✅ 是否允许 Sprint 32 引入 WriteHandler 依赖注入破坏现有签名（推荐加 WithMemory variant）？
-5. ✅ chapter_actions 切回 LLM 后是否能接受 5x 慢（mock 立即返回 → LLM 5-15s）？
+| # | 决策点 | 用户选择 | 含义 |
+|---|--------|---------|------|
+| 1 | 执行顺序 | **B. 32+33 并行 → 34+35 并行 → 36** | 今天起 Sprint 32 + 33 同时启动 |
+| 2 | Sprint 33 并行性 | **A. 与 32 并行** | 文档改动独立，不依赖代码 |
+| 3 | E2E 测试策略 | **A. Mock + 真 LLM 双跑** | CI 默认 mock LLM（自动），手动/定时触发真 LLM |
+| 4 | Sprint 32 兼容性 | **A. 加 `NewWriteHandlerWithMemory` 变体** | 不破坏 `NewWriteHandler(executor, loader)` 现有签名 |
+| 5 | chapter_actions 性能 | **B. 加流式 + 异步抵消延迟** | chapter_actions.go 用 SSE 流式 + goroutine 异步，不直接接受 5x 慢 |
+
+### 实施路线
+```
+Sprint 32 (handleStream) ─┐
+                          ├─ 并行 → Sprint 34 (tool call + actions) ─┐
+                          │                                       │
+Sprint 33 (SKILL.md) ──────┘                                       ├─→ Sprint 36 (E2E)
+                                                                  │
+                                       Sprint 35 (references) ─────┘
+```
+
+### Sprint 32 兼容性影响（决策 4A）
+- `WriteHandler` 结构体加新字段（`memMgr *memory.MemoryManager`、`refLoader *references.Loader`）
+- 现有 `NewWriteHandler(executor, loader)` 保留，**新字段默认 nil**（向后兼容）
+- 新增 `NewWriteHandlerWithMemory(executor, loader, memMgr, refLoader)` 工厂
+- `server.go` 升级时调用新工厂
+- 测试：现有 write_test.go 不变 → 加 `write_with_memory_test.go`
+
+### Sprint 32 chapter_actions 影响（决策 5B）
+- chapter_actions.go 改造时加流式响应（goroutine + channel）
+- 返回 SSE 风格的多 event 响应（started → progress → done/error）
+- 客户端用 EventSource 订阅，前端能实时显示 LLM 生成进度
+- mock fallback：executor nil 时仍走 mockLLMOutput（瞬间返回）

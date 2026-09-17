@@ -56,6 +56,10 @@ func (e *Executor) Execute(ctx context.Context, input ExecuteInput) (*ExecuteRes
 
 // ExecuteStream 流式执行 skill
 // ch 会在结束时被关闭
+//
+// Sprint 32: 支持 SystemInput (memory + references + settings 注入).
+// 拼接顺序: SystemInput + "---\n\n" + skill.Body 合并为一个 system message.
+// 空 SystemInput 走 V0.29 路径（只 skill.Body），完全向后兼容.
 func (e *Executor) ExecuteStream(ctx context.Context, input ExecuteInput, ch chan<- llm.Chunk) error {
 	skill, err := e.loader.Get(input.SkillName)
 	if err != nil {
@@ -66,10 +70,14 @@ func (e *Executor) ExecuteStream(ctx context.Context, input ExecuteInput, ch cha
 	if input.Task != "" {
 		task = llm.TaskType(input.Task)
 	}
+	systemContent := skill.Body
+	if input.SystemInput != "" {
+		systemContent = input.SystemInput + "\n\n---\n\n" + skill.Body
+	}
 	req := llm.Request{
 		Task: task,
 		Messages: []llm.Message{
-			{Role: "system", Content: skill.Body},
+			{Role: "system", Content: systemContent},
 			{Role: "user", Content: input.UserInput},
 		},
 		Stream:           true,

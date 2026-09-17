@@ -30,6 +30,12 @@ type ExecuteInput struct {
 	// UserInput 用户输入（作为 user message）
 	UserInput string
 
+	// SystemInput 系统消息（V0.30+ Sprint 32）.
+	//
+	// 拼接顺序: SystemInput → skill.Body → UserInput.
+	// 空 = 走原路径（只 skill.Body + UserInput）保持 V0.29 兼容.
+	SystemInput string
+
 	// Variables 模板变量（用于未来扩展，V0.1 暂未使用）
 	Variables map[string]any
 

@@ -24,6 +24,7 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/config"
 	"github.com/ourvps1688/novel2all-go/internal/graph"
 	"github.com/ourvps1688/novel2all-go/internal/llm"
+	"github.com/ourvps1688/novel2all-go/internal/memory"
 	"github.com/ourvps1688/novel2all-go/internal/obs"
 	"github.com/ourvps1688/novel2all-go/internal/skills"
 	"github.com/ourvps1688/novel2all-go/internal/store"
@@ -149,6 +150,21 @@ func Run(cfg *config.Config) error {
 		)
 	}
 
+	// 6.5 Sprint 32: MemoryManager (5 层 memory 子系统)
+	//
+	// ProjectRoot 用 cfg.HTTP.RootDir 或当前目录; 默认 "." 让 user 配 project_root param 决定.
+	memMgr := memory.NewMemoryManager(".", llmRouter, memory.MemoryConfig{
+		CoreTokenBudget:      3000,
+		CharacterTokenBudget: 4000,
+		RecentChapterCount:   5,
+		EventTopK:            8,
+	})
+	memMgr.SetLLM(llmRouter) // Sprint 26: extractor 也用 LLM
+	logger.Info("memory_manager_ready",
+		"retriever", memMgr.Retriever() != nil,
+		"extractor", memMgr.Extractor() != nil,
+	)
+
 	// 7. 装配 router
 	deps := api.Deps{
 		Store:        db,
@@ -166,6 +182,7 @@ func Run(cfg *config.Config) error {
 		ChaptersMeta: chaptersSQLStore,
 	}
 	deps.SetProjectStore(projectStore)
+	deps.SetMemoryManager(memMgr) // Sprint 32: 注入 WriteHandler
 	mux := api.Router(deps)
 	handler := api.LoggingMiddleware(logger, metrics, traces, mux)
 	// 套一层 security headers middleware (Sprint 21)
