@@ -89,7 +89,7 @@ func TestGraph_BFS(t *testing.T) {
 	h := newTestGraphHandler(t)
 
 	// BFS from alice (full)
-	req := httptest.NewRequest(http.MethodGet, "/api/graph/bfs?start=alice", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/graph/bfs?start=alice", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -106,7 +106,7 @@ func TestGraph_BFS_Until(t *testing.T) {
 	h := newTestGraphHandler(t)
 
 	// BFS from alice to charlie (early stop)
-	req := httptest.NewRequest(http.MethodGet, "/api/graph/bfs?start=alice&end=charlie", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/graph/bfs?start=alice&end=charlie", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -125,7 +125,7 @@ func TestGraph_BFS_Until(t *testing.T) {
 func TestGraph_BFS_MissingStart(t *testing.T) {
 	h := newTestGraphHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/graph/bfs", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/graph/bfs", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -136,7 +136,7 @@ func TestGraph_BFS_MissingStart(t *testing.T) {
 func TestGraph_BFS_NotFound(t *testing.T) {
 	h := newTestGraphHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/graph/bfs?start=nonexistent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/graph/bfs?start=nonexistent", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -147,7 +147,7 @@ func TestGraph_BFS_NotFound(t *testing.T) {
 func TestGraph_Shortest(t *testing.T) {
 	h := newTestGraphHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/graph/shortest?from=alice&to=charlie", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/graph/shortest?from=alice&to=charlie", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -167,7 +167,7 @@ func TestGraph_Shortest_MissingParams(t *testing.T) {
 	h := newTestGraphHandler(t)
 
 	// 缺 to
-	req := httptest.NewRequest(http.MethodGet, "/api/graph/shortest?from=alice", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/graph/shortest?from=alice", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -175,7 +175,7 @@ func TestGraph_Shortest_MissingParams(t *testing.T) {
 	}
 
 	// 缺 from
-	req = httptest.NewRequest(http.MethodGet, "/api/graph/shortest?to=charlie", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/graph/shortest?to=charlie", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -186,7 +186,7 @@ func TestGraph_Shortest_MissingParams(t *testing.T) {
 func TestGraph_Stats(t *testing.T) {
 	h := newTestGraphHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/graph/stats", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/graph/stats", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -205,7 +205,7 @@ func TestGraph_Stats(t *testing.T) {
 func TestGraph_Nodes_Edges(t *testing.T) {
 	h := newTestGraphHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/graph/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/graph/nodes", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	var resp struct {
@@ -217,7 +217,7 @@ func TestGraph_Nodes_Edges(t *testing.T) {
 		t.Errorf("expected 3 nodes, got %d", resp.Count)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/graph/edges", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/graph/edges", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	_ = json.NewDecoder(rr.Body).Decode(&resp)
@@ -229,14 +229,14 @@ func TestGraph_Nodes_Edges(t *testing.T) {
 func TestGraph_Clear(t *testing.T) {
 	h := newTestGraphHandler(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/graph/clear", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/graph/clear", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rr.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/graph/stats", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/graph/stats", http.NoBody)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	var stats GraphStats
@@ -250,7 +250,7 @@ func TestGraph_MethodNotAllowed(t *testing.T) {
 	h := newTestGraphHandler(t)
 
 	// GET /api/graph/node → 405
-	req := httptest.NewRequest(http.MethodGet, "/api/graph/node", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/graph/node", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusMethodNotAllowed {
@@ -261,7 +261,7 @@ func TestGraph_MethodNotAllowed(t *testing.T) {
 func TestGraph_NotFound(t *testing.T) {
 	h := newTestGraphHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/graph/unknown", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/graph/unknown", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {

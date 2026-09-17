@@ -16,7 +16,7 @@ func newTestExporterHandler(t *testing.T) *ExporterHandler {
 func TestExporter_Formats(t *testing.T) {
 	h := newTestExporterHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/exporter/formats", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/exporter/formats", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -113,7 +113,7 @@ func TestExporter_Render_InvalidJSON(t *testing.T) {
 func TestExporter_Chapter_RequiresAuth(t *testing.T) {
 	h := newTestExporterHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/exporter/chapter/1?format=md", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/exporter/chapter/1?format=md", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusUnauthorized {
@@ -125,7 +125,7 @@ func TestExporter_Chapter_NotFound(t *testing.T) {
 	h := newTestExporterHandler(t)
 
 	// 用不存在的 project_root，章节文件肯定没有
-	req := httptest.NewRequest(http.MethodGet, "/api/exporter/chapter/1?format=md&project_root=Z:/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/exporter/chapter/1?format=md&project_root=Z:/nonexistent", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -137,7 +137,7 @@ func TestExporter_Chapter_NotFound(t *testing.T) {
 func TestExporter_Chapter_InvalidNumber(t *testing.T) {
 	h := newTestExporterHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/exporter/chapter/abc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/exporter/chapter/abc", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
