@@ -7,7 +7,14 @@ import (
 	"testing"
 )
 
-func setupMembershipTest(t *testing.T) (*DB, int64, int64) {
+// membershipTestCtx 包装测试 fixture（避免 3+ 元组返回）
+type membershipTestCtx struct {
+	db        *DB
+	adminID   int64
+	normalID  int64
+}
+
+func setupMembershipTest(t *testing.T) *membershipTestCtx {
 	t.Helper()
 	dir := t.TempDir()
 	db, err := Open(context.Background(), filepath.Join(dir, "test.db"))
@@ -21,7 +28,6 @@ func setupMembershipTest(t *testing.T) (*DB, int64, int64) {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	// 创建 2 个用户（admin + 普通用户）
 	fakeHash := "fake_hash_for_test_purposes_only"
 	adminID, err := db.CreateUser(ctx, "admin_user", fakeHash, "admin")
 	if err != nil {
@@ -31,11 +37,14 @@ func setupMembershipTest(t *testing.T) (*DB, int64, int64) {
 	if err != nil {
 		t.Fatalf("create normal: %v", err)
 	}
-	return db, adminID, normalID
+	return &membershipTestCtx{db: db, adminID: adminID, normalID: normalID}
 }
 
 func TestGrantProjectAccess_Success(t *testing.T) {
-	db, adminID, normalID := setupMembershipTest(t)
+	mctx := setupMembershipTest(t)
+	db := mctx.db
+	adminID := mctx.adminID
+	normalID := mctx.normalID
 	ctx := context.Background()
 
 	m, err := db.GrantProjectAccess(ctx, normalID, "/path/to/proj", "editor", adminID)
@@ -48,7 +57,10 @@ func TestGrantProjectAccess_Success(t *testing.T) {
 }
 
 func TestGrantProjectAccess_Duplicate(t *testing.T) {
-	db, adminID, normalID := setupMembershipTest(t)
+	mctx := setupMembershipTest(t)
+	db := mctx.db
+	adminID := mctx.adminID
+	normalID := mctx.normalID
 	ctx := context.Background()
 
 	_, err := db.GrantProjectAccess(ctx, normalID, "/proj", "viewer", adminID)
@@ -62,7 +74,9 @@ func TestGrantProjectAccess_Duplicate(t *testing.T) {
 }
 
 func TestGetProjectRole_NotFound(t *testing.T) {
-	db, _, normalID := setupMembershipTest(t)
+	mctx := setupMembershipTest(t)
+	db := mctx.db
+	normalID := mctx.normalID
 	ctx := context.Background()
 
 	role, err := db.GetProjectRole(ctx, normalID, "/nonexistent")
@@ -75,7 +89,10 @@ func TestGetProjectRole_NotFound(t *testing.T) {
 }
 
 func TestGetProjectRole_Found(t *testing.T) {
-	db, adminID, normalID := setupMembershipTest(t)
+	mctx := setupMembershipTest(t)
+	db := mctx.db
+	adminID := mctx.adminID
+	normalID := mctx.normalID
 	ctx := context.Background()
 
 	_, _ = db.GrantProjectAccess(ctx, normalID, "/proj1", "owner", adminID)
@@ -89,7 +106,10 @@ func TestGetProjectRole_Found(t *testing.T) {
 }
 
 func TestRevokeProjectAccess(t *testing.T) {
-	db, adminID, normalID := setupMembershipTest(t)
+	mctx := setupMembershipTest(t)
+	db := mctx.db
+	adminID := mctx.adminID
+	normalID := mctx.normalID
 	ctx := context.Background()
 
 	_, _ = db.GrantProjectAccess(ctx, normalID, "/proj", "viewer", adminID)
@@ -103,7 +123,10 @@ func TestRevokeProjectAccess(t *testing.T) {
 }
 
 func TestListProjectMembers(t *testing.T) {
-	db, adminID, normalID := setupMembershipTest(t)
+	mctx := setupMembershipTest(t)
+	db := mctx.db
+	adminID := mctx.adminID
+	normalID := mctx.normalID
 	ctx := context.Background()
 
 	// 第二个用户
@@ -122,7 +145,10 @@ func TestListProjectMembers(t *testing.T) {
 }
 
 func TestListUserProjects(t *testing.T) {
-	db, adminID, normalID := setupMembershipTest(t)
+	mctx := setupMembershipTest(t)
+	db := mctx.db
+	adminID := mctx.adminID
+	normalID := mctx.normalID
 	ctx := context.Background()
 
 	_, _ = db.GrantProjectAccess(ctx, normalID, "/proj1", "editor", adminID)
@@ -139,7 +165,10 @@ func TestListUserProjects(t *testing.T) {
 }
 
 func TestUpdateProjectRole(t *testing.T) {
-	db, adminID, normalID := setupMembershipTest(t)
+	mctx := setupMembershipTest(t)
+	db := mctx.db
+	adminID := mctx.adminID
+	normalID := mctx.normalID
 	ctx := context.Background()
 
 	_, _ = db.GrantProjectAccess(ctx, normalID, "/proj", "viewer", adminID)
@@ -153,7 +182,9 @@ func TestUpdateProjectRole(t *testing.T) {
 }
 
 func TestUpdateProjectRole_NotFound(t *testing.T) {
-	db, _, normalID := setupMembershipTest(t)
+	mctx := setupMembershipTest(t)
+	db := mctx.db
+	normalID := mctx.normalID
 	ctx := context.Background()
 
 	err := db.UpdateProjectRole(ctx, normalID, "/nonexistent", "editor")
@@ -163,7 +194,10 @@ func TestUpdateProjectRole_NotFound(t *testing.T) {
 }
 
 func TestMembershipCascadeOnUserDelete(t *testing.T) {
-	db, adminID, normalID := setupMembershipTest(t)
+	mctx := setupMembershipTest(t)
+	db := mctx.db
+	adminID := mctx.adminID
+	normalID := mctx.normalID
 	ctx := context.Background()
 
 	_, _ = db.GrantProjectAccess(ctx, normalID, "/proj", "viewer", adminID)
