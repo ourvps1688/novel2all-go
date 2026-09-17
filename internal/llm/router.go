@@ -1,3 +1,13 @@
+// Package llm 提供 LLM 多 provider 路由 + 流式响应。
+//
+// P1 阶段支持 4 家 provider：
+//   - dashscope (阿里云通义千问, OpenAI 兼容)
+//   - deepseek  (OpenAI 兼容)
+//   - minimax   (⚠️ 必须用 Anthropic 兼容协议,不是 OpenAI)
+//   - anthropic (Anthropic 官方)
+//
+// 路由策略：按 TaskType 自动选 provider + model
+// （延续 Python V1.5.5 决策：WRITING → minimax，其他 → deepseek）
 package llm
 
 import (
@@ -5,7 +15,19 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
+	"time"
 )
+
+// MetricsHook LLM 调用的可观测性钩子（P1-F 切片 9）。
+//
+// 用于解耦 llm 包和 obs 包：llm 包定义接口，main.go 注入 obs.Metrics + obs.TraceRecorder 的 adapter 实现。
+// 不传钩子时 Router 行为不变（向后兼容）。
+type MetricsHook interface {
+	IncLLMCall(provider, task, status string)
+	AddLLMTokens(provider, kind string, n int64)
+	RecordLLMTrace(provider, task, status string, duration time.Duration, tokensIn, tokensOut int)
+}
 
 // Router 根据 task type 选 provider + model，并支持 fallback。
 type Router struct {
@@ -14,6 +36,9 @@ type Router struct {
 
 	// 路由表：TaskType → (Provider, Model)
 	routes map[TaskType]routeConfig
+
+	// metrics 钩子（P1-F 切片 9，可选）
+	hook atomic.Pointer[MetricsHook]
 }
 
 type routeConfig struct {
@@ -131,21 +156,32 @@ func defaultModelFor(p ProviderName) string {
 
 // ChatStream 流式调用（自动路由）
 func (r *Router) ChatStream(ctx context.Context, req Request, ch chan<- Chunk) error {
+	start := time.Now()
 	p, model, err := r.resolve(req)
 	if err != nil {
+		r.recordCall("", string(req.Task), "resolve_error", 0, 0)
 		return err
 	}
 	req2 := req
 	if req2.OverrideModel == "" {
 		req2.OverrideModel = model
 	}
-	return p.ChatStream(ctx, req2, ch)
+	if err := p.ChatStream(ctx, req2, ch); err != nil {
+		r.recordCall(string(p.Name()), string(req.Task), "error", 0, 0)
+		r.recordTrace(string(p.Name()), string(req.Task), "error", time.Since(start), 0, 0)
+		return err
+	}
+	r.recordCall(string(p.Name()), string(req.Task), "success", 0, 0)
+	r.recordTrace(string(p.Name()), string(req.Task), "success", time.Since(start), 0, 0)
+	return nil
 }
 
 // Chat 非流式调用（自动路由）
 func (r *Router) Chat(ctx context.Context, req Request) (*Response, error) {
+	start := time.Now()
 	p, model, err := r.resolve(req)
 	if err != nil {
+		r.recordCall("", string(req.Task), "resolve_error", 0, 0)
 		return nil, err
 	}
 	req2 := req
@@ -154,6 +190,8 @@ func (r *Router) Chat(ctx context.Context, req Request) (*Response, error) {
 	}
 	resp, err := p.Chat(ctx, req2)
 	if err != nil {
+		r.recordCall(string(p.Name()), string(req.Task), "error", 0, 0)
+		r.recordTrace(string(p.Name()), string(req.Task), "error", time.Since(start), 0, 0)
 		return nil, err
 	}
 	if resp.Provider == "" {
@@ -162,7 +200,32 @@ func (r *Router) Chat(ctx context.Context, req Request) (*Response, error) {
 	if resp.Model == "" {
 		resp.Model = model
 	}
+	r.recordCall(string(p.Name()), string(req.Task), "success", resp.TokensIn, resp.TokensOut)
+	r.recordTrace(string(p.Name()), string(req.Task), "success", time.Since(start), resp.TokensIn, resp.TokensOut)
 	return resp, nil
+}
+
+// SetMetricsHook 注入 metrics 钩子（可选；不注入时 metrics 调用为 no-op）。
+func (r *Router) SetMetricsHook(h MetricsHook) {
+	r.hook.Store(&h)
+}
+
+func (r *Router) recordCall(provider, task, status string, tokensIn, tokensOut int) {
+	if p := r.hook.Load(); p != nil {
+		(*p).IncLLMCall(provider, task, status)
+		if tokensIn > 0 {
+			(*p).AddLLMTokens(provider, "prompt", int64(tokensIn))
+		}
+		if tokensOut > 0 {
+			(*p).AddLLMTokens(provider, "completion", int64(tokensOut))
+		}
+	}
+}
+
+func (r *Router) recordTrace(provider, task, status string, duration time.Duration, tokensIn, tokensOut int) {
+	if p := r.hook.Load(); p != nil {
+		(*p).RecordLLMTrace(provider, task, status, duration, tokensIn, tokensOut)
+	}
 }
 
 // ErrProviderNotConfigured provider 未配置

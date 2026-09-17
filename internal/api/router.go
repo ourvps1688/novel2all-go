@@ -19,6 +19,10 @@ type Deps struct {
 	Session *auth.SessionManager
 	Limiter *auth.RateLimiter
 	Store   *store.DB // optional - 用于 project share API
+
+	// P1-F 切片 9：运维可观测性
+	Metrics *obs.Metrics      // optional - 用于 /metrics + /debug/info
+	Traces  *obs.TraceRecorder // optional - 用于 /debug/traces
 }
 
 // Router 返回配置好的 http.ServeMux
@@ -112,6 +116,17 @@ func Router(deps Deps) *http.ServeMux {
 	mux.Handle("/api/foreshadows", charactersHandler)
 	mux.Handle("/api/foreshadows/", charactersHandler)
 
+	// Metrics + Debug API（P1-F 切片 9：运维可观测性）
+	// /metrics 无鉴权（Prometheus 惯例；用 firewall/reverse-proxy 限制）
+	if deps.Metrics != nil {
+		mux.Handle("/metrics", NewMetricsHandler(deps.Metrics))
+	}
+	// /debug/* 需要 admin 鉴权
+	if deps.Session != nil && (deps.Metrics != nil || deps.Traces != nil) {
+		debugHandler := NewDebugHandler(deps.Session, deps.Metrics, deps.Traces)
+		mux.Handle("/debug/", debugHandler)
+	}
+
 	// 根路径提示
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -125,21 +140,32 @@ func Router(deps Deps) *http.ServeMux {
 	return mux
 }
 
-// LoggingMiddleware 简易访问日志中间件
+// LoggingMiddleware 简易访问日志中间件 + metrics 注入
 //
 // 注意：这是 P0 简化版，P1 会替换为带 request_id + 结构化字段的中间件。
-func LoggingMiddleware(logger *obs.Logger, next http.Handler) http.Handler {
+// P1-F 切片 9 增加 metrics + traces 写入。
+func LoggingMiddleware(logger *obs.Logger, metrics *obs.Metrics, traces *obs.TraceRecorder, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(ww, r)
+		duration := time.Since(start)
 		logger.Info("http_request",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", ww.status,
-			"duration_ms", time.Since(start).Milliseconds(),
+			"duration_ms", duration.Milliseconds(),
 			"remote", r.RemoteAddr,
 		)
+		// 写 metrics（可选）
+		if metrics != nil {
+			metrics.IncHTTPRequests(r.Method, r.URL.Path, ww.status)
+			metrics.ObserveHTTPDuration(r.Method, r.URL.Path, duration)
+		}
+		// 写 trace（可选）
+		if traces != nil {
+			traces.RecordHTTP(r.Method, r.URL.Path, ww.status, duration)
+		}
 	})
 }
 

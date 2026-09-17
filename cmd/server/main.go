@@ -109,6 +109,18 @@ func run() error {
 	limiter := auth.NewRateLimiter(5, 5*time.Minute, 5*time.Minute)
 	logger.Info("auth_ready", "session_ttl", auth.DefaultSessionConfig().TTL.String())
 
+	// 5.5 P1-F 切片 9：metrics + traces
+	v := version.Get()
+	metrics := obs.NewMetrics(v.Version, v.Commit, v.GoVersion)
+	traces := obs.NewTraceRecorder(100)
+	logger.Info("ops_ready",
+		"metrics_enabled", true,
+		"traces_capacity", traces.Capacity(),
+	)
+
+	// 注入 LLM metrics 钩子（adapter 把 metrics + traces 桥接到 llm.MetricsHook 接口）
+	llmRouter.SetMetricsHook(&llmHookAdapter{m: metrics, t: traces})
+
 	// 6. 装配 router
 	mux := api.Router(api.Deps{
 		Store:   db,
@@ -117,8 +129,10 @@ func run() error {
 		Router:  llmRouter,
 		Session: sessionManager,
 		Limiter: limiter,
+		Metrics: metrics,
+		Traces:  traces,
 	})
-	handler := api.LoggingMiddleware(logger, mux)
+	handler := api.LoggingMiddleware(logger, metrics, traces, mux)
 
 	// 5. HTTP server
 	srv := &http.Server{
