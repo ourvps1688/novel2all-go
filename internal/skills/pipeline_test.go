@@ -9,6 +9,12 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 )
 
+// Stage name constants for tests (avoid goconst on string literals).
+const (
+	stageOutline = "outline"
+	stageWrite   = "write"
+)
+
 // mockExecutor 测试用 mock executor
 type mockExecutor struct {
 	// stage name → output
@@ -182,15 +188,15 @@ func TestRenderTemplate(t *testing.T) {
 func TestPipeline_Run_Linear(t *testing.T) {
 	mock := &mockExecutor{
 		outputs: map[string]string{
-			"outline": "OUTLINE_OUT",
-			"write":   "WRITE_OUT",
+			stageOutline: "OUTLINE_OUT",
+			stageWrite:   "WRITE_OUT",
 		},
 	}
 	p := NewPipeline(mock)
 
 	stages := []Stage{
-		{Name: "outline", Skill: "outline"},
-		{Name: "draft", Skill: "write", Depends: []string{"outline"}},
+		{Name: stageOutline, Skill: stageOutline},
+		{Name: "draft", Skill: stageWrite, Depends: []string{stageOutline}},
 	}
 	results, err := p.Run(context.Background(), stages)
 	if err != nil {
@@ -199,15 +205,15 @@ func TestPipeline_Run_Linear(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
-	if results["outline"].Output != "OUTLINE_OUT" {
-		t.Errorf("outline output: got %q", results["outline"].Output)
+	if results[stageOutline].Output != "OUTLINE_OUT" {
+		t.Errorf("outline output: got %q", results[stageOutline].Output)
 	}
 	if results["draft"].Output != "WRITE_OUT" {
 		t.Errorf("draft output: got %q", results["draft"].Output)
 	}
 	// Vars 应该自动存到 vars[stage.Name]
-	if p.GetVar("outline") != "OUTLINE_OUT" {
-		t.Errorf("var outline not stored: got %q", p.GetVar("outline"))
+	if p.GetVar(stageOutline) != "OUTLINE_OUT" {
+		t.Errorf("var outline not stored: got %q", p.GetVar(stageOutline))
 	}
 	if p.GetVar("draft") != "WRITE_OUT" {
 		t.Errorf("var draft not stored: got %q", p.GetVar("draft"))
@@ -216,7 +222,7 @@ func TestPipeline_Run_Linear(t *testing.T) {
 	if len(mock.calls) != 2 {
 		t.Errorf("expected 2 calls, got %d", len(mock.calls))
 	}
-	if mock.calls[0] != "outline" || mock.calls[1] != "write" {
+	if mock.calls[0] != stageOutline || mock.calls[1] != stageWrite {
 		t.Errorf("call order: %v", mock.calls)
 	}
 }

@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -45,14 +46,14 @@ func TestDeslopPromptTemplate_HasRules(t *testing.T) {
 }
 
 func TestApplyDeslop_Empty(t *testing.T) {
-	_, err := ApplyDeslop(nil, nil, "")
+	_, err := ApplyDeslop(context.Background(), nil, "")
 	if err == nil {
 		t.Error("expected error for empty content")
 	}
 }
 
 func TestApplyDeslop_Replaces(t *testing.T) {
-	out, err := ApplyDeslop(nil, nil, "首先, 这是一个测试.")
+	out, err := ApplyDeslop(context.Background(), nil, "首先, 这是一个测试.")
 	if err != nil {
 		t.Fatalf("ApplyDeslop: %v", err)
 	}
