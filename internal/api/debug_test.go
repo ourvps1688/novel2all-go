@@ -17,8 +17,10 @@ import (
 
 // mockUserLookup 实现 UserLookup 接口（测试用）
 type mockUserLookup struct {
-	users      map[string]*store.User // key: token
-	cookieName string                  // mock cookie 名（默认 "session_id" 跟生产一致）
+	// users - key: token
+	users map[string]*store.User
+	// cookieName - 默认 "novel2all_session" 跟生产 SessionManager 一致
+	cookieName string
 }
 
 func (m *mockUserLookup) GetTokenFromRequest(r *http.Request) string {
@@ -59,7 +61,7 @@ func newMockLookup(adminToken, userToken string) *mockUserLookup {
 				CreatedAt: now,
 			},
 		},
-		cookieName: "novel2all_session", // 跟生产 SessionManager 默认 CookieName 一致
+		cookieName: "novel2all_session",
 	}
 }
 

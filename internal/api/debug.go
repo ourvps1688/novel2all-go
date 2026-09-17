@@ -170,7 +170,11 @@ func (h *DebugHandler) handleInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := InfoResponse{
-		Version: version.Get(),
+		Version: version.Info{
+			Version:   snap.Version,
+			Commit:    snap.Commit,
+			GoVersion: snap.GoVersion,
+		},
 		Runtime: RuntimeInfo{
 			GoRoutines:    snap.GoRoutines,
 			UptimeSeconds: snap.UptimeSeconds,

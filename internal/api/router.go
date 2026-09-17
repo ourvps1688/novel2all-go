@@ -18,11 +18,14 @@ type Deps struct {
 	Router  *llm.Router
 	Session *auth.SessionManager
 	Limiter *auth.RateLimiter
-	Store   *store.DB // optional - 用于 project share API
+	// Store - 用于 project share API
+	Store *store.DB
 
 	// P1-F 切片 9：运维可观测性
-	Metrics *obs.Metrics      // optional - 用于 /metrics + /debug/info
-	Traces  *obs.TraceRecorder // optional - 用于 /debug/traces
+	// Metrics - 用于 /metrics + /debug/info
+	Metrics *obs.Metrics
+	// Traces - 用于 /debug/traces
+	Traces *obs.TraceRecorder
 }
 
 // Router 返回配置好的 http.ServeMux

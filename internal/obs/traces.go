@@ -37,11 +37,11 @@ type Trace struct {
 	DurationMS int64     `json:"duration_ms,omitempty"`
 
 	// LLM specific
-	Provider   string `json:"provider,omitempty"`
-	Task       string `json:"task,omitempty"`
-	LLMStatus  string `json:"llm_status,omitempty"`
-	TokensIn   int    `json:"tokens_in,omitempty"`
-	TokensOut  int    `json:"tokens_out,omitempty"`
+	Provider  string `json:"provider,omitempty"`
+	Task      string `json:"task,omitempty"`
+	LLMStatus string `json:"llm_status,omitempty"`
+	TokensIn  int    `json:"tokens_in,omitempty"`
+	TokensOut int    `json:"tokens_out,omitempty"`
 
 	// Error specific
 	Error string `json:"error,omitempty"`
