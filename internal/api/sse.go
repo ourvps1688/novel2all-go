@@ -15,13 +15,25 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
+// sseWriteMu 保护 SSE 写操作的并发安全.
+//
+// httptest.ResponseRecorder (测试用) 内部不是并发安全, 多个 goroutine 同时
+// 调 Fprintf/Flush 会触发 race detector. 真 http server 的 ResponseWriter
+// 也不保证并发安全 (实际通过 mutex 串行化写网络).
+//
+// 所有 SSE handler 共享一个全局 mu — 简单粗暴但正确 (SSE handler 之间不会并发).
+var sseWriteMu sync.Mutex
+
 // writeSSEEvent 写一个 SSE event 到 w (格式: "event: <name>\ndata: <data>\n\n").
 //
-// 自动调 Flush() (需要 http.Flusher).
+// 自动调 Flush() (需要 http.Flusher). 持 sseWriteMu 保证并发安全.
 func writeSSEEvent(w http.ResponseWriter, event, data string) error {
+	sseWriteMu.Lock()
+	defer sseWriteMu.Unlock()
 	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data); err != nil {
 		return err
 	}
