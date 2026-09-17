@@ -11,9 +11,10 @@
 //	write          单次写作生成 (调 LLM)
 //	cache-migrate  cache 迁移 (stub, 见 cache_migrate.go)
 //	web            启动 HTTP server (等同 cmd/server)
+//	memory         memory 子系统 CLI (Sprint 26: stats/query/add-event/rebuild)
 //
 // 设计目的:
-//   - 复用 internal/{skills,roles,llm,store} 等包, 无业务逻辑
+//   - 复用 internal/{skills,roles,llm,store,memory} 等包, 无业务逻辑
 //   - std flag 而非 cobra (避免 go.mod 升级)
 //   - 每个子命令独立 Go 文件, 失败单独修复
 //   - run() 接受 stdout/stderr 参数, 便于测试注入 buffer
@@ -61,6 +62,8 @@ func run(stdout, stderr io.Writer, args []string) error {
 		return runCacheMigrate(stdout, stderr, rest)
 	case "web":
 		return runWeb(rest)
+	case "memory":
+		return runMemory(stdout, stderr, rest)
 	case "-h", "--help", "help":
 		printHelp(stdout)
 		return nil
@@ -84,6 +87,7 @@ func printHelp(w io.Writer) {
   write          单次写作生成 (调 LLM router, 输出到 stdout)
   cache-migrate  cache 迁移工具 (P1 stub, 当前版本不需要)
   web            启动 HTTP server (等同 cmd/server)
+  memory         memory 子系统 CLI (Sprint 26: stats/query/add-event/rebuild)
 
 通用 flag:
   -h, --help     显示帮助
@@ -93,5 +97,7 @@ func printHelp(w io.Writer) {
   novel2all roles --format=json
   novel2all write --task=WRITING --prompt "写一个侦探开场"
   novel2all web --port 8000
+  novel2all memory stats --project=./projects/my-novel
+  novel2all memory query --text="血脉觉醒"
 `)
 }

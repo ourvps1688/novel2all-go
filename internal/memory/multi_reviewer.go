@@ -12,6 +12,7 @@ package memory
 // 参考 Python V0.30.6 B3 core/memory/multi_reviewer.py.
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/ourvps1688/novel2all-go/internal/llm"
@@ -59,25 +60,54 @@ var ReviewerRoles = []string{
 	"story_reviewer",      // 审稿: 检查错别字/逻辑漏洞/AI 味
 }
 
-// Review 并行审稿 chapter (V0: sequential).
+// Review 并行审稿 chapter (Sprint 26: 真实 LLM 并行).
 //
 // chapter: 已写章节号.
 // content: 章节正文.
 // state: 当前 tracking state.
 //
 // 返回 ReviewReport (合并所有 reviewer 的 issues + scores).
-// 注: router=nil 时仍返回 stub 数据 (用于测试 + 无 LLM 环境).
+// router=nil 时返 stub (测试 + 无 LLM 环境).
 func (r *MultiAgentReviewer) Review(ctx context.Context, chapter int, content string, state *TrackingState) (*ReviewReport, error) {
 	report := &ReviewReport{Chapter: chapter}
 
-	for _, role := range ReviewerRoles {
-		// V0 简化: 每个 role 生成自己的 issues (mock 用 LLM 调, 无 LLM 则 fallback)
-		issues, score := r.reviewByRole(ctx, role, chapter, content, state)
-		if len(issues) > 0 {
-			report.Issues = append(report.Issues, issues...)
+	if r.router == nil {
+		// 无 LLM: 顺序执行 stub 模式
+		for _, role := range ReviewerRoles {
+			issues, score := r.reviewByRole(ctx, role, chapter, content, state)
+			if len(issues) > 0 {
+				report.Issues = append(report.Issues, issues...)
+			}
+			if score != nil {
+				report.Scores = append(report.Scores, *score)
+			}
 		}
-		if score != nil {
-			report.Scores = append(report.Scores, *score)
+		report.Summary = summarizeReport(report)
+		return report, nil
+	}
+
+	// LLM 模式: 4 reviewer goroutine 并行
+	type result struct {
+		issues []ReviewIssue
+		score  *QualityScore
+		role   string
+	}
+	results := make(chan result, len(ReviewerRoles))
+
+	for _, role := range ReviewerRoles {
+		go func(role string) {
+			issues, score := r.reviewByRole(ctx, role, chapter, content, state)
+			results <- result{issues: issues, score: score, role: role}
+		}(role)
+	}
+
+	for i := 0; i < len(ReviewerRoles); i++ {
+		res := <-results
+		if len(res.issues) > 0 {
+			report.Issues = append(report.Issues, res.issues...)
+		}
+		if res.score != nil {
+			report.Scores = append(report.Scores, *res.score)
 		}
 	}
 
@@ -85,21 +115,102 @@ func (r *MultiAgentReviewer) Review(ctx context.Context, chapter int, content st
 	return report, nil
 }
 
-// reviewByRole 单个 role 审稿 (V0 简化: 返回固定 issues + score).
+// reviewByRole 单个 role 审稿 (Sprint 26: router 可用时调 LLM).
 func (r *MultiAgentReviewer) reviewByRole(ctx context.Context, role string, chapter int, content string, state *TrackingState) ([]ReviewIssue, *QualityScore) {
-	// V0 stub: 根据角色返回 mock 数据
-	// Sprint 25+ 接 LLM prompt (per-role review_prompt)
-	switch role {
-	case "story_outliner":
-		return nil, &QualityScore{Overall: 8.0, Style: 8.5, Plot: 8.0, Reviewer: role}
-	case "chapter_writer":
-		return nil, &QualityScore{Overall: 7.5, Style: 7.0, Plot: 7.5, Character: 8.0, Reviewer: role}
-	case "consistency_checker":
-		return r.checkConsistency(ctx, role, content, state), &QualityScore{Overall: 9.0, Style: 9.0, Plot: 9.0, Reviewer: role}
-	case "story_reviewer":
-		return nil, &QualityScore{Overall: 8.0, Style: 8.0, Originality: 8.0, Reviewer: role}
+	if r.router == nil {
+		// Stub mode: 返回固定 score (Sprint 24 行为, 兼容旧测试)
+		switch role {
+		case "story_outliner":
+			return nil, &QualityScore{Overall: 8.0, Style: 8.5, Plot: 8.0, Reviewer: role}
+		case "chapter_writer":
+			return nil, &QualityScore{Overall: 7.5, Style: 7.0, Plot: 7.5, Character: 8.0, Reviewer: role}
+		case "consistency_checker":
+			return r.checkConsistency(ctx, role, content, state), &QualityScore{Overall: 9.0, Style: 9.0, Plot: 9.0, Reviewer: role}
+		case "story_reviewer":
+			return nil, &QualityScore{Overall: 8.0, Style: 8.0, Originality: 8.0, Reviewer: role}
+		}
+		return nil, nil
 	}
-	return nil, nil
+
+	// LLM mode: 调 router 生成 review
+	schema := llm.JSONSchema{
+		Name:        "RoleReview",
+		Description: role + " reviewer 输出",
+		Fields: []llm.JSONSchemaField{
+			{Name: "issues", Type: "array"},
+			{Name: "scores", Type: "object"},
+		},
+	}
+
+	prompt := buildRoleReviewPrompt(role, chapter, content, state)
+	req := llm.Request{
+		Task:     llm.TaskConsistency,
+		Messages: []llm.Message{{Role: "user", Content: prompt}},
+	}
+
+	target := &roleReviewResult{}
+	if err := llm.GenerateJSON(ctx, r.router, req, schema, target); err != nil {
+		// 失败: 返回空 (fail-soft)
+		return nil, &QualityScore{Overall: 7.0, Reviewer: role}
+	}
+
+	// 转换
+	score := &QualityScore{
+		Overall:     target.Scores.Overall,
+		Style:       target.Scores.Style,
+		Plot:        target.Scores.Plot,
+		Character:   target.Scores.Character,
+		Originality: target.Scores.Originality,
+		Reviewer:    role,
+	}
+	if score.Overall == 0 {
+		score.Overall = 7.0
+	}
+
+	issues := make([]ReviewIssue, 0, len(target.Issues))
+	for _, iss := range target.Issues {
+		issues = append(issues, ReviewIssue{
+			ContinuityIssue: ContinuityIssue{
+				Severity:    iss.Severity,
+				Category:    iss.Category,
+				Description: iss.Description,
+			},
+			Reviewer: role,
+		})
+	}
+	return issues, score
+}
+
+// roleReviewResult LLM 输出 schema.
+type roleReviewResult struct {
+	Issues []struct {
+		Severity    string `json:"severity"`
+		Category    string `json:"category"`
+		Description string `json:"description"`
+	} `json:"issues"`
+	Scores struct {
+		Overall     float64 `json:"overall"`
+		Style       float64 `json:"style"`
+		Plot        float64 `json:"plot"`
+		Character   float64 `json:"character"`
+		Originality float64 `json:"originality"`
+	} `json:"scores"`
+}
+
+// buildRoleReviewPrompt 构造 per-role prompt.
+func buildRoleReviewPrompt(role string, chapter int, content string, state *TrackingState) string {
+	prompts := map[string]string{
+		"story_outliner":      "你是大纲师. 检查本章大纲合理性: 情节推进是否合理, 是否有逻辑漏洞.",
+		"chapter_writer":      "你是章节作者. 检查本章内容充实度: 场景描写/对话/心理是否到位.",
+		"consistency_checker": "你是一致性检查员. 检查人物/伏笔/时间线是否有冲突.",
+		"story_reviewer":      "你是审稿. 检查错别字/标点/AI 味/重复表达.",
+	}
+	base, ok := prompts[role]
+	if !ok {
+		base = "你是审稿员."
+	}
+	stateJSON, _ := json.Marshal(state)
+	return fmt.Sprintf("%s\n\n第 %d 章内容:\n%s\n\n当前状态:\n%s\n\n返回 JSON: {issues: [...], scores: {overall, style, plot, character, originality}}", base, chapter, content, string(stateJSON))
 }
 
 // checkConsistency 一致性检查 (V0 简化: 不调 LLM, 仅检查 state 中已知冲突).
