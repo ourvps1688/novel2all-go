@@ -127,7 +127,13 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Loader != nil && deps.Router != nil {
 		executor := skills.NewExecutor(deps.Loader, deps.Router)
 		skillsHandler := NewSkillsHandler(executor, deps.Loader)
+		// Sprint 28: 注入 SkillTaskManager 支持 SSE status
+		skillsHandler.skillTaskMgr = NewSkillTaskManager()
 		mux.Handle("/api/skills/", skillsHandler)
+		// Sprint 28: SSE skill status (GET /api/skills/{name}/status)
+		// 注意: /api/skills/ 优先级更长会优先生效, 但路径含 /status 后缀更具体
+		// 因此用 HandleFunc 注册同名但更具体的子路径会失败, 改在 ServeHTTP 内部 dispatch
+		_ = skillsHandler // 显式保留
 	}
 
 	// Roles API
@@ -193,7 +199,15 @@ func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Loader != nil && deps.Router != nil {
 		executor := skills.NewExecutor(deps.Loader, deps.Router)
 		writeHandler := NewWriteHandler(executor, deps.Loader)
+		// Sprint 28: 注入 PipelineTaskManager 支持 SSE 流式
+		writeHandler.taskMgr = NewPipelineTaskManager()
 		mux.Handle("/api/write/", writeHandler)
+		// Sprint 28: 取消任务端点 (POST /api/write/cancel/{task_id})
+		mux.HandleFunc("/api/write/cancel/", writeHandler.handleWriteCancel)
+		// Sprint 28: 列出活跃任务 (GET /api/write/active)
+		mux.HandleFunc("/api/write/active", writeHandler.handleWriteActive)
+		// Sprint 28: SSE 流式 + 切模型 (POST /api/write/stream/model)
+		mux.HandleFunc("/api/write/stream/model", writeHandler.handleWriteStreamModel)
 	}
 	mux.Handle("/api/tracking", NewTrackingHandler())
 }

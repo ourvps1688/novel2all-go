@@ -16,8 +16,9 @@ import (
 
 // SkillsHandler 暴露 /api/skills 路由
 type SkillsHandler struct {
-	executor *skills.Executor
-	loader   *skills.Loader
+	executor     *skills.Executor
+	loader       *skills.Loader
+	skillTaskMgr *SkillTaskManager // Sprint 28 SSE skill status
 }
 
 // NewSkillsHandler 创建 handler
@@ -91,6 +92,12 @@ func (h *SkillsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			h.executeSync(w, r, name)
+		case "status": // Sprint 28: SSE skill status
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			h.handleSkillStatus(w, r)
 		default:
 			http.NotFound(w, r)
 		}

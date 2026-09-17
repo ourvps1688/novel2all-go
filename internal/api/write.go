@@ -25,6 +25,7 @@ type WriteHandler struct {
 	tasks    *TaskManager
 	executor *skills.Executor
 	loader   *skills.Loader
+	taskMgr  *PipelineTaskManager // Sprint 28 SSE 流式
 }
 
 // NewWriteHandler 创建
