@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -86,7 +87,7 @@ func TestProjectsStore_CRUD(t *testing.T) {
 		t.Fatalf("Delete: %v", err)
 	}
 	_, err = store.Get(ctx, p.ID)
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Get after Delete: expected ErrNotFound, got %v", err)
 	}
 }
