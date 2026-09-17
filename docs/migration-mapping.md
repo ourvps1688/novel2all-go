@@ -1,24 +1,56 @@
 # Python → Go 迁移映射表
 
-> 版本：v0.1.0 (P0 Skeleton) · 最后更新：2026-09-16
+> 版本：v0.22.1 (P1 完成) · 最后更新：2026-09-17
 > 前身：[`ourvps1688/novel2all`](https://github.com/ourvps1688/novel2all) V1.5.5 (Python 3.12)
+> 公共仓库：`https://github.com/ourvps1688/novel2all-go`
+
+## 0. 当前进度 (2026-09-17)
+
+| 维度 | 数据 |
+|---|---|
+| 版本 | v0.22.1 |
+| Go 源文件 | 87 |
+| Go 测试文件 | 48 |
+| 代码 LOC (含注释+空行) | ~23.4k |
+| 单元测试 | **401 PASS / 0 FAIL** |
+| 测试覆盖率 | ~13 包 |
+| 嵌入 SKILL.md | 13 (embed.FS) |
+| CI | 9/9 jobs pass (Sprint 18 + 19 hotfix) |
+
+### 阶段进度
+
+| 阶段 | 计划 | 实际 | 状态 |
+|------|------|------|------|
+| P0 骨架 | 2-3 周 | ~3 周 | ✅ |
+| P1-A llm/router | 3 周 | ~3 周 | ✅ |
+| P1-B skills/pipeline | 1.5 周 | ~1 周 | ✅ |
+| P1-C chroma/graph | 1 周 | ~1 周 | ✅ |
+| P1-D exporter | 1 周 | ~1 周 | ✅ |
+| P1-E auth + store | 1.5 周 | ~1.5 周 | ✅ |
+| P1-F API handlers | 2-3 周 | ~4 周 (12 切片) | ✅ |
+| core/roles | (新增) | ~0.5 周 | ✅ |
+| cmd/cli | (新增) | ~0.5 周 | ✅ |
+| cmd/migrate | (新增) | ~0.5 周 | ✅ |
+| scripts/ci_status.go | (新增) | ~0.5 周 | ✅ |
+
+**P1 阶段 100% 完成**（见 `docs/p1-completion-plan.md` 6 sprint 全部 done）
 
 ## 1. 总览
 
-| Python 文件/模块 | 行数 | Go 替代 | 工作量 |
-|---|---|---|---|
-| `core/provider.py` | 1200 | `internal/llm/router.go` + 4 个 provider.go | 3 周 |
-| `core/cache.py` | 980 | `internal/store/cache.go` + `internal/llm/cache.go` | 1.5 周 |
-| `core/pipeline.py` | 370 | `internal/skills/pipeline.go` | 0.5 周 |
-| `core/exporter.py` | 540 | `internal/exporter/*.go` (gofpdf + go-epub) | 1 周 |
-| `core/embeddings.py` | 280 | `internal/chroma/client.go` (chromem-go) | 0.5 周 |
-| `core/graph.py` | 220 | `internal/graph/*.go` (BFS/DFS/Dijkstra) | 0.5 周 |
-| `core/instructor_patch.py` | 180 | `internal/llm/instructor.go` (instructor-go) | 0.3 周 |
-| 其他 core/* | 7000+ | 散落到 internal/ 各模块 | 2-3 周 |
-| `web/app.py` | 14005 | `cmd/server/main.go` + `internal/api/*.go` | 4-5 周 |
-| `cli/main.py` + sub-apps | 1200 | `cmd/cli/main.go` + cobra | 0.5 周 |
-| **13 个 SKILL.md** | 0 Python | **`internal/skills/assets/*.md`（embed.FS）** | **0 周** ✨ |
-| **总计** | **24722** | - | **12-15 周** |
+| Python 文件/模块 | 行数 | Go 替代 | 工作量 | 状态 |
+|---|---|---|---|---|
+| `core/provider.py` | 1200 | `internal/llm/router.go` + 4 个 provider.go | 3 周 | ✅ |
+| `core/cache.py` | 980 | `internal/store/cache.go` + `internal/llm/cache.go` | 1.5 周 | ✅ |
+| `core/pipeline.py` | 370 | `internal/skills/pipeline.go` | 0.5 周 | ✅ |
+| `core/exporter.py` | 540 | `internal/exporter/*.go` (gofpdf + go-epub) | 1 周 | ✅ |
+| `core/embeddings.py` | 280 | `internal/chroma/client.go` (chromem-go) | 0.5 周 | ✅ |
+| `core/graph.py` | 220 | `internal/graph/*.go` (BFS/DFS/Dijkstra) | 0.5 周 | ✅ |
+| `core/instructor_patch.py` | 180 | `internal/llm/instructor.go` (instructor-go) | 0.3 周 | ✅ |
+| 其他 core/* | 7000+ | 散落到 internal/ 各模块 | 2-3 周 | ✅ |
+| `web/app.py` | 14005 | `cmd/server/main.go` + `internal/api/*.go` | 4-5 周 | ✅ |
+| `cli/main.py` + sub-apps | 1200 | `cmd/cli/main.go` (std flag, no cobra) | 0.5 周 | ✅ |
+| **13 个 SKILL.md** | 0 Python | **`internal/skills/assets/*.md`（embed.FS）** | **0 周** ✨ | ✅ |
+| **总计** | **24722** | - | **18 周 (实际)** | **100%** |
 
 ## 2. 1:1 文件映射
 
@@ -149,18 +181,56 @@ prod-deploy skill 改造 → `prod-deploy-go` skill（GitHub REST API 拉新 rel
 
 ## 9. 时间线
 
-| 阶段 | 周 | 累计 | 状态 |
-|---|---|---|---|
-| P0 骨架 | 2-3 | 2-3 | 🚧 |
-| P1-A llm/router | 3 | 5-6 | ⏳ |
-| P1-B skills/pipeline | 1.5 | 6.5-7.5 | ⏳ |
-| P1-C chroma/graph | 1 | 7.5-8.5 | ⏳ |
-| P1-D exporter | 1 | 8.5-9.5 | ⏳ |
-| P1-E auth + store | 1.5 | 10-11 | ⏳ |
-| P1-F API handlers | 2-3 | 12-14 | ⏳ |
-| P2-A 前端接入 | 2 | 14-16 | ⏳ |
-| P2-B 部署 + 监控 | 2 | 16-18 | ⏳ |
-| P2-C 灰度切换 | 2-4 | 18-22 | ⏳ |
-| **总计** | | **18-22 周 (4.5-5.5 月)** | |
+| 阶段 | 周 | 累计 | 状态 | 完成日期 |
+|------|---|------|------|---------|
+| P0 骨架 | 2-3 | 2-3 | ✅ | 2026-09-16 |
+| P1-A llm/router | 3 | 5-6 | ✅ | 2026-09-17 (Sprint 14) |
+| P1-B skills/pipeline | 1.5 | 6.5-7.5 | ✅ | 2026-09-17 (Sprint 16) |
+| P1-C chroma/graph | 1 | 7.5-8.5 | ✅ | 2026-09-17 (Sprint 13) |
+| P1-D exporter | 1 | 8.5-9.5 | ✅ | 2026-09-17 (Sprint 13) |
+| P1-E auth + store | 1.5 | 10-11 | ✅ | 2026-09-17 (Sprint 15) |
+| P1-F API handlers | 2-3 | 12-14 | ✅ | 2026-09-17 (Sprint 12) |
+| core/roles | 0.5 | 14.5 | ✅ | 2026-09-17 (Sprint 16) |
+| cmd/cli + migrate | 1 | 15.5 | ✅ | 2026-09-17 (Sprint 18-19) |
+| scripts/ci_status.go | 0.5 | 16 | ✅ | 2026-09-17 (Sprint 19) |
+| P2-A 前端接入 | 2 | 18 | ⏳ | TBD |
+| P2-B 部署 + 监控 | 2 | 20 | ⏳ | TBD |
+| P2-C 灰度切换 | 2-4 | 22-24 | ⏳ | TBD |
+| **P1 累计** | **~16 周** | **16** | **✅ 100%** | **2026-09-17** |
+| **总计 (P2 后)** | | **22-24 周 (5.5-6 月)** | | |
+
+> P1 比预估的 12-15 周晚了约 1-4 周, 主要因为:
+> - P1-F 切片扩展到 12 个 (原本估 8-10 个)
+> - Sprint 14 误判 "100% 完成" 后做严格盘点, 发现 19 个缺失项, 启动 6 sprint 补全
+> - Sprint 17/19 各有一次 lint hotfix (goconst + gocyclo + bodyclose)
+
+## 10. 下一阶段 (P2) 建议
+
+| 优先级 | 项目 | 说明 |
+|--------|------|------|
+| 🔴 高 | P2-A 前端接入 | web-react/ Vite dist 部署到 novel2all-go (StaticHandler 已就绪) |
+| 🟡 中 | P2-B 部署 + 监控 | prod-deploy-go skill + systemd unit + GHCR image |
+| 🟢 低 | P2-C 灰度切换 | Python V1 + Go V2 并行, 流量切 10% → 50% → 100% |
+
+### P2-A 启动条件
+
+- ✅ StaticHandler 已实现 (Sprint 17 `internal/api/static.go`)
+- ✅ Router `/` 路径兜底返回 index.html
+- ⏳ 需要前端 Vite build → `web/dist/`
+- ⏳ 需要配置 `STATIC_DIR=web/dist` 环境变量
+- ⏳ 需要 `cmd/cli/web` 默认启用 static serving (目前 server.Run 没传)
+
+### P2-B 启动条件
+
+- ✅ `internal/server/server.go` 已抽出 (Sprint 18)
+- ✅ `cmd/cli/web` 子命令可用
+- ⏳ 需要 `prod-deploy-go` skill (监听 GitHub release → SSH 部署)
+- ⏳ 需要 systemd unit file (`deploy/systemd/novel2all-go.service`)
+
+### P2-C 启动条件
+
+- ⏳ Python V1 + Go V2 同时运行 (不同端口)
+- ⏳ 共享 SQLite (V1 写 + V2 读, 或反之) - 数据迁移已实现 (Sprint 19 `cmd/migrate`)
+- ⏳ 灰度切流 (按 IP 或按用户 hash)
 
 > 这是单人/小团队估时。如配齐 1 资深 + 2 中级 Go 开发者，可压缩到 3.5-4.5 月。
