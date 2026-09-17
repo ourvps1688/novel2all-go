@@ -150,6 +150,7 @@ func run() error {
 		Metrics: metrics,
 		Traces:  traces,
 		State:   statePersistor,
+		Backup:  store.NewBackupManager("data/backups", "data/state.json", cfg.DB.DSN, 10),
 	}
 	// 共享 ProjectStore 给 ProjectsHandler 和 StatePersistor (切片 10)
 	deps.SetProjectStore(projectStore)

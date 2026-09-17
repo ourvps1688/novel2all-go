@@ -31,6 +31,10 @@ type Deps struct {
 	// State 用于 /api/state/* (save/load/reset)
 	State *StatePersistor
 
+	// P1-F 切片 12: backup
+	// Backup 用于 /api/backup (admin only)
+	Backup *store.BackupManager
+
 	// projectStore 共享 ProjectStore（切片 10 让 State 持久化 projects）
 	// 未导出避免 main.go 误用（应该只通过 State 间接访问）
 	// 用 SetProjectStore 方法设置（main.go 在外部构造 Deps）
@@ -187,6 +191,11 @@ func registerOpsRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Session != nil && deps.Store != nil {
 		auditHandler := NewAuditHandler(deps.Store, deps.Session)
 		mux.Handle("/api/audit", auditHandler)
+	}
+	// /api/backup/* 备份管理（admin only，require BackupManager）
+	if deps.Session != nil && deps.Backup != nil {
+		backupHandler := NewBackupHandler(deps.Backup, deps.Session)
+		mux.Handle("/api/backup", backupHandler)
 	}
 }
 
