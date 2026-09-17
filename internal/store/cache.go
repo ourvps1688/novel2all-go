@@ -140,6 +140,29 @@ func (s *CacheStore) ListByModel(ctx context.Context, model string) ([]*CacheEnt
 	return scanCacheEntries(rows)
 }
 
+// ListAllKeys 返回所有 cache keys (Sprint 27 cache_migrate 用).
+//
+// 返回 []string (不返 entry 减少 IO). 顺序不保证.
+func (s *CacheStore) ListAllKeys(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT key FROM llm_cache`)
+	if err != nil {
+		return nil, fmt.Errorf("list keys: %w", err)
+	}
+	defer rows.Close()
+	keys := make([]string, 0)
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
 func scanCacheEntries(rows *sql.Rows) ([]*CacheEntry, error) {
 	out := make([]*CacheEntry, 0)
 	for rows.Next() {

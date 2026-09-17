@@ -65,12 +65,12 @@ func TestRun_HelpCmd(t *testing.T) {
 // 不依赖 LLM/DB, 纯 flag 解析 + 输出, 必过.
 func TestRun_CacheMigrate(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-
-	err := run(&stdout, &stderr, []string{"cache-migrate", "--dry-run"})
-	if err != nil {
-		t.Errorf("cache-migrate 应无 error (Sprint 18 stub), 实际=%v", err)
+	// Sprint 27: cache-migrate 是真功能. --from 和 --to 必填, 缺一会报错.
+	err := run(&stdout, &stderr, []string{"cache-migrate"})
+	if err == nil {
+		t.Error("cache-migrate 缺 --from/--to 应报错")
 	}
-	if !strings.Contains(stderr.String(), "cache-migrate") {
-		t.Errorf("stderr 应输出 'cache-migrate' 标签, 实际=%q", stderr.String()[:200])
+	if !strings.Contains(err.Error(), "required") {
+		t.Errorf("错误应提示 'required', 实际=%v", err)
 	}
 }

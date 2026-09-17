@@ -52,6 +52,12 @@ func run(stdout, stderr io.Writer, args []string) error {
 	rest := args[1:]
 
 	switch cmd {
+	case "version", "-v", "--version":
+		return runVersion(stdout, rest)
+	case "status":
+		return runStatus(stdout, stderr, rest)
+	case "setup":
+		return runSetup(stdout, stderr, rest)
 	case "skills":
 		return runSkills(stdout, rest)
 	case "roles":
