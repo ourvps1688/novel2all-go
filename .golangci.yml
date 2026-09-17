@@ -156,3 +156,5 @@ issues:
   exclude:
     - "composites"  # interface 兼容
     - "lll"         # 行长度
+    - "unnamedResult" # v1.61.0 误报: 单 struct 返回被识别为 unnamed
+    - "G104"        # gosimple S1008 之类（按需开）
