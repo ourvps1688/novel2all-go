@@ -33,66 +33,69 @@ type Deps struct {
 // P1-F: + register, users CRUD, audit
 //   - /api/roles
 //   - /api/cache/{stats,prompt-stats}
+//   - /api/model, /api/models, /api/projects, /api/write, /api/tracking
+//   - /api/chapters, /api/chapter, /api/characters, /api/relationships, /api/foreshadows
+//   - /metrics, /debug/* (切片 9)
 func Router(deps Deps) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// 健康检查 + 版本
+	registerSystemRoutes(mux)
+	registerAuthRoutes(mux, deps)
+	registerContentRoutes(mux, deps)
+	registerProjectRoutes(mux, deps)
+	registerOpsRoutes(mux, deps)
+	registerRootHandler(mux)
+
+	return mux
+}
+
+// registerSystemRoutes 注册 /health + /version
+func registerSystemRoutes(mux *http.ServeMux) {
 	mux.Handle("/health", NewHealthHandler())
 	mux.Handle("/version", NewVersionHandler())
+}
 
-	// Auth API（P1-E + P1-F 部分）
+// registerAuthRoutes 注册 auth + project share 路由
+func registerAuthRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Session != nil && deps.Limiter != nil {
 		authHandler := NewAuthHandler(deps.Session, deps.Limiter)
 		mux.Handle("/api/auth/", authHandler)
 	}
 
-	// Project share API（P1-F 切片 8）
-	// 单独注册到具体 path，避免和 AuthHandler 冲突（ServeMux longest-prefix match）
+	// Project share API（单独注册避免和 AuthHandler 冲突）
 	if deps.Session != nil && deps.Store != nil {
 		shareHandler := NewProjectShareHandler(deps.Session, deps.Store)
 		mux.Handle("/api/auth/projects/", shareHandler)
 		mux.Handle("/api/auth/users/", shareHandler)
 	}
+}
 
-	// Skills API（P1）
+// registerContentRoutes 注册 skills + roles + cache + status + models + chapters + characters
+func registerContentRoutes(mux *http.ServeMux, deps Deps) {
+	// Skills API
 	if deps.Loader != nil && deps.Router != nil {
 		executor := skills.NewExecutor(deps.Loader, deps.Router)
 		skillsHandler := NewSkillsHandler(executor, deps.Loader)
 		mux.Handle("/api/skills/", skillsHandler)
 	}
 
-	// Roles API（P1-F）
+	// Roles API
 	mux.Handle("/api/roles", NewRolesHandler())
 
-	// Cache API（P1-F mock）
+	// Cache API
 	mux.Handle("/api/cache/", NewCacheHandler())
 
-	// Status API（P1-F）
+	// Status API
 	mux.Handle("/api/status", NewStatusHandler())
 
-	// Models API（P1-F）
-	// 注册 /api/model/ subtree（匹配 /api/model/{current,switch}）
-	// + /api/models/ 精确（带 slash，匹配 listModels）
-	//   /api/models 不带 slash → ServeMux 自动 301 重定向到 /api/models/
+	// Models API（/api/model/{current,switch} + /api/models/）
 	if deps.Router != nil {
 		modelsHandler := NewModelsHandler(deps.Router)
 		mux.Handle("/api/model/", modelsHandler)
 		mux.Handle("/api/models/", modelsHandler)
 	}
 
-	// Projects API（P1-F, 内存版）
-	mux.Handle("/api/projects/", NewProjectsHandler())
-	// /api/projects 不带 slash → ServeMux 自动 301 重定向到 /api/projects/
-
-	// Write + Tracking API（P1-F 切片 3：流式写作）
-	if deps.Loader != nil && deps.Router != nil {
-		executor := skills.NewExecutor(deps.Loader, deps.Router)
-		writeHandler := NewWriteHandler(executor, deps.Loader)
-		mux.Handle("/api/write/", writeHandler)
-	}
-	mux.Handle("/api/tracking", NewTrackingHandler())
-
-	// Chapters API（P1-F 切片 4+5：文件系统存储 + LLM 操作）
+	// Chapters API（filesystem + LLM actions）
 	if deps.Loader != nil && deps.Router != nil {
 		executor := skills.NewExecutor(deps.Loader, deps.Router)
 		actions := NewChapterActions(executor)
@@ -107,7 +110,7 @@ func Router(deps Deps) *http.ServeMux {
 		mux.Handle("/api/chapter/", chaptersHandler)
 	}
 
-	// Characters / Relationships / Foreshadows API（P1-F 切片 6：JSON 文件持久化）
+	// Characters + Relationships + Foreshadows API（JSON 持久化）
 	charactersHandler := NewCharactersHandler()
 	mux.Handle("/api/characters", charactersHandler)
 	mux.Handle("/api/characters/", charactersHandler)
@@ -115,8 +118,24 @@ func Router(deps Deps) *http.ServeMux {
 	mux.Handle("/api/relationships/", charactersHandler)
 	mux.Handle("/api/foreshadows", charactersHandler)
 	mux.Handle("/api/foreshadows/", charactersHandler)
+}
 
-	// Metrics + Debug API（P1-F 切片 9：运维可观测性）
+// registerProjectRoutes 注册 projects + write + tracking
+func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
+	// Projects API（内存版）
+	mux.Handle("/api/projects/", NewProjectsHandler())
+
+	// Write + Tracking API（流式写作）
+	if deps.Loader != nil && deps.Router != nil {
+		executor := skills.NewExecutor(deps.Loader, deps.Router)
+		writeHandler := NewWriteHandler(executor, deps.Loader)
+		mux.Handle("/api/write/", writeHandler)
+	}
+	mux.Handle("/api/tracking", NewTrackingHandler())
+}
+
+// registerOpsRoutes 注册 metrics + debug（切片 9）
+func registerOpsRoutes(mux *http.ServeMux, deps Deps) {
 	// /metrics 无鉴权（Prometheus 惯例；用 firewall/reverse-proxy 限制）
 	if deps.Metrics != nil {
 		mux.Handle("/metrics", NewMetricsHandler(deps.Metrics))
@@ -126,8 +145,10 @@ func Router(deps Deps) *http.ServeMux {
 		debugHandler := NewDebugHandler(deps.Session, deps.Metrics, deps.Traces)
 		mux.Handle("/debug/", debugHandler)
 	}
+}
 
-	// 根路径提示
+// registerRootHandler 注册根路径提示
+func registerRootHandler(mux *http.ServeMux) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -136,8 +157,6 @@ func Router(deps Deps) *http.ServeMux {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("novel2all-go v0.6.0 — see /health, /version, /api/auth, /api/skills, /api/roles, /api/cache, /api/status, /api/models, /api/projects, /api/write, /api/tracking, /api/chapters, /api/chapter\n"))
 	})
-
-	return mux
 }
 
 // LoggingMiddleware 简易访问日志中间件 + metrics 注入

@@ -71,7 +71,7 @@ func TestDebugHandler_Traces_RequiresAuth(t *testing.T) {
 	h := newDebugHandler(newMockLookup("admin-token", "user-token"), obs.NewMetrics("test", "test", "test"), obs.NewTraceRecorder(10))
 
 	// 无 token → 401
-	req := httptest.NewRequest(http.MethodGet, "/debug/traces", nil)
+	req := httptest.NewRequest(http.MethodGet, "/debug/traces", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusUnauthorized {
@@ -79,7 +79,7 @@ func TestDebugHandler_Traces_RequiresAuth(t *testing.T) {
 	}
 
 	// 无效 token → 401
-	req = httptest.NewRequest(http.MethodGet, "/debug/traces", nil)
+	req = httptest.NewRequest(http.MethodGet, "/debug/traces", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "bogus"})
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -93,7 +93,7 @@ func TestDebugHandler_Traces_RequiresAdmin(t *testing.T) {
 	h := newDebugHandler(lookup, obs.NewMetrics("test", "test", "test"), obs.NewTraceRecorder(10))
 
 	// user token → 403
-	req := httptest.NewRequest(http.MethodGet, "/debug/traces", nil)
+	req := httptest.NewRequest(http.MethodGet, "/debug/traces", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "user-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -111,7 +111,7 @@ func TestDebugHandler_Traces_AdminSuccess(t *testing.T) {
 
 	h := newDebugHandler(newMockLookup("admin-token", "user-token"), metrics, traces)
 
-	req := httptest.NewRequest(http.MethodGet, "/debug/traces", nil)
+	req := httptest.NewRequest(http.MethodGet, "/debug/traces", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -153,7 +153,7 @@ func TestDebugHandler_Traces_TypeFilter(t *testing.T) {
 
 	h := newDebugHandler(newMockLookup("admin-token", "user-token"), obs.NewMetrics("test", "test", "test"), traces)
 
-	req := httptest.NewRequest(http.MethodGet, "/debug/traces?type=http", nil)
+	req := httptest.NewRequest(http.MethodGet, "/debug/traces?type=http", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
