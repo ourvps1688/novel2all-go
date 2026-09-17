@@ -108,7 +108,7 @@ func (h *ExporterHandler) handleRender(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", result.MimeType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=`+strconv.Quote(result.Filename)))
+	w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(result.Filename))
 	w.Header().Set("X-Export-Format", string(result.Format))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(result.Body)
@@ -157,7 +157,7 @@ func (h *ExporterHandler) handleChapter(w http.ResponseWriter, r *http.Request, 
 	}
 
 	w.Header().Set("Content-Type", result.MimeType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=`+strconv.Quote(result.Filename)))
+	w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(result.Filename))
 	w.Header().Set("X-Export-Format", string(result.Format))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(result.Body)
