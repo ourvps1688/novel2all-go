@@ -129,7 +129,7 @@ func (c *Cache) Get(ctx context.Context, task TaskType, model, prompt string) (*
 	}
 
 	c.putL1(key, resp)
-	c.l2.IncrementHit(ctx, key)
+	_ = c.l2.IncrementHit(ctx, key)
 	c.hitsL2.Add(1)
 	return resp, true
 }

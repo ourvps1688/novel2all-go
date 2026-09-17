@@ -91,7 +91,7 @@ func TestMemoryCache_LRUEviction(t *testing.T) {
 
 	// 写 4 条不同 key → 第一条被淘汰
 	for i := 0; i < 4; i++ {
-		c.Set(ctx, TaskWriting, "model", string(rune('a'+i)), &Response{Content: string(rune('A' + i))})
+		_ = c.Set(ctx, TaskWriting, "model", string(rune('a'+i)), &Response{Content: string(rune('A' + i))})
 	}
 
 	stats := c.Stats()
