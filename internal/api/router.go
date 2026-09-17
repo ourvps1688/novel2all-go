@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/ourvps1688/novel2all-go/internal/auth"
+	"github.com/ourvps1688/novel2all-go/internal/chroma"
+	"github.com/ourvps1688/novel2all-go/internal/graph"
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 	"github.com/ourvps1688/novel2all-go/internal/obs"
 	"github.com/ourvps1688/novel2all-go/internal/skills"
@@ -34,6 +36,12 @@ type Deps struct {
 	// P1-F 切片 12: backup
 	// Backup 用于 /api/backup (admin only)
 	Backup *store.BackupManager
+
+	// P1-C: chroma (向量存储) + graph (图算法)
+	// Chroma 用于 /api/chroma/* (RAG 基础设施)
+	Chroma *chroma.Client
+	// Graph 用于 /api/graph/* (人物关系图谱)
+	Graph *graph.Graph
 
 	// projectStore 共享 ProjectStore（切片 10 让 State 持久化 projects）
 	// 未导出避免 main.go 误用（应该只通过 State 间接访问）
@@ -196,6 +204,18 @@ func registerOpsRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Session != nil && deps.Backup != nil {
 		backupHandler := NewBackupHandler(deps.Backup, deps.Session)
 		mux.Handle("/api/backup", backupHandler)
+	}
+	// P1-C: /api/chroma/* 向量存储 (RAG)
+	if deps.Chroma != nil {
+		mux.Handle("/api/chroma/", NewChromaHandler(deps.Chroma))
+	}
+	// P1-C: /api/graph/* 图算法 (BFS/Dijkstra)
+	if deps.Graph != nil {
+		mux.Handle("/api/graph/", NewGraphHandler(deps.Graph))
+	}
+	// P1-D: /api/exporter/* 多格式导出 (md/txt/epub/pdf)
+	if deps.Session != nil {
+		mux.Handle("/api/exporter/", NewExporterHandler(deps.Session))
 	}
 }
 

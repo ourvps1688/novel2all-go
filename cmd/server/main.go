@@ -20,7 +20,9 @@ import (
 
 	"github.com/ourvps1688/novel2all-go/internal/api"
 	"github.com/ourvps1688/novel2all-go/internal/auth"
+	"github.com/ourvps1688/novel2all-go/internal/chroma"
 	"github.com/ourvps1688/novel2all-go/internal/config"
+	"github.com/ourvps1688/novel2all-go/internal/graph"
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 	"github.com/ourvps1688/novel2all-go/internal/obs"
 	"github.com/ourvps1688/novel2all-go/internal/skills"
@@ -151,6 +153,8 @@ func run() error {
 		Traces:  traces,
 		State:   statePersistor,
 		Backup:  store.NewBackupManager("data/backups", "data/state.json", cfg.DB.DSN, 10),
+		Chroma:  chroma.NewClient(128), // P1-C 向量存储 (128 维 hash embedding)
+		Graph:   graph.NewGraph(),      // P1-C 图算法 (BFS/Dijkstra)
 	}
 	// 共享 ProjectStore 给 ProjectsHandler 和 StatePersistor (切片 10)
 	deps.SetProjectStore(projectStore)
