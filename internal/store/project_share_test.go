@@ -14,6 +14,7 @@ type membershipTestCtx struct {
 	normalID  int64
 }
 
+//nolint:unnamedResult // gocritic 误报: 实际函数返回 1 个 struct,lint 误判为 unnamed
 func setupMembershipTest(t *testing.T) *membershipTestCtx {
 	t.Helper()
 	dir := t.TempDir()
