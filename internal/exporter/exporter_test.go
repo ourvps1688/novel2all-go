@@ -1,6 +1,7 @@
 package exporter
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -196,7 +197,8 @@ func TestExportBookEPUB_ChapterTooLarge(t *testing.T) {
 		{ChapterNum: 1, Title: "ch1", Content: bigContent},
 	}
 	_, err := ExportBookEPUB(metadata, chapters)
-	if _, ok := err.(*ChapterTooLargeError); !ok {
+	var chErr *ChapterTooLargeError
+	if !errors.As(err, &chErr) {
 		t.Errorf("expected ChapterTooLargeError, got %T %v", err, err)
 	}
 }
@@ -210,7 +212,8 @@ func TestExportBookEPUB_BookTooLarge(t *testing.T) {
 		chapters[i] = &Chapter{ChapterNum: i + 1, Title: "ch", Content: big}
 	}
 	_, err := ExportBookEPUB(metadata, chapters)
-	if _, ok := err.(*BookTooLargeError); !ok {
+	var bkErr *BookTooLargeError
+	if !errors.As(err, &bkErr) {
 		t.Errorf("expected BookTooLargeError, got %T %v", err, err)
 	}
 }
@@ -250,7 +253,7 @@ func TestXMLEscape_All(t *testing.T) {
 	// (详细 entity 转义在 TestXMLEscape 中覆盖)
 	in := "plain text with & and <>"
 	got := xmlEscape(in)
-	if len(got) == 0 {
+	if got == "" {
 		t.Error("xmlEscape returned empty string")
 	}
 	// 纯文本 (无特殊字符) 应该原样返回
@@ -267,7 +270,8 @@ func TestExportEPUB_TooLarge(t *testing.T) {
 	// 单章 exportEPUB 路径: 触发 ChapterTooLargeError
 	bigContent := strings.Repeat("x", MaxChapterBytes+1)
 	_, err := exportEPUB("title", bigContent, 1)
-	if _, ok := err.(*ChapterTooLargeError); !ok {
+	var chErr *ChapterTooLargeError
+	if !errors.As(err, &chErr) {
 		t.Errorf("expected ChapterTooLargeError, got %T %v", err, err)
 	}
 }

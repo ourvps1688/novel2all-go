@@ -43,18 +43,20 @@ func TestPaths_AllStandard(t *testing.T) {
 }
 
 func TestChapterOutline_Padded(t *testing.T) {
-	p := &ProjectStructure{Root: "/tmp/x"}
+	root := "/tmp/x"
+	p := &ProjectStructure{Root: root}
 	got := p.ChapterOutline(5)
-	want := filepath.Join("/tmp/x", "大纲", "细纲_第005章.md")
+	want := filepath.Join(root, "大纲", "细纲_第005章.md")
 	if got != want {
 		t.Errorf("ChapterOutline(5) = %q, want %q", got, want)
 	}
 }
 
 func TestChapterProse_Padded(t *testing.T) {
-	p := &ProjectStructure{Root: "/tmp/x"}
+	root := "/tmp/x"
+	p := &ProjectStructure{Root: root}
 	got := p.ChapterProse(123)
-	want := filepath.Join("/tmp/x", "正文", "第123章.md")
+	want := filepath.Join(root, "正文", "第123章.md")
 	if got != want {
 		t.Errorf("ChapterProse(123) = %q, want %q", got, want)
 	}

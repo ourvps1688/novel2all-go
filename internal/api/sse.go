@@ -72,7 +72,7 @@ func (h *WriteHandler) handleWriteStream(w http.ResponseWriter, r *http.Request)
 	q := r.URL.Query()
 	chapter := parseIntQuery(q.Get("chapter"), 0)
 	projectRoot := defaultStr(q.Get("project_root"), ".")
-	skill := defaultStr(q.Get("skill"), "story-long-write")
+	skill := defaultStr(q.Get("skill"), skillStoryLongWrite)
 	minChars := parseIntQuery(q.Get("min_chars"), 2000)
 
 	if chapter <= 0 {
@@ -283,7 +283,7 @@ func (h *WriteHandler) handleWriteStreamModel(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if req.Skill == "" {
-		req.Skill = "story-long-write"
+		req.Skill = skillStoryLongWrite
 	}
 	if req.ProjectRoot == "" {
 		req.ProjectRoot = "."

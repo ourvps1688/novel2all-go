@@ -11,6 +11,9 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/roles"
 )
 
+// roles 子命令表格格式（formatJSON 在 memory.go 共享定义）.
+const formatTable = "table"
+
 // runRoles 执行 roles 子命令.
 //
 // flags:
@@ -18,7 +21,7 @@ import (
 func runRoles(stdout io.Writer, args []string) error {
 	fs := flag.NewFlagSet("roles", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	format := fs.String("format", "table", "output format: table | json")
+	format := fs.String("format", formatTable, "output format: table | json")
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("roles: %w", err)
 	}
@@ -26,11 +29,11 @@ func runRoles(stdout io.Writer, args []string) error {
 	all := roles.All()
 
 	switch *format {
-	case "json":
+	case formatJSON:
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(all)
-	case "table", "":
+	case formatTable, "":
 		return printRolesTable(stdout, all)
 	default:
 		return fmt.Errorf("unknown format %q (use table or json)", *format)

@@ -14,6 +14,8 @@ import (
 )
 
 // ProjectStructure 项目目录结构.
+//
+//nolint:revive // 名称与 package 重名, 但 Python 端叫 ProjectStructure, 保留对齐
 type ProjectStructure struct {
 	// Root 项目根目录.
 	Root string

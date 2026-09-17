@@ -107,7 +107,7 @@ func (h *WriteHandler) handleStream(w http.ResponseWriter, r *http.Request) {
 	}
 	skill := r.URL.Query().Get("skill")
 	if skill == "" {
-		skill = "story-long-write"
+		skill = skillStoryLongWrite
 	}
 	projectRoot := r.URL.Query().Get("project_root")
 	if projectRoot == "" {

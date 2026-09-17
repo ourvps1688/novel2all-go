@@ -45,6 +45,13 @@ func (r *MigrationResult) Summary() string {
 	)
 }
 
+// Cache backend 名称常量 (用于 srcBackend/dstBackend 参数).
+const (
+	backendJSON   = "json"
+	backendSQLite = "sqlite"
+	backendMemory = "memory"
+)
+
 // Cacheable 通用 cache 抽象 (migrate 用).
 //
 // CacheStore (SQLite) 和 JSONCache 都实现这个接口, 这样 migrate 可跨 backend.
@@ -78,10 +85,10 @@ func MigrateCache(srcBackend, dstBackend, srcPath, dstPath string,
 		Errors:     []string{},
 	}
 
-	if srcBackend != "json" && srcBackend != "sqlite" {
+	if srcBackend != backendJSON && srcBackend != backendSQLite {
 		return result, fmt.Errorf("unsupported src backend %q (json|sqlite)", srcBackend)
 	}
-	if dstBackend != "json" && dstBackend != "sqlite" {
+	if dstBackend != backendJSON && dstBackend != backendSQLite {
 		return result, fmt.Errorf("unsupported dst backend %q (json|sqlite)", dstBackend)
 	}
 
@@ -135,13 +142,13 @@ func MigrateCache(srcBackend, dstBackend, srcPath, dstPath string,
 
 // openCacheBackend 构造 cache backend (json/sqlite).
 func openCacheBackend(backend, path string, maxSize, ttlSeconds int) (Cacheable, error) {
-	if backend == "memory" {
+	if backend == backendMemory {
 		return nil, fmt.Errorf("memory backend not supported for migration")
 	}
 	switch backend {
-	case "json":
+	case backendJSON:
 		return NewJSONCache(path, maxSize, ttlSeconds)
-	case "sqlite":
+	case backendSQLite:
 		return NewSQLiteCache(path, maxSize, ttlSeconds)
 	default:
 		return nil, fmt.Errorf("unknown backend %q", backend)

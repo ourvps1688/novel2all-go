@@ -337,59 +337,6 @@ func writeChapterXHTML(zw *zip.Writer, c *Chapter, index int) error {
 	return err
 }
 
-// _checkChapterSize 检查单章大小.
-func _checkChapterSize(c *Chapter) error {
-	if c.ContentSizeBytes() > MaxChapterBytes {
-		return &ChapterTooLargeError{
-			ChapterNum: c.ChapterNum,
-			Bytes:      c.ContentSizeBytes(),
-			MaxBytes:   MaxChapterBytes,
-		}
-	}
-	return nil
-}
-
-// _checkBookSize 检查整书大小.
-func _checkBookSize(chapters []*Chapter) error {
-	total := TotalBytes(chapters)
-	if total > MaxBookBytes {
-		return &BookTooLargeError{TotalBytes: total, MaxBytes: MaxBookBytes}
-	}
-	return nil
-}
-
-// _coverPage 构造封面页 XHTML (V0.27.3 Sprint 31 新增).
-func _coverPage(metadata *BookMetadata) string {
-	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <title>Cover</title>
-</head>
-<body>
-  <h1 style="text-align:center;">%s</h1>
-  <p style="text-align:center;font-size:large;">%s</p>
-  <p style="text-align:center;">共 %d 章 / %d 字</p>
-</body>
-</html>`, xmlEscape(metadata.Title), xmlEscape(metadata.Author), metadata.TotalChapters, metadata.TotalWords)
-}
-
-// _zipFiles 批量加文件 (V0.27.3 Sprint 31 工具方法, 当前未使用).
-//
-// 保留供未来 batch 优化 (直接传入 map[string][]byte).
-func _zipFiles(zw *zip.Writer, files map[string][]byte) error {
-	for name, data := range files {
-		w, err := zw.Create(name)
-		if err != nil {
-			return err
-		}
-		if _, err := w.Write(data); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // sanitizeFilename 文件名清洗 (替换非法字符).
 func sanitizeFilename(name string) string {
 	replacer := strings.NewReplacer(

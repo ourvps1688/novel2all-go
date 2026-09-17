@@ -169,7 +169,7 @@ func TestHandleWriteStream_SSEFormat(t *testing.T) {
 	if events[0] != "started" {
 		t.Errorf("first event = %s, want started", events[0])
 	}
-	// 验证关键事件都出现过 (顺序不限)
+	// 关键事件都出现过
 	foundStarted, foundChunk, foundDone := false, false, false
 	for _, e := range events {
 		switch e {

@@ -18,7 +18,7 @@ import (
 )
 
 // runSetup flag 解析 + 执行初始化.
-func runSetup(stdout io.Writer, stderr io.Writer, args []string) error {
+func runSetup(stdout, stderr io.Writer, args []string) error {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	name := fs.String("name", "", "项目名（书名）")

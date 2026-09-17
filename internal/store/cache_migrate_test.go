@@ -27,9 +27,9 @@ func TestJSONCache_Keys(t *testing.T) {
 	dir := t.TempDir()
 	c, _ := NewJSONCache(filepath.Join(dir, "t.json"), 100, 0)
 	defer c.Close()
-	c.Set("a", 1)
-	c.Set("b", 2)
-	c.Set("c", 3)
+	_ = c.Set("a", 1)
+	_ = c.Set("b", 2)
+	_ = c.Set("c", 3)
 	keys := c.Keys()
 	if len(keys) != 3 {
 		t.Errorf("Keys count = %d, want 3", len(keys))
@@ -40,7 +40,7 @@ func TestJSONCache_TTL(t *testing.T) {
 	dir := t.TempDir()
 	c, _ := NewJSONCache(filepath.Join(dir, "t.json"), 100, 1) // TTL 1 second
 	defer c.Close()
-	c.Set("k", "v")
+	_ = c.Set("k", "v")
 	// 不等, 应该立即能 Get
 	if v := c.Get("k"); v != "v" {
 		t.Error("expected immediate read")
@@ -51,7 +51,7 @@ func TestJSONCache_Persistence(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "t.json")
 	c1, _ := NewJSONCache(path, 100, 0)
-	c1.Set("persist", "yes")
+	_ = c1.Set("persist", "yes")
 	c1.Close()
 
 	c2, _ := NewJSONCache(path, 100, 0)
@@ -65,9 +65,9 @@ func TestJSONCache_LRUEviction(t *testing.T) {
 	dir := t.TempDir()
 	c, _ := NewJSONCache(filepath.Join(dir, "t.json"), 2, 0) // maxSize=2
 	defer c.Close()
-	c.Set("a", 1)
-	c.Set("b", 2)
-	c.Set("c", 3) // 应该淘汰一个
+	_ = c.Set("a", 1)
+	_ = c.Set("b", 2)
+	_ = c.Set("c", 3) // 应该淘汰一个
 	if c.Size() > 2 {
 		t.Errorf("Size = %d, want <= 2", c.Size())
 	}
@@ -79,9 +79,9 @@ func TestMigrateCache_JsonToJson(t *testing.T) {
 	dstPath := filepath.Join(dir, "dst.json")
 	src, _ := NewJSONCache(srcPath, 100, 0)
 	defer src.Close()
-	src.Set("k1", "v1")
-	src.Set("k2", 42)
-	src.Set("k3", map[string]any{"nested": true})
+	_ = src.Set("k1", "v1")
+	_ = src.Set("k2", 42)
+	_ = src.Set("k3", map[string]any{"nested": true})
 
 	result, err := MigrateCache("json", "json", srcPath, dstPath, 100, 0, nil)
 	if err != nil {
@@ -128,7 +128,7 @@ func TestMigrateCache_ProgressCallback(t *testing.T) {
 	src, _ := NewJSONCache(srcPath, 100, 0)
 	defer src.Close()
 	for i := 0; i < 60; i++ {
-		src.Set(string(rune('a'+i%26))+"_"+string(rune('0'+i/26)), i)
+		_ = src.Set(string(rune('a'+i%26))+"_"+string(rune('0'+i/26)), i)
 	}
 
 	var calls int

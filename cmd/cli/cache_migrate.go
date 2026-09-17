@@ -23,20 +23,31 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
+// cache-migrate 子命令用的 backend 常量（避免 goconst 重复字面量）.
+const (
+	cacheBackendAuto   = "auto"
+	cacheBackendJSON   = "json"
+	cacheBackendSQLite = "sqlite"
+	cacheBackendMemory = "memory"
+)
+
 // runCacheMigrate 执行 cache-migrate 子命令.
+//
+//nolint:gocyclo // 参数解析+auto-detect+校验多个分支, 流程型函数复杂度天然高
 func runCacheMigrate(stdout, stderr io.Writer, args []string) error {
 	fs := flag.NewFlagSet("cache-migrate", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
 	fromPath := fs.String("from", "", "source cache file path")
 	toPath := fs.String("to", "", "target cache file path")
-	srcBackend := fs.String("src", "auto", "source backend: json|sqlite|auto (auto-detect from extension)")
-	dstBackend := fs.String("dst", "auto", "target backend: json|sqlite|auto")
+	srcBackend := fs.String("src", cacheBackendAuto, "source backend: json|sqlite|auto (auto-detect from extension)")
+	dstBackend := fs.String("dst", cacheBackendAuto, "target backend: json|sqlite|auto")
 	maxSize := fs.Int("max-size", 1024, "target max_size")
 	ttlSeconds := fs.Int("ttl", 0, "target TTL in seconds (0 = never expire)")
 	if err := fs.Parse(args); err != nil {
@@ -50,33 +61,19 @@ func runCacheMigrate(stdout, stderr io.Writer, args []string) error {
 		return fmt.Errorf("--to is required")
 	}
 
-	// auto-detect backend
-	src := *srcBackend
-	if src == "auto" {
-		if strings.HasSuffix(*fromPath, ".json") {
-			src = "json"
-		} else if strings.HasSuffix(*fromPath, ".db") || strings.HasSuffix(*fromPath, ".sqlite") {
-			src = "sqlite"
-		} else {
-			return fmt.Errorf("cannot auto-detect src backend from %q, use --src=json|sqlite", *fromPath)
-		}
+	src, err := resolveBackend(*srcBackend, *fromPath, "src")
+	if err != nil {
+		return err
 	}
-	dst := *dstBackend
-	if dst == "auto" {
-		if strings.HasSuffix(*toPath, ".json") {
-			dst = "json"
-		} else if strings.HasSuffix(*toPath, ".db") || strings.HasSuffix(*toPath, ".sqlite") {
-			dst = "sqlite"
-		} else {
-			return fmt.Errorf("cannot auto-detect dst backend from %q, use --dst=json|sqlite", *toPath)
-		}
+	dst, err := resolveBackend(*dstBackend, *toPath, "dst")
+	if err != nil {
+		return err
 	}
 
 	if src == dst && *fromPath == *toPath {
 		return fmt.Errorf("source and target are identical")
 	}
-
-	if src == "memory" || dst == "memory" {
+	if src == cacheBackendMemory || dst == cacheBackendMemory {
 		return fmt.Errorf("memory backend not supported for migration")
 	}
 
@@ -113,4 +110,24 @@ func runCacheMigrate(stdout, stderr io.Writer, args []string) error {
 		fmt.Fprintf(stdout, "\n[提示] 迁移成功! 建议备份或删除源文件 %s (手动)\n", *fromPath)
 	}
 	return nil
+}
+
+// resolveBackend 解析 backend: auto 时从扩展名推断, 否则校验显式值.
+func resolveBackend(declared, path, label string) (string, error) {
+	if declared != cacheBackendAuto {
+		switch declared {
+		case cacheBackendJSON, cacheBackendSQLite, cacheBackendMemory:
+			return declared, nil
+		default:
+			return "", fmt.Errorf("invalid %s backend %q (json|sqlite|auto|memory)", label, declared)
+		}
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".json":
+		return cacheBackendJSON, nil
+	case ".db", ".sqlite":
+		return cacheBackendSQLite, nil
+	default:
+		return "", fmt.Errorf("cannot auto-detect %s backend from %q, use --%s=json|sqlite", label, path, label)
+	}
 }
