@@ -98,18 +98,26 @@ func registerSystemRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("/health/", NewHealthReadyHandler(deps.Store, deps.Router))
 }
 
-// registerAuthRoutes 注册 auth + project share 路由
+// registerAuthRoutes 注册 auth + users + project share 路由
 func registerAuthRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Session != nil && deps.Limiter != nil {
 		authHandler := NewAuthHandler(deps.Session, deps.Limiter)
 		mux.Handle("/api/auth/", authHandler)
 	}
 
+	// /api/auth/users[/{id}] (Sprint 17: 独立 UsersHandler, admin only).
+	// 注：必须在 AuthHandler 注册后再注册 users, 因为 /api/auth/users 会被
+	// AuthHandler 拦截到 default 分支, 走独立 UsersHandler 优先.
+	if deps.Session != nil && deps.Limiter != nil {
+		usersHandler := NewUsersHandler(deps.Session)
+		mux.Handle("/api/auth/users", usersHandler)
+		mux.Handle("/api/auth/users/", usersHandler)
+	}
+
 	// Project share API（单独注册避免和 AuthHandler 冲突）
 	if deps.Session != nil && deps.Store != nil {
 		shareHandler := NewProjectShareHandler(deps.Session, deps.Store)
 		mux.Handle("/api/auth/projects/", shareHandler)
-		mux.Handle("/api/auth/users/", shareHandler)
 	}
 }
 
@@ -191,10 +199,7 @@ func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 func registerOpsRoutes(mux *http.ServeMux, deps Deps) {
 	registerMetricsRoute(mux, deps)
 	registerDebugRoute(mux, deps)
-	registerStateRoute(mux, deps)
-	registerMetricsAdminRoute(mux, deps)
-	registerAuditRoute(mux, deps)
-	registerBackupRoute(mux, deps)
+	RegisterAdminRoutes(mux, deps)  // Sprint 17: 聚合 state/metrics_admin/audit/backup admin 路由
 	registerAIRoutes(mux, deps)     // P1-C: chroma + graph
 	registerExportRoutes(mux, deps) // P1-D: exporter
 }
@@ -214,38 +219,6 @@ func registerDebugRoute(mux *http.ServeMux, deps Deps) {
 	}
 	debugHandler := NewDebugHandler(deps.Session, deps.Metrics, deps.Traces)
 	mux.Handle("/debug/", debugHandler)
-}
-
-// registerStateRoute /api/state/* admin only
-func registerStateRoute(mux *http.ServeMux, deps Deps) {
-	if deps.Session == nil || deps.State == nil {
-		return
-	}
-	mux.Handle("/api/state/", NewStateHandler(deps.State, deps.Session))
-}
-
-// registerMetricsAdminRoute /api/metrics/reset admin only
-func registerMetricsAdminRoute(mux *http.ServeMux, deps Deps) {
-	if deps.Session == nil || deps.Metrics == nil {
-		return
-	}
-	mux.Handle("/api/metrics/reset", NewMetricsAdminHandler(deps.Metrics, deps.Session))
-}
-
-// registerAuditRoute /api/audit admin only
-func registerAuditRoute(mux *http.ServeMux, deps Deps) {
-	if deps.Session == nil || deps.Store == nil {
-		return
-	}
-	mux.Handle("/api/audit", NewAuditHandler(deps.Store, deps.Session))
-}
-
-// registerBackupRoute /api/backup admin only
-func registerBackupRoute(mux *http.ServeMux, deps Deps) {
-	if deps.Session == nil || deps.Backup == nil {
-		return
-	}
-	mux.Handle("/api/backup", NewBackupHandler(deps.Backup, deps.Session))
 }
 
 // registerAIRoutes P1-C: chroma + graph（无 admin 鉴权）

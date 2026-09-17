@@ -59,7 +59,7 @@ func (h *BackupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// requireAdmin 通用 admin 鉴权（与 state_handler / audit_handler 一致模式）
+// requireAdmin 通用 admin 鉴权（与 state_handler / audit 一致模式）
 func (h *BackupHandler) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 	if h.session == nil {
 		http.Error(w, `{"error":"backup endpoints disabled"}`, http.StatusServiceUnavailable)

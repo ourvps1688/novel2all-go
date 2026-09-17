@@ -1,4 +1,4 @@
-// audit_handler.go 提供 /api/audit/* 端点（admin only）。
+// audit.go 提供 /api/audit/* 端点（admin only）。
 //
 // 路由：
 //

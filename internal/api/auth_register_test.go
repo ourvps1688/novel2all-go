@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -96,114 +95,6 @@ func TestRegister_ShortPassword(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("短密码应 400，实际=%d body=%s", rec.Code, rec.Body.String())
-	}
-}
-
-// TestListUsers_RequiresAdmin 测试列表需要 admin
-func TestListUsers_RequiresAdmin(t *testing.T) {
-	h, _ := setupTestAuthWithAdmin(t)
-
-	// 无 cookie → 401
-	req := httptest.NewRequest(http.MethodGet, "/api/auth/users", http.NoBody)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("无 cookie 应 401，实际=%d", rec.Code)
-	}
-}
-
-// TestListUsers_AsAdmin 测试 admin 列表
-func TestListUsers_AsAdmin(t *testing.T) {
-	h, _ := setupTestAuthWithAdmin(t)
-
-	// 登录拿 admin cookie
-	loginBody, _ := json.Marshal(LoginRequest{Username: "admin", Password: "adminpass"})
-	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
-	loginRec := httptest.NewRecorder()
-	h.ServeHTTP(loginRec, loginReq)
-	loginResult := loginRec.Result()
-	defer loginResult.Body.Close()
-	cookies := loginResult.Cookies()
-	if len(cookies) == 0 {
-		t.Fatal("登录失败")
-	}
-
-	// 带 cookie 列表
-	req := httptest.NewRequest(http.MethodGet, "/api/auth/users", http.NoBody)
-	req.AddCookie(cookies[0])
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("admin 应 200，实际=%d body=%s", rec.Code, rec.Body.String())
-	}
-	var resp UsersListResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if resp.Count != 2 { // admin + alice
-		t.Errorf("应 2 个用户，实际=%d", resp.Count)
-	}
-}
-
-// TestCreateUser_AsAdmin 测试 admin 创建新用户（可指定 role）
-func TestCreateUser_AsAdmin(t *testing.T) {
-	h, _ := setupTestAuthWithAdmin(t)
-
-	// 拿 admin cookie
-	loginBody, _ := json.Marshal(LoginRequest{Username: "admin", Password: "adminpass"})
-	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
-	loginRec := httptest.NewRecorder()
-	h.ServeHTTP(loginRec, loginReq)
-	loginResult := loginRec.Result()
-	defer loginResult.Body.Close()
-	cookies := loginResult.Cookies()
-
-	// admin 创建另一个 admin
-	body, _ := json.Marshal(RegisterRequest{
-		Username: "admin2",
-		Password: "pass1234",
-		Role:     "admin",
-	})
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/users", bytes.NewReader(body))
-	req.AddCookie(cookies[0])
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusCreated {
-		t.Errorf("admin 创建应 201，实际=%d body=%s", rec.Code, rec.Body.String())
-	}
-	var resp RegisterResponse
-	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
-	if resp.Role != "admin" {
-		t.Errorf("admin 创建的 role 应为 admin，实际=%q", resp.Role)
-	}
-}
-
-// TestDeleteUser_SelfDelete 测试自删防护
-func TestDeleteUser_SelfDelete(t *testing.T) {
-	h, _ := setupTestAuthWithAdmin(t)
-
-	// 拿 admin cookie
-	loginBody, _ := json.Marshal(LoginRequest{Username: "admin", Password: "adminpass"})
-	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
-	loginRec := httptest.NewRecorder()
-	h.ServeHTTP(loginRec, loginReq)
-	loginResult := loginRec.Result()
-	defer loginResult.Body.Close()
-	cookies := loginResult.Cookies()
-
-	// admin 删自己（带 trailing slash 触发 subtree handler）
-	req := httptest.NewRequest(http.MethodDelete, "/api/auth/users/1/", http.NoBody)
-	req.AddCookie(cookies[0])
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("自删应 400，实际=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "yourself") {
-		t.Errorf("错误信息应含 'yourself'")
 	}
 }
 

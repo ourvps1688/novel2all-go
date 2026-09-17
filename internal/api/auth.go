@@ -44,21 +44,6 @@ type RegisterResponse struct {
 	Role     string `json:"role"`
 }
 
-// UserResponse GET /api/auth/users 单个用户
-type UserResponse struct {
-	ID        int64     `json:"id"`
-	Username  string    `json:"username"`
-	Role      string    `json:"role"`
-	Disabled  bool      `json:"disabled"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// UsersListResponse GET /api/auth/users
-type UsersListResponse struct {
-	Users []UserResponse `json:"users"`
-	Count int            `json:"count"`
-}
-
 // AuditEntryResponse GET /api/auth/audit
 type AuditEntryResponse struct {
 	ID        int64     `json:"id"`
@@ -94,10 +79,11 @@ type LoginResponse struct {
 //	POST /api/auth/logout
 //	GET  /api/auth/me
 //	POST /api/auth/register
-//	GET/POST/DELETE /api/auth/users[/{id}]
 //	GET /api/auth/audit
 //
-//nolint:gocyclo // auth 路由多分支（login/logout/me/register/users/audit 各 method 检查）
+// 注意: /api/auth/users[/{id}] 由独立 UsersHandler 处理 (Sprint 17 抽出).
+//
+//nolint:gocyclo // auth 路由多分支（login/logout/me/register/audit 各 method 检查）
 func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/auth")
 	path = strings.Trim(path, "/")
@@ -129,16 +115,7 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.register(w, r)
 	case "audit":
 		h.handleAudit(w, r)
-	}
-
-	// /api/auth/users 或 /api/auth/users/{id}[/]
-	if path == "users" || strings.HasPrefix(path, "users/") {
-		h.handleUsers(w, r)
-		return
-	}
-
-	// 未匹配 → 404
-	if path != "login" && path != "logout" && path != "me" && path != "register" && path != "audit" {
+	default:
 		http.NotFound(w, r)
 	}
 }
@@ -300,159 +277,6 @@ func (h *AuthHandler) register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleUsers 路由分发：GET 列表 / POST 创建（admin） / DELETE 删除（admin）
-func (h *AuthHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
-	// 解析子路径：/api/auth/users 或 /api/auth/users/{id}[/]
-	path := strings.TrimPrefix(r.URL.Path, "/api/auth/users")
-	path = strings.Trim(path, "/")
-
-	if path == "" {
-		// 列表 / 创建
-		switch r.Method {
-		case http.MethodGet:
-			h.listUsers(w, r)
-		case http.MethodPost:
-			h.createUser(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-		return
-	}
-
-	// /api/auth/users/{id} → 删除（允许带 / 结尾）
-	idStr := strings.TrimSuffix(path, "/")
-	if r.Method == http.MethodDelete {
-		h.deleteUser(w, r, idStr)
-		return
-	}
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-}
-
-// listUsers GET /api/auth/users（admin guard）
-func (h *AuthHandler) listUsers(w http.ResponseWriter, r *http.Request) {
-	requestor, err := h.requireAdmin(w, r)
-	if err != nil {
-		return
-	}
-	_ = requestor
-
-	users, err := h.manager.ListUsers(r.Context())
-	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
-		return
-	}
-
-	resp := UsersListResponse{Users: make([]UserResponse, 0, len(users)), Count: len(users)}
-	for _, u := range users {
-		resp.Users = append(resp.Users, UserResponse{
-			ID:        u.ID,
-			Username:  u.Username,
-			Role:      u.Role,
-			Disabled:  u.Disabled,
-			CreatedAt: u.CreatedAt,
-		})
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(resp)
-}
-
-// createUser POST /api/auth/users（admin guard，admin only）
-func (h *AuthHandler) createUser(w http.ResponseWriter, r *http.Request) {
-	requestor, err := h.requireAdmin(w, r)
-	if err != nil {
-		return
-	}
-	_ = requestor
-
-	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"invalid JSON: %v"}`, err), http.StatusBadRequest)
-		return
-	}
-
-	// admin 可指定 role
-	role := req.Role
-	if role == "" {
-		role = roleUser
-	}
-	if role != roleAdmin && role != roleUser {
-		http.Error(w, fmt.Sprintf(`{"error":"invalid role: %q"}`, role), http.StatusBadRequest)
-		return
-	}
-
-	user, err := h.manager.Register(r.Context(), auth.RegisterInput{
-		Username: req.Username,
-		Password: req.Password,
-		Role:     role,
-	})
-	if err != nil {
-		if errors.Is(err, store.ErrUserExists) {
-			http.Error(w, `{"error":"username already taken"}`, http.StatusConflict)
-			return
-		}
-		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
-		return
-	}
-
-	ip := clientIP(r)
-	ua := r.UserAgent()
-	uid := user.ID
-	_ = store.AuditEntry{
-		EventType: "create_user",
-		UserID:    &uid,
-		Username:  user.Username,
-		IP:        ip,
-		UserAgent: ua,
-		Success:   true,
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(RegisterResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		Role:     user.Role,
-	})
-}
-
-// deleteUser DELETE /api/auth/users/{id}（admin guard, self-delete 防护）
-func (h *AuthHandler) deleteUser(w http.ResponseWriter, r *http.Request, idStr string) {
-	requestor, err := h.requireAdmin(w, r)
-	if err != nil {
-		return
-	}
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
-		return
-	}
-
-	u, err := h.getUserByID(r, id)
-	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusNotFound)
-		return
-	}
-
-	if err := h.manager.DeleteUser(r.Context(), requestor, u); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
-		return
-	}
-
-	// 写审计
-	uid := id
-	_ = store.AuditEntry{
-		EventType: "delete_user",
-		UserID:    &uid,
-		Username:  u.Username,
-		IP:        clientIP(r),
-		UserAgent: r.UserAgent(),
-		Success:   true,
-	}
-
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // handleAudit GET /api/auth/audit?limit=50&offset=0（admin guard）
 func (h *AuthHandler) handleAudit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -498,8 +322,8 @@ func (h *AuthHandler) handleAudit(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// requireAdmin 验证 cookie + 必须是 admin
-// 通过返回 user; 不通过返回 nil + 写 401/403
+// requireAdmin 验证 cookie + 必须是 admin.
+// 通过返回 user; 不通过返回 nil + 写 401/403.
 func (h *AuthHandler) requireAdmin(w http.ResponseWriter, r *http.Request) (*store.User, error) {
 	token := h.manager.GetTokenFromRequest(r)
 	user, err := h.manager.GetUserByToken(r.Context(), token)
@@ -512,11 +336,4 @@ func (h *AuthHandler) requireAdmin(w http.ResponseWriter, r *http.Request) (*sto
 		return nil, fmt.Errorf("admin required")
 	}
 	return user, nil
-}
-
-// getUserByID 内部 helper（避免 handler 直接 import store 多重）
-func (h *AuthHandler) getUserByID(r *http.Request, id int64) (*store.User, error) {
-	// 用 store.DB 的方法（通过 session manager 拿 db 引用有点绕，简单直接 import）
-	// 实际上 SessionManager 没有暴露 GetUserByID,加一个 getter
-	return h.manager.GetUserByID(r.Context(), id)
 }
