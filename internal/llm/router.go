@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -39,6 +40,9 @@ type Router struct {
 
 	// metrics 钩子（P1-F 切片 9，可选）
 	hook atomic.Pointer[MetricsHook]
+
+	// cache 钩子（Sprint 15 commit G，可选）
+	cache atomic.Pointer[Cache]
 }
 
 type routeConfig struct {
@@ -176,8 +180,18 @@ func (r *Router) ChatStream(ctx context.Context, req Request, ch chan<- Chunk) e
 	return nil
 }
 
-// Chat 非流式调用（自动路由）
+// Chat 非流式调用（自动路由 + cache 集成）
 func (r *Router) Chat(ctx context.Context, req Request) (*Response, error) {
+	// Cache lookup（仅非流式；ChatStream 不缓存 chunks）
+	if cp := r.cache.Load(); cp != nil {
+		prompt := r.promptFromRequest(req)
+		cached, hit := (*cp).Get(ctx, req.Task, "", prompt)
+		if hit {
+			r.recordCall("", string(req.Task), "cache_hit", cached.TokensIn, cached.TokensOut)
+			return cached, nil
+		}
+	}
+
 	start := time.Now()
 	p, model, err := r.resolve(req)
 	if err != nil {
@@ -202,12 +216,41 @@ func (r *Router) Chat(ctx context.Context, req Request) (*Response, error) {
 	}
 	r.recordCall(string(p.Name()), string(req.Task), "success", resp.TokensIn, resp.TokensOut)
 	r.recordTrace(string(p.Name()), string(req.Task), "success", time.Since(start), resp.TokensIn, resp.TokensOut)
+	// Cache write（异步，不影响返回）
+	if cp := r.cache.Load(); cp != nil {
+		prompt := r.promptFromRequest(req)
+		_ = (*cp).Set(ctx, req.Task, model, prompt, resp)
+	}
 	return resp, nil
 }
 
 // SetMetricsHook 注入 metrics 钩子（可选；不注入时 metrics 调用为 no-op）。
 func (r *Router) SetMetricsHook(h MetricsHook) {
 	r.hook.Store(&h)
+}
+
+// SetCache 注入 LLM cache（Sprint 15 commit G，可选）
+//
+// 调用后 router.Chat 会先查 cache（hit 直接返回，不调 provider API）。
+// nil 也允许（清除 cache），向后兼容。
+func (r *Router) SetCache(c *Cache) {
+	r.cache.Store(c)
+}
+
+// promptFromRequest 从 Request.Messages 拼出完整 prompt 用于 cache key
+//
+// 简单拼接：user messages 的 Content + system prompt（如果有）
+func (r *Router) promptFromRequest(req Request) string {
+	var sb strings.Builder
+	for _, m := range req.Messages {
+		if sb.Len() > 0 {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString(m.Role)
+		sb.WriteByte(':')
+		sb.WriteString(m.Content)
+	}
+	return sb.String()
 }
 
 func (r *Router) recordCall(provider, task, status string, tokensIn, tokensOut int) {

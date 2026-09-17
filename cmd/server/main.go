@@ -123,6 +123,14 @@ func run() error {
 	// 注入 LLM metrics 钩子（adapter 把 metrics + traces 桥接到 llm.MetricsHook 接口）
 	llmRouter.SetMetricsHook(&llmHookAdapter{m: metrics, t: traces})
 
+	// 注入 LLM cache（Sprint 15 commit G）
+	// - L1 内存（1024 entries）
+	// - L2 SQLite llm_cache 表（启动已有 db，连 llmRouter 共享）
+	cacheStore := store.NewCacheStore(db)
+	llmCache := llm.NewCacheWithSQLite(cacheStore, 1024)
+	llmRouter.SetCache(llmCache)
+	logger.Info("llm_cache_ready", "l1_capacity", 1024, "l2_enabled", true)
+
 	// 5.6 P1-F 切片 10：state 持久化
 	// Sprint 15：projectStore 用 SQLiteProjectsAdapter 替代内存版
 	// - store.ProjectsStore 直接读 projects 表
