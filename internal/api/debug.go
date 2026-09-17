@@ -26,8 +26,8 @@ type UserLookup interface {
 // DebugHandler 暴露 /debug/* 路由（admin only）。
 //
 // 支持的子路由：
-//  GET /debug/traces?type=http|llm|error
-//  GET /debug/info
+// GET /debug/traces?type=http|llm|error
+// GET /debug/info
 type DebugHandler struct {
 	manager UserLookup
 	metrics *obs.Metrics

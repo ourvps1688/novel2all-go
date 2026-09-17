@@ -28,7 +28,6 @@ type Deps struct {
 	Traces  *obs.TraceRecorder
 }
 
-
 // Router 返回配置好的 http.ServeMux
 //
 // P0: /health, /version
