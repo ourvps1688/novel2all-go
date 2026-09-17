@@ -9,9 +9,9 @@ import (
 
 // membershipTestCtx 包装测试 fixture（避免 3+ 元组返回）
 type membershipTestCtx struct {
-	db        *DB
-	adminID   int64
-	normalID  int64
+	db       *DB
+	adminID  int64
+	normalID int64
 }
 
 //nolint:gocritic // unnamedResult 误报: 实际返回 1 个 struct,lint 误判为 unnamed (v1.61.0 bug)
