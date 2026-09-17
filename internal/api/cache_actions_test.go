@@ -46,7 +46,9 @@ func TestCacheMigrate_Success(t *testing.T) {
 		{Key: "k1", Value: "v1"},
 		{Key: "k2", Value: "v2"},
 	}
-	writeCacheJSON(src, entries, 100, 3600)
+	if err := writeCacheJSON(src, entries, 100, 3600); err != nil {
+		t.Fatalf("writeCacheJSON: %v", err)
+	}
 
 	h := NewCacheHandler()
 	form := url.Values{}
@@ -155,6 +157,8 @@ func TestCacheRecommend_GoodConfig(t *testing.T) {
 	defer atomic.StoreInt64(&cacheHits, 0)
 	defer atomic.StoreInt64(&cacheMisses, 0)
 	defer atomic.StoreInt64(&cacheSize, 0)
+	defer atomic.StoreInt64(&cacheMaxSize, 0)
+	defer atomic.StoreInt64(&cacheTTLSec, 0)
 
 	h := NewCacheHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/cache/recommend/", http.NoBody)

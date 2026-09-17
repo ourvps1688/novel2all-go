@@ -365,16 +365,24 @@ func (h *CacheHandler) handleReset(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// backend 名常量（避免 goconst）
+const (
+	backendJSON   = "json"
+	backendSQLite = "sqlite"
+	backendRedis  = "redis"
+	backendMemory = "memory"
+)
+
 // detectBackend 根据扩展名检测 backend
 func detectBackend(path string) string {
-	if strings.HasSuffix(path, ".json") {
-		return "json"
+	if strings.HasSuffix(path, "."+backendJSON) {
+		return backendJSON
 	}
 	if strings.HasSuffix(path, ".db") || strings.HasSuffix(path, ".sqlite") {
-		return "sqlite"
+		return backendSQLite
 	}
 	if strings.HasPrefix(path, "redis://") {
-		return "redis"
+		return backendRedis
 	}
 	return "unknown"
 }
@@ -413,8 +421,8 @@ func readCacheJSON(path string) ([]cacheEntry, error) {
 	return entries, nil
 }
 
-// writeCacheJSON 写 cache JSON 文件
-func writeCacheJSON(path string, entries []cacheEntry, maxSize int, ttlSeconds int) error {
+// writeCacheJSON 写 cache JSON 文件（合并同类型 int 参数）
+func writeCacheJSON(path string, entries []cacheEntry, maxSize, ttlSeconds int) error {
 	dir := filepath.Dir(path)
 	if dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
