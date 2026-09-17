@@ -8,6 +8,7 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 	"github.com/ourvps1688/novel2all-go/internal/obs"
 	"github.com/ourvps1688/novel2all-go/internal/skills"
+	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
 // Deps 注入依赖（避免循环依赖）
@@ -17,6 +18,7 @@ type Deps struct {
 	Router  *llm.Router
 	Session *auth.SessionManager
 	Limiter *auth.RateLimiter
+	Store   *store.DB // optional - 用于 project share API
 }
 
 // Router 返回配置好的 http.ServeMux
@@ -38,6 +40,14 @@ func Router(deps Deps) *http.ServeMux {
 	if deps.Session != nil && deps.Limiter != nil {
 		authHandler := NewAuthHandler(deps.Session, deps.Limiter)
 		mux.Handle("/api/auth/", authHandler)
+	}
+
+	// Project share API（P1-F 切片 8）
+	// 单独注册到具体 path，避免和 AuthHandler 冲突（ServeMux longest-prefix match）
+	if deps.Session != nil && deps.Store != nil {
+		shareHandler := NewProjectShareHandler(deps.Session, deps.Store)
+		mux.Handle("/api/auth/projects/", shareHandler)
+		mux.Handle("/api/auth/users/", shareHandler)
 	}
 
 	// Skills API（P1）

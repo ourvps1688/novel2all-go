@@ -111,6 +111,7 @@ func run() error {
 
 	// 6. 装配 router
 	mux := api.Router(api.Deps{
+		Store:   db,
 		Logger:  logger,
 		Loader:  skillLoader,
 		Router:  llmRouter,

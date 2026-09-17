@@ -50,10 +50,29 @@ CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_log(event_type);
 CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at);
 `
 
-// Migrate 跑 schema migration（目前只有 v001，未来加 v002/v003 改这里）
+// schema002 P1-F 切片 8：project_memberships（项目分享 + users/projects 关联）
+const schema002 = `
+CREATE TABLE IF NOT EXISTS project_memberships (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL,
+    project_path  TEXT NOT NULL,
+    role          TEXT NOT NULL DEFAULT 'viewer',  -- 'owner' | 'editor' | 'viewer'
+    granted_by    INTEGER NOT NULL DEFAULT 0,
+    granted_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, project_path),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_pm_project_path ON project_memberships(project_path);
+CREATE INDEX IF NOT EXISTS idx_pm_user_id ON project_memberships(user_id);
+`
+
+// Migrate 跑 schema migration（按版本顺序应用）
 func (db *DB) Migrate(ctx context.Context) error {
-	if _, err := db.ExecContext(ctx, schema001); err != nil {
-		return fmt.Errorf("apply schema001: %w", err)
+	for _, stmt := range []string{schema001, schema002} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("apply migration: %w", err)
+		}
 	}
 	return nil
 }
