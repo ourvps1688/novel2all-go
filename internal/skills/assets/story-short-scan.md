@@ -1,7 +1,14 @@
 ---
 name: story-short-scan
 description: "novel2all 短篇扫榜：知乎盐言 / 番茄短篇 / 七猫短篇 情绪与题材信号识别。"
+status: partial
+since: v0.30.0
 ---
+
+> Go 端状态 (Sprint 33): **部分实现**。
+> - LLM 内置知识 + 平台特点分析：✅ 完整
+> - `references/genre-trends.md` 历史趋势参考：⚠️ 待 Sprint 35 补 references/ 加载
+> - browser-cdp 抓取榜单数据：❌ 待 Sprint 34+ 补
 
 # story-short-scan：短篇扫榜
 

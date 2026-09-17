@@ -1,7 +1,13 @@
 ---
 name: story
 description: "novel2all 网文工具箱主入口。根据用户需求自动路由到对应 skill，管理作者习惯。触发方式：/story、/网文、「我想写小说」「记住我的写作习惯」。"
+status: full
+since: v0.30.0
 ---
+
+> Go 端调整 (Sprint 33): 删 Python IDE spawn 段（Go 端无 IDE 集成 runtime），
+> 统一方法名为 CamelCase（LoadForWriting 而非 load_for_writing）。
+> Go 端 RoleRegistry 通过 `roles.StageToRole()` 映射，无需 spawn 独立 agent。
 
 # story：novel2all 工具箱路由
 
@@ -29,16 +35,16 @@ description: "novel2all 网文工具箱主入口。根据用户需求自动路�
 
 ## 长记忆系统
 
-novel2all 使用 5 层 memory 系统（详见 `core/memory`）：
+novel2all 使用 5 层 memory 系统（详见 `internal/memory/`）：
 
-- L1: 核心设定（永远加载）
-- L2: 角色状态（按需加载）
-- L3: 最近章节摘要（滑动窗口）
-- L4: 事件检索（向量检索，v0.21+）
-- L5: 知识图谱（tool call 查询）
+- L1: 核心设定（永远加载）→ `ProjectStructure.SetupMD() + StyleMD() + WorldviewDir()`
+- L2: 角色状态（按需加载）→ `MemoryContext.L2 (Tracker.GetCharacter per char)`
+- L3: 最近章节摘要（滑动窗口）→ `MemoryContext.L3 (Tracker.GetRecentSummaries)`
+- L4: 事件检索（向量检索）→ `MemoryRetriever.Query(text, topK)`
+- L5: 知识图谱（tool call 查询）→ `MemoryGraph` methods（Sprint 34 暴露为 tool）
 
-每次写正文前，调用 MemoryManager.load_for_writing() 加载相关 memory。
-写完后调用 update_after_writing() 自动更新 _tracking-state.json。
+每次写正文前，调用 `MemoryManager.LoadForWriting(ctx, chapter, outline, characters)` 加载相关 memory。
+写完后调用 `MemoryManager.UpdateAfterWriting(ctx, chapter, content)` 自动更新 `_tracking-state.json`。
 
 ## 工作流
 
@@ -72,10 +78,26 @@ novel2all 使用 5 层 memory 系统（详见 `core/memory`）：
 └── 拆文库/
 ```
 
-## 子 skill 调用约定
+## 子 skill 调用约定（Go 端）
 
 调用其他 skill 时：
-- 加载目标 skill 的 SKILL.md 正文
-- 拼接当前 memory context（如果涉及写作）
-- 调对应 skill 处理
-- 不要"启动独立运行时"——所有 skill 都在同一个 novel2all runtime
+- 加载目标 skill 的 SKILL.md 正文（embed.FS 13 个 .md 已在 `internal/skills/assets/`）
+- 拼接当前 memory context（如果涉及写作）：
+  - `MemoryManager.LoadForWriting(ctx, chapter, outline, characters)`
+  - 返回 `MemoryContext`，调 `ToSystemSections()` 拼到 system prompt
+- 调 `skills.Executor.Execute(ctx, ExecuteInput{SkillName, UserInput, Vars}, ch)` 流式执行
+- **不启动独立运行时**——所有 skill 都在同一个 Go process
+
+## 角色映射（Go 端）
+
+Go 端 `internal/roles/roles.go` 提供 5 个 Role：
+- `story_outliner`：大纲 / 结构 / 伏笔
+- `chapter_writer`：章节写作 / 文风 / 节奏
+- `consistency_checker`：一致性 / 设定冲突
+- `story_reviewer`：多视角审稿
+- `character_extractor`：人物提取
+
+调用：`roles.StageToRole(stageName)` 返回对应 Role。
+
+> Go 端无 Python V1 的 `story-explorer` / `story-researcher` role。
+> 类似功能由 `MemoryManager.LoadForWriting`（探索）+ `MemoryRetriever.Query`（检索）替代。

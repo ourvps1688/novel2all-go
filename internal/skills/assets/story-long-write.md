@@ -1,7 +1,18 @@
 ---
 name: story-long-write
 description: "novel2all 长篇写作：题材定位、大纲搭建、人物设定、正文输出。使用 5 层 memory 系统保持长篇一致性。"
+status: partial
+since: v0.30.0
 ---
+
+> Go 端状态 (Sprint 33):
+> - 5 层 memory 自动注入 prompt：✅ Sprint 32 完成（`MemoryManager.LoadForWriting` → `MemoryContext.ToSystemSections`）
+> - 文风/世界观/references 自动加载：⚠️ Sprint 35 补 references/
+> - L5 知识图谱 tool call：⚠️ Sprint 34 补 OpenAI/Anthropic function calling
+> - pre-write / post-write check：✅ Sprint 32 完成（`Verifier.PreWriteCheck` / `PostWriteCheck`）
+> - 自动 Extractor + Tracker 更新：✅ Sprint 32 完成
+>
+> V0.30 可用性：✅ 可跑（5 层 memory + LLM 流式），tool call 部分等 Sprint 34。
 
 # story-long-write：长篇写作
 

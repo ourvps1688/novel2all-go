@@ -1,7 +1,13 @@
 ---
 name: browser-cdp
-description: "novel2all 浏览器能力适配：通过 Playwright（不是 CDP 自启动）实现网页抓取、登录态复用。"
+description: "novel2all 浏览器能力适配：通过 Playwright/chromedp 实现网页抓取、登录态复用。"
+status: missing
+since: v0.30.0
 ---
+
+> Go 端状态 (Sprint 33): **本 skill 暂不可用**。Go 端尚未集成 Playwright 或 chromedp。
+> Python 代码示例（async_playwright）Go 端跑不了。Sprint 34+ 才补 chromedp 集成。
+> V0 期间请改用 Python V1 端跑浏览器抓取，或手抓数据 + 上传。
 
 # browser-cdp：浏览器能力
 
@@ -20,7 +26,7 @@ novel2all 的浏览器抓取能力。**不启动 Chrome / CDP 端口 / 独立浏
    - 用户授权（涉及登录态必须问）
    - 不绕过验证码 / 付费墙 / IP 限制
 
-## 用法
+## 用法（Python V1 参考）
 
 ```python
 from playwright.async_api import async_playwright
@@ -38,6 +44,9 @@ async with async_playwright() as p:
     
     await browser.close()
 ```
+
+> ⚠️ **Go 端尚未移植**：本 SKILL.md 仅 Python V1 可用。
+> Go 实现待 Sprint 34+ 补 chromedp 集成，参考 chromedp example: `chromedp.NewContext(alloc)` + `chromedp.Run(ctx, chromedp.Navigate(url))` + `chromedp.Text(".item", &data)`。
 
 ## 关键原则
 

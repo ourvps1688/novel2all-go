@@ -1,7 +1,16 @@
 ---
 name: story-long-scan
 description: "novel2all 长篇扫榜：基于可核验样本识别长篇网文趋势，分析题材分布、新题材信号、篇幅与更新模式。"
+status: partial
+since: v0.30.0
 ---
+
+> Go 端状态 (Sprint 33): **部分实现**。
+> - LLM 内置知识 + 用户提供数据：✅ 完整（Go 端调用 `llm.Router.Chat`）
+> - `references/genre-trends.md` 历史趋势参考：⚠️ 待 Sprint 35 补 references/ 加载
+> - browser-cdp 抓取榜单：❌ Sprint 34+ 补（Go 端无 Playwright/chromedp）
+>
+> V0 使用建议：用户提供样本数据 + 用 LLM 内置知识分析，效果已经很好。
 
 # story-long-scan：长篇扫榜
 

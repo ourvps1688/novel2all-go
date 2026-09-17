@@ -1,20 +1,29 @@
 ---
 name: story-review
-description: "novel2all 多视角审查：4 个 Role 多视角审稿（一致性 / 伏笔追踪 / 设定冲突 / 文风 / AI 味）。"
+description: "novel2all 多视角审查：4 视角并行审稿（一致性 / 文风 / 人物 / 结构）。"
+status: full
+since: v0.30.0
 ---
+
+> Go 端调整 (Sprint 33): 4 个 Python Role 名改成 Go 端 5 role 的对应视角。
+> 原 Python 4 role (consistency-checker/narrative-writer/character-designer/story-architect)
+> 对应 Go 5 role: consistency_checker / chapter_writer(文风) / character_extractor(人物) / story_outliner(结构)。
+> 保留"多视角并行审稿"理念不变。
 
 # story-review：多视角审查
 
 调 4 个 Role 并行审稿，每个 Role 从不同视角检查章节质量。
 
-## 4 个审稿 Role
+## 4 个审稿视角（Go 端映射）
 
-| Role | 视角 | 关注点 |
-|---|---|---|
-| `consistency-checker` | 内部一致性 | 角色性格漂移 / 设定冲突 / 时间线硬伤 |
-| `narrative-writer` | 文风与节奏 | 偏离文风 / AI 味 / 钩子弱 / 节奏拖沓 |
-| `character-designer` | 人物塑造 | 角色行为合理 / 对话贴脸 / 动机连贯 |
-| `story-architect` | 结构与伏笔 | 伏笔是否被收回 / 新伏笔是否埋好 / 与全局大纲对得上 |
+| Go 端 Role | 原 Python Role | 视角 | 关注点 |
+|-----------|---------------|------|------|
+| `consistency_checker` | consistency-checker | 内部一致性 | 角色性格漂移 / 设定冲突 / 时间线硬伤 |
+| `chapter_writer` | narrative-writer | 文风与节奏 | 偏离文风 / AI 味 / 钩子弱 / 节奏拖沓 |
+| `character_extractor` | character-designer | 人物塑造 | 角色行为合理 / 对话贴脸 / 动机连贯 |
+| `story_outliner` | story-architect | 结构与伏笔 | 伏笔是否被收回 / 新伏笔是否埋好 / 与全局大纲对得上 |
+
+> 调用用 Go 端 role ID（snake_case）：`MultiAgentReviewer.ReviewByRole(roleID, content, context)`
 
 ## 工作流
 
