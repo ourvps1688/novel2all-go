@@ -47,15 +47,15 @@ func TestMemoryGraph_AddNodeEdge(t *testing.T) {
 
 func TestMemoryGraph_RemoveNode(t *testing.T) {
 	g := newTestGraph()
-	if !g.RemoveNode("char:bob") {
+	if !g.RemoveNode(charBob) {
 		t.Fatal("RemoveNode should return true")
 	}
-	if g.HasNode("char:bob") {
+	if g.HasNode(charBob) {
 		t.Error("bob should be removed")
 	}
 	// edges with bob should also be gone
 	for _, e := range g.IterEdges() {
-		if e.FromID == "char:bob" || e.ToID == "char:bob" {
+		if e.FromID == charBob || e.ToID == charBob {
 			t.Errorf("edge with bob not removed: %+v", e)
 		}
 	}
@@ -81,10 +81,10 @@ func TestMemoryGraph_GetPath(t *testing.T) {
 	if len(path) != 2 {
 		t.Errorf("path length = %d, want 2", len(path))
 	}
-	if path[0].FromID != "char:alice" || path[0].ToID != "char:bob" {
+	if path[0].FromID != charAlice || path[0].ToID != charBob {
 		t.Errorf("first edge wrong: %+v", path[0])
 	}
-	if path[1].FromID != "char:bob" || path[1].ToID != "char:carol" {
+	if path[1].FromID != charBob || path[1].ToID != charCarol {
 		t.Errorf("second edge wrong: %+v", path[1])
 	}
 
