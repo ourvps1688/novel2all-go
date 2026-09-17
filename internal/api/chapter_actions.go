@@ -56,6 +56,33 @@ type ActionResponse struct {
 	AppendedChars int    `json:"appended_chars,omitempty"`
 	ElapsedMS     int64  `json:"elapsed_ms"`
 	Message       string `json:"message,omitempty"`
+	// Issues Sprint 34c: verifier post-check 报告 (consistency/style/character drift).
+	// 为空时 omitempty 不序列化, V0.30 调用方 JSON 兼容.
+	Issues []PostCheckIssue `json:"issues,omitempty"`
+}
+
+// PostCheckIssue verifier 报告的 1 条问题 (Sprint 34c).
+//
+// Severity: info/warning/critical.
+// Category: consistency/character/style/plot/pacing/other.
+// Message:  简短描述 (≤200 字, 不含 markdown).
+type PostCheckIssue struct {
+	Severity string `json:"severity"`
+	Category string `json:"category"`
+	Message  string `json:"message"`
+}
+
+// Verifier action 后置一致性/文风/角色一致性检查接口 (Sprint 34c).
+//
+// ChapterActions.expand/rewrite/insert 完成后调用, 结果写到 ActionResponse.Issues.
+// verifier=nil 时跳过检查 (向后兼容, V0.30 mock 路径).
+//
+// 期望行为:
+//   - 不修改 content, 只读.
+//   - 返回 ≤20 条 issue, 多了截断.
+//   - 内部失败 (panic) 应被 recover, 不影响 action 成功.
+type Verifier interface {
+	Check(ctx context.Context, content string) []PostCheckIssue
 }
 
 // ReviewResult review 输出
@@ -84,11 +111,28 @@ type ChapterActions struct {
 	// Sprint 34: 注入 MemoryManager 让 callLLMSync/callLLMAppend 拼 5 层 memory + settings 到 system prompt.
 	// nil = 走 V0.29 mock 路径 (向后兼容).
 	memMgr *memory.MemoryManager
+
+	// Sprint 34c: 注入 Verifier, action 完成后跑 post-check 写到 ActionResponse.Issues.
+	// nil = 跳过检查 (向后兼容).
+	verifier Verifier
 }
 
 // NewChapterActions 创建
 func NewChapterActions(executor *skills.Executor) *ChapterActions {
 	return &ChapterActions{executor: executor}
+}
+
+// NewChapterActionsWithVerifier 创建带 verifier post-check 的 ChapterActions (Sprint 34c).
+//
+// 用法:
+//
+//	actions := api.NewChapterActionsWithVerifier(executor, memMgr, verifier)
+//
+// 与 NewChapterActions + NewChapterActionsWithMemory 并存; 不破坏现有调用.
+// memMgr=nil 跳过 memory 注入 (V0.29 mock 路径).
+// verifier=nil 跳过 post-check.
+func NewChapterActionsWithVerifier(executor *skills.Executor, memMgr *memory.MemoryManager, v Verifier) *ChapterActions {
+	return &ChapterActions{executor: executor, memMgr: memMgr, verifier: v}
 }
 
 // NewChapterActionsWithMemory 创建带 memory 注入的 ChapterActions.
@@ -158,6 +202,7 @@ func (a *ChapterActions) expand(w http.ResponseWriter, r *http.Request, chapter 
 		CharsAfter:    len([]rune(newContent)),
 		AppendedChars: len([]rune(appended)),
 		ElapsedMS:     time.Since(start).Milliseconds(),
+		Issues:        a.runVerifierCheck(r.Context(), newContent),
 	})
 }
 
@@ -196,6 +241,7 @@ func (a *ChapterActions) rewrite(w http.ResponseWriter, r *http.Request, chapter
 		CharsBefore: len([]rune(string(before))),
 		CharsAfter:  len([]rune(rewritten)),
 		ElapsedMS:   time.Since(start).Milliseconds(),
+		Issues:      a.runVerifierCheck(r.Context(), rewritten),
 	})
 }
 
@@ -280,6 +326,7 @@ func (a *ChapterActions) insert(w http.ResponseWriter, r *http.Request, chapter 
 		AppendedChars: len([]rune(strings.TrimSpace(inserted))),
 		ElapsedMS:     time.Since(start).Milliseconds(),
 		Message:       fmt.Sprintf("inserted at line %d", req.Position),
+		Issues:        a.runVerifierCheck(r.Context(), newContent),
 	})
 }
 
@@ -542,4 +589,29 @@ func mockReview(chapter, chars int, elapsedMS int64) *ReviewResult {
 		ContentChars:   chars,
 		ElapsedMS:      elapsedMS,
 	}
+}
+
+// runVerifierCheck 安全调 verifier, 防 panic; verifier=nil 返回 nil.
+//
+// Sprint 34c: expand/rewrite/insert 完成后调, 结果写到 ActionResponse.Issues.
+// 截断到 maxIssues (≤20) 防止 ActionResponse 太大.
+func (a *ChapterActions) runVerifierCheck(ctx context.Context, content string) []PostCheckIssue {
+	if a.verifier == nil {
+		return nil
+	}
+	const maxIssues = 20
+	var issues []PostCheckIssue
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// verifier 自身 panic → 静默吞, 不影响 action 成功.
+				issues = nil
+			}
+		}()
+		issues = a.verifier.Check(ctx, content)
+	}()
+	if len(issues) > maxIssues {
+		issues = issues[:maxIssues]
+	}
+	return issues
 }

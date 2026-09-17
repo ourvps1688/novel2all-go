@@ -73,7 +73,7 @@ func (h *MemoryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.handleReview(w, r)
-	case path == "rollback" || path == "rollback/":
+	case path == actionRollback || path == actionRollback+"/":
 		if !h.requireMethod(w, r, http.MethodPost) {
 			return
 		}
