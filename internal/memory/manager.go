@@ -288,6 +288,8 @@ func (m *MemoryManager) UpdateAfterWriting(ctx context.Context, chapter int, con
 //   - extracted.CharacterUpdates
 //   - extracted.TimelineEvents
 //   - 内嵌兜底: chapter 第一段 (保 retriever 非空)
+//
+//nolint:gocyclo // 4 extraction sources (foreshadowing/character/timeline/summary) + fallback
 func (m *MemoryManager) indexEventsToRetriever(chapter int, content string, extracted *ExtractedChapterInfo) {
 	if m.retriever == nil {
 		return
@@ -364,7 +366,7 @@ func (m *MemoryManager) indexEventsToRetriever(chapter int, content string, extr
 	}
 
 	// 兜底: 如 LLM 没返回 events, 用 chapter 第一段作 general 事件
-	if len(events) == 0 && len(content) > 0 {
+	if len(events) == 0 && content != "" {
 		firstPara := content
 		if idx := indexNewline(content, '\n'); idx > 0 {
 			firstPara = content[:idx]

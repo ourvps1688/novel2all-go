@@ -150,8 +150,7 @@ func (r *MultiAgentReviewer) reviewByRole(ctx context.Context, role string, chap
 
 	target := &roleReviewResult{}
 	if err := llm.GenerateJSON(ctx, r.router, req, schema, target); err != nil {
-		// 失败: 返回空 (fail-soft)
-		return nil, &QualityScore{Overall: 7.0, Reviewer: role}
+		return nil, &QualityScore{Overall: 7.0, Reviewer: role} // fail-soft
 	}
 
 	// 转换

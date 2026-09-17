@@ -21,6 +21,8 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/memory"
 )
 
+const formatJSON = "json"
+
 // runMemory 路由 memory 子命令.
 func runMemory(stdout, stderr io.Writer, args []string) error {
 	if len(args) == 0 {
@@ -130,7 +132,7 @@ func memoryQuery(stdout, stderr io.Writer, args []string) error {
 	results := retriever.Query(*text, *topK, rng, *eventType)
 
 	switch *format {
-	case "json":
+	case formatJSON:
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(results)
@@ -141,7 +143,7 @@ func memoryQuery(stdout, stderr io.Writer, args []string) error {
 		for _, item := range results {
 			// extract chapter from source "retriever#chN"
 			var ch int
-			fmt.Sscanf(item.Source, "retriever#ch%d", &ch)
+			_, _ = fmt.Sscanf(item.Source, "retriever#ch%d", &ch)
 			content := item.Content
 			if len(content) > 80 {
 				content = content[:77] + "..."

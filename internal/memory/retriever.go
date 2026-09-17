@@ -52,6 +52,8 @@ type RetrievedEvent struct {
 }
 
 // MemoryRetriever 事件检索器.
+//
+//nolint:revive // matches Python
 type MemoryRetriever struct {
 	mu sync.RWMutex
 
@@ -157,8 +159,7 @@ func (r *MemoryRetriever) saveToDisk() error {
 		return err
 	}
 	if err := os.Rename(tmp, fp); err != nil {
-		// fallback: 直接写 (best-effort)
-		return os.WriteFile(fp, data, 0o644)
+		return os.WriteFile(fp, data, 0o644) // best-effort fallback
 	}
 	return nil
 }
@@ -257,8 +258,7 @@ func (r *MemoryRetriever) AddEvent(chapter int, eventType, text string, metadata
 	}
 	r.mu.Unlock()
 
-	// 持久化 (锁外做, 减少锁持有)
-	_ = r.saveToDisk()
+	_ = r.saveToDisk() // 持久化 (锁外做, 减少锁持有)
 	return id
 }
 
@@ -290,8 +290,7 @@ func (r *MemoryRetriever) Query(text string, topK int, chapterRange *[2]int, eve
 		topK = 8
 	}
 
-	switch r.mode {
-	case ModeChromaDB:
+	if r.mode == ModeChromaDB {
 		items := r.queryChroma(text, topK, chapterRange, eventType)
 		if items != nil {
 			return items
@@ -307,9 +306,7 @@ func (r *MemoryRetriever) Query(text string, topK int, chapterRange *[2]int, eve
 // queryChroma 用 chroma + post-filter (因为 chroma.Query 不支持 metadata filter).
 func (r *MemoryRetriever) queryChroma(text string, topK int, chapterRange *[2]int, eventType string) []MemoryItem {
 	defer func() {
-		if rec := recover(); rec != nil {
-			// 检索失败: 返回 nil 触发降级
-		}
+		_ = recover() // 检索失败: 返回 nil 触发降级
 	}()
 
 	if r.chroma == nil {
@@ -583,6 +580,8 @@ func tokenizeForSearch(text string) []string {
 }
 
 // tfidfScores TF-IDF 余弦相似度 (Python _tfidf_scores 移植).
+//
+//nolint:gocyclo // TF-IDF 计算含 tf + idf + cosine 三层逻辑, 复杂度天然高
 func tfidfScores(query string, docs []string) []float64 {
 	if len(docs) == 0 {
 		return nil
@@ -703,7 +702,7 @@ func tryUpsert(r *MemoryRetriever, id, text string, meta map[string]string) {
 // parseChapterFromID 从 "chN-type-hash" 解析 chapter (降级 fallback 用).
 func parseChapterFromID(id string) int {
 	var n int
-	fmt.Sscanf(id, "ch%d-", &n)
+	_, _ = fmt.Sscanf(id, "ch%d-", &n)
 	if n < 0 {
 		return 0
 	}
@@ -711,6 +710,4 @@ func parseChapterFromID(id string) int {
 }
 
 // osRemoveAll 生产 = os.RemoveAll (test 可覆盖).
-var osRemoveAll = func(p string) error {
-	return os.RemoveAll(p)
-}
+var osRemoveAll = os.RemoveAll
