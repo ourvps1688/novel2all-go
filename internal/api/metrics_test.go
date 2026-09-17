@@ -21,7 +21,7 @@ func TestMetricsHandler_ServesPrometheusText(t *testing.T) {
 
 	h := NewMetricsHandler(m)
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -56,7 +56,7 @@ func TestMetricsHandler_ServesPrometheusText(t *testing.T) {
 func TestMetricsHandler_NilMetricsReturns503(t *testing.T) {
 	h := NewMetricsHandler(nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -69,7 +69,7 @@ func TestMetricsHandler_NoAuthRequired(t *testing.T) {
 	// 验证不要求 cookie / Authorization header
 	h := NewMetricsHandler(obs.NewMetrics("test", "test", "test"))
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody)
 	// 故意不设置任何 cookie
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -85,7 +85,7 @@ func TestMetricsHandler_ObservesHTTPDuration(t *testing.T) {
 	m.ObserveHTTPDuration("GET", "/api/cache/stats", 150*time.Millisecond)
 
 	h := NewMetricsHandler(m)
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 

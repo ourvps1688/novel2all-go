@@ -178,7 +178,7 @@ func TestDebugHandler_Traces_TypeFilter(t *testing.T) {
 func TestDebugHandler_Info_RequiresAdmin(t *testing.T) {
 	h := newDebugHandler(newMockLookup("admin-token", "user-token"), obs.NewMetrics("test", "test", "test"), obs.NewTraceRecorder(10))
 
-	req := httptest.NewRequest(http.MethodGet, "/debug/info", nil)
+	req := httptest.NewRequest(http.MethodGet, "/debug/info", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusUnauthorized {
@@ -198,7 +198,7 @@ func TestDebugHandler_Info_Structure(t *testing.T) {
 
 	h := newDebugHandler(newMockLookup("admin-token", "user-token"), metrics, traces)
 
-	req := httptest.NewRequest(http.MethodGet, "/debug/info", nil)
+	req := httptest.NewRequest(http.MethodGet, "/debug/info", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -240,7 +240,7 @@ func TestDebugHandler_Info_Structure(t *testing.T) {
 func TestDebugHandler_UnknownSubPath(t *testing.T) {
 	h := newDebugHandler(newMockLookup("admin-token", "user-token"), obs.NewMetrics("test", "test", "test"), obs.NewTraceRecorder(10))
 
-	req := httptest.NewRequest(http.MethodGet, "/debug/unknown", nil)
+	req := httptest.NewRequest(http.MethodGet, "/debug/unknown", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -253,7 +253,7 @@ func TestDebugHandler_MethodNotAllowed(t *testing.T) {
 	h := newDebugHandler(newMockLookup("admin-token", "user-token"), obs.NewMetrics("test", "test", "test"), obs.NewTraceRecorder(10))
 
 	// POST /debug/traces → 405
-	req := httptest.NewRequest(http.MethodPost, "/debug/traces", nil)
+	req := httptest.NewRequest(http.MethodPost, "/debug/traces", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -262,7 +262,7 @@ func TestDebugHandler_MethodNotAllowed(t *testing.T) {
 	}
 
 	// POST /debug/info → 405
-	req = httptest.NewRequest(http.MethodPost, "/debug/info", nil)
+	req = httptest.NewRequest(http.MethodPost, "/debug/info", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -274,7 +274,7 @@ func TestDebugHandler_MethodNotAllowed(t *testing.T) {
 func TestDebugHandler_NilManagerReturns503(t *testing.T) {
 	h := NewDebugHandler(nil, obs.NewMetrics("test", "test", "test"), obs.NewTraceRecorder(10))
 
-	req := httptest.NewRequest(http.MethodGet, "/debug/traces", nil)
+	req := httptest.NewRequest(http.MethodGet, "/debug/traces", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusServiceUnavailable {
