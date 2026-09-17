@@ -115,6 +115,10 @@ type ChapterActions struct {
 	// Sprint 34c: 注入 Verifier, action 完成后跑 post-check 写到 ActionResponse.Issues.
 	// nil = 跳过检查 (向后兼容).
 	verifier Verifier
+
+	// Sprint 35: 注入 ReferencesLoader, 让 buildActionSystemPrompt 拼 references 段.
+	// nil = 跳过 references (V0.30 mock 路径).
+	refLoader ReferencesLoader
 }
 
 // NewChapterActions 创建
@@ -133,6 +137,17 @@ func NewChapterActions(executor *skills.Executor) *ChapterActions {
 // verifier=nil 跳过 post-check.
 func NewChapterActionsWithVerifier(executor *skills.Executor, memMgr *memory.MemoryManager, v Verifier) *ChapterActions {
 	return &ChapterActions{executor: executor, memMgr: memMgr, verifier: v}
+}
+
+// NewChapterActionsFull 创建 Sprint 34+35 全功能 ChapterActions.
+//
+// 参数:
+//   - executor: skills 执行器
+//   - memMgr:   5 层 memory 注入 (nil = V0.29 mock)
+//   - v:        verifier post-check (nil = 跳过)
+//   - rl:       references 按 skill 自动加载 (nil = 跳过)
+func NewChapterActionsFull(executor *skills.Executor, memMgr *memory.MemoryManager, v Verifier, rl ReferencesLoader) *ChapterActions {
+	return &ChapterActions{executor: executor, memMgr: memMgr, verifier: v, refLoader: rl}
 }
 
 // NewChapterActionsWithMemory 创建带 memory 注入的 ChapterActions.
@@ -502,6 +517,30 @@ func (a *ChapterActions) buildActionSystemPrompt(ctx context.Context, req Action
 		}
 	}
 
+	// 1.5 Sprint 35: References (按 skill 自动加载)
+	if a.refLoader != nil {
+		// 用 action 推导 skill: chapter actions (expand/rewrite/insert/review) 都用同一基础 skill set
+		// V0 简化: 用 chapter 数字区分不出, 全部传 "" 让 LoadForSkill 返回 defaults
+		refs := a.refLoader.LoadForSkill(req.skillForReference())
+		if len(refs) > 0 {
+			var refSection strings.Builder
+			refSection.WriteString("# References\n")
+			for _, r := range refs {
+				body := a.refLoader.LoadByName(r)
+				if body == "" {
+					continue
+				}
+				refSection.WriteString("\n\n## ")
+				refSection.WriteString(r)
+				refSection.WriteString("\n")
+				refSection.WriteString(body)
+			}
+			if refSection.Len() > len("# References\n") {
+				parts = append(parts, refSection.String())
+			}
+		}
+	}
+
 	// 2. Project settings (设定/文风.md + 创作设定.md)
 	settingMDs := []string{"设定/文风.md", "创作设定.md"}
 	for _, rel := range settingMDs {
@@ -521,6 +560,17 @@ func (a *ChapterActions) buildActionSystemPrompt(ctx context.Context, req Action
 		result = result[:32000] + "\n\n[... truncated ...]"
 	}
 	return result
+}
+
+// skillForReference 从 ActionRequest 推导 reference dispatch skill 名.
+//
+// Sprint 35: 暂用 action 名 (expand/rewrite/review/insert) 直接映射.
+// V1.0: 按 user 配置的 writing_skill 字段 + chapter action type 双维度 dispatch.
+func (r ActionRequest) skillForReference() string {
+	// 留空 → LoadForSkill 只返回 defaults (style-anchor + deslop-rules + platform-style).
+	// action-specific references 通过 defaultSkillDispatch 的空 mapping 覆盖.
+	// 后续 Sprint 可在 ActionRequest 加 SkillName 字段让 user 配置.
+	return ""
 }
 
 func buildActionUserInput(req ActionRequest, chapter int, action string) string {

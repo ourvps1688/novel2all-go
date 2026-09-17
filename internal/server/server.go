@@ -26,6 +26,7 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 	"github.com/ourvps1688/novel2all-go/internal/memory"
 	"github.com/ourvps1688/novel2all-go/internal/obs"
+	"github.com/ourvps1688/novel2all-go/internal/references"
 	"github.com/ourvps1688/novel2all-go/internal/skills"
 	"github.com/ourvps1688/novel2all-go/internal/store"
 	"github.com/ourvps1688/novel2all-go/internal/version"
@@ -165,6 +166,18 @@ func Run(cfg *config.Config) error {
 		"extractor", memMgr.Extractor() != nil,
 	)
 
+	// 6.6 Sprint 35: References loader (写作技巧/平台特征/文风锚定 reference 库).
+	//
+	// 默认从 internal/references/assets/ embed.FS 加载 (23 个 starter references).
+	// 未来 Sprint 支持用户自定义 references 热加载 (ReloadFromDisk).
+	refLoader := references.NewLoader()
+	loaded, refCount, defaultCount := refLoader.Stats()
+	logger.Info("references_loader_ready",
+		"loaded", loaded,
+		"skills", refCount,
+		"defaults", defaultCount,
+	)
+
 	// 7. 装配 router
 	deps := api.Deps{
 		Store:        db,
@@ -182,7 +195,8 @@ func Run(cfg *config.Config) error {
 		ChaptersMeta: chaptersSQLStore,
 	}
 	deps.SetProjectStore(projectStore)
-	deps.SetMemoryManager(memMgr) // Sprint 32: 注入 WriteHandler
+	deps.SetMemoryManager(memMgr)       // Sprint 32: 注入 WriteHandler
+	deps.SetReferencesLoader(refLoader) // Sprint 35: 注入 references loader
 	mux := api.Router(deps)
 	handler := api.LoggingMiddleware(logger, metrics, traces, mux)
 	// 套一层 security headers middleware (Sprint 21)

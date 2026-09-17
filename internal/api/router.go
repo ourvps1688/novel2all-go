@@ -53,6 +53,10 @@ type Deps struct {
 	// 可选, nil = 走 V0.29 mock 路径 (向后兼容).
 	MemoryMgr *memory.MemoryManager
 
+	// Sprint 35: references.Loader 拼 system prompt (按 skill 自动加载 references).
+	// nil = 跳过 references 段 (V0.30 mock 路径).
+	RefLoader ReferencesLoader
+
 	// projectStore 共享 ProjectStore（切片 10 让 State 持久化 projects）
 	// 未导出避免 main.go 误用（应该只通过 State 间接访问）
 	// 用 SetProjectStore 方法设置（main.go 在外部构造 Deps）
@@ -78,6 +82,14 @@ func (d *Deps) SetProjectStore(ps ProjectsRepo) {
 // chunk 直接 mock, 不调真 LLM).
 func (d *Deps) SetMemoryManager(mm *memory.MemoryManager) {
 	d.MemoryMgr = mm
+}
+
+// SetReferencesLoader 设置 references.Loader (Sprint 35).
+//
+// 注入到 WriteHandler 让 handleStream 拼 system prompt 时按 skill 自动加载
+// references (钩子技法/文风锚定/伏笔等). nil 时跳过 (V0.30 mock 路径).
+func (d *Deps) SetReferencesLoader(rl ReferencesLoader) {
+	d.RefLoader = rl
 }
 
 // Router 返回配置好的 http.ServeMux
@@ -218,7 +230,7 @@ func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 		var writeHandler *WriteHandler
 		// Sprint 32: 用 NewWriteHandlerWithMemory 注入 MemoryManager (5 层 memory 自动加载)
 		if deps.MemoryMgr != nil {
-			writeHandler = NewWriteHandlerWithMemory(executor, deps.Loader, deps.MemoryMgr, nil /* refLoader Sprint 35 */)
+			writeHandler = NewWriteHandlerWithMemory(executor, deps.Loader, deps.MemoryMgr, deps.RefLoader)
 		} else {
 			writeHandler = NewWriteHandler(executor, deps.Loader)
 		}

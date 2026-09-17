@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
 // ProjectStructure 项目目录结构.
@@ -143,4 +145,110 @@ func (p *ProjectStructure) Subdirs() []string {
 		p.MetadataDir(),
 		p.ChromaDir(),
 	}
+}
+
+// LoadAllSettings 加载 设定/ 下所有 .md 文件 (按字母排序), 返回 [(相对路径, 内容)].
+//
+// Sprint 35: 自动遍历 设定/ + 设定/世界观/ + 设定/角色/ 等子目录.
+//
+// 文件格式约定: 每个 .md 第一行作为标题 (# XXX), 内容包含 markdown 体.
+//
+// 返回空 slice 如果目录不存在或没有 .md 文件 (不报错).
+//
+// 典型用法 (chapter_actions / write handler 拼 system prompt):
+//
+//	sections := ps.LoadAllSettings()
+//	for _, sec := range sections {
+//	    // sec.Name = "设定/世界观/地图.md"
+//	    // sec.Body = "# 地图\\n\\n..."
+//	}
+func (p *ProjectStructure) LoadAllSettings() []SettingSection {
+	var sections []SettingSection
+
+	settingDir := filepath.Join(p.Root, "设定")
+	if !isDir(settingDir) {
+		return sections
+	}
+
+	// 1. 顶层 设定/*.md (不含子目录)
+	entries, err := os.ReadDir(settingDir)
+	if err != nil {
+		return sections
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		full := filepath.Join(settingDir, e.Name())
+		data, err := os.ReadFile(full)
+		if err != nil {
+			continue
+		}
+		sections = append(sections, SettingSection{
+			Name: "设定/" + e.Name(),
+			Body: strings.TrimSpace(string(data)),
+		})
+	}
+
+	// 2. 子目录 (世界观/, 角色/, 历史/, ...) 递归一层 (Sprint 35 简化).
+	//
+	// 跳过 _开头/ .开头的隐藏目录; 跳过 node_modules / vendor 等.
+	for _, e := range entries {
+		if !e.IsDir() || skipDirName(e.Name()) {
+			continue
+		}
+		subdir := filepath.Join(settingDir, e.Name())
+		subEntries, err := os.ReadDir(subdir)
+		if err != nil {
+			continue
+		}
+		for _, se := range subEntries {
+			if se.IsDir() || !strings.HasSuffix(se.Name(), ".md") {
+				continue
+			}
+			full := filepath.Join(subdir, se.Name())
+			data, err := os.ReadFile(full)
+			if err != nil {
+				continue
+			}
+			sections = append(sections, SettingSection{
+				Name: "设定/" + e.Name() + "/" + se.Name(),
+				Body: strings.TrimSpace(string(data)),
+			})
+		}
+	}
+
+	// 按 Name 排序 (确保一致顺序, 便于 diff)
+	sort.Slice(sections, func(i, j int) bool {
+		return sections[i].Name < sections[j].Name
+	})
+	return sections
+}
+
+// SettingSection 一个 .md 配置 (相对路径 + 内容).
+type SettingSection struct {
+	Name string // e.g. "设定/世界观/地图.md"
+	Body string // markdown body
+}
+
+func isDir(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
+}
+
+// skipDirName 判断是否应该跳过目录 (隐藏目录 + 第三方目录).
+//
+// 规则:
+//   - 以 . 开头 (隐藏, e.g. .git, .workbuddy)
+//   - 以 _ 开头 (用户标记为草稿/临时, e.g. _draft, _backup)
+//   - 知名第三方目录 (node_modules, vendor)
+func skipDirName(name string) bool {
+	switch name {
+	case "node_modules", "vendor":
+		return true
+	}
+	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+		return true
+	}
+	return false
 }
