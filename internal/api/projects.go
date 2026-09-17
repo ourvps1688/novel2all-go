@@ -169,19 +169,26 @@ var ErrNotFound = errors.New("not found")
 
 // ProjectsHandler 提供 /api/projects CRUD
 type ProjectsHandler struct {
-	store *ProjectStore
+	repo ProjectsRepo
 }
 
-// NewProjectsHandler 创建
+// NewProjectsHandler 创建（内存版 ProjectsRepo，向后兼容）
 func NewProjectsHandler() *ProjectsHandler {
-	return &ProjectsHandler{store: NewProjectStore()}
+	return &ProjectsHandler{repo: NewProjectStore()}
 }
 
-// NewProjectsHandlerWithStore 用已有 store 创建（P1-F 切片 10 state 持久化用）
+// NewProjectsHandlerWithRepo 用已有 repo 创建（P1-F 切片 10 state 持久化用 + Sprint 15 SQLite）
 //
-// 让 main.go 创建共享 ProjectStore 实例给 ProjectsHandler 和 StatePersistor。
+// 让 main.go 创建共享 ProjectsRepo 实例给 ProjectsHandler 和 StatePersistor。
+func NewProjectsHandlerWithRepo(repo ProjectsRepo) *ProjectsHandler {
+	return &ProjectsHandler{repo: repo}
+}
+
+// NewProjectsHandlerWithStore 向后兼容 wrapper（DEPRECATED: 用 NewProjectsHandlerWithRepo）
+//
+// P1-F 切片 10-12 调用此方法，签名不变。
 func NewProjectsHandlerWithStore(store *ProjectStore) *ProjectsHandler {
-	return &ProjectsHandler{store: store}
+	return &ProjectsHandler{repo: store}
 }
 
 // ServeHTTP 路由分发
@@ -229,7 +236,7 @@ func (h *ProjectsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // list 列出所有项目
 func (h *ProjectsHandler) list(w http.ResponseWriter, _ *http.Request) {
-	projects := h.store.List()
+	projects := h.repo.List()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"projects": projects,
@@ -250,7 +257,7 @@ func (h *ProjectsHandler) create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
 	}
-	p, err := h.store.Create(req.Name, req.Slug, req.Description, req.OwnerID, req.Genre)
+	p, err := h.repo.Create(req.Name, req.Slug, req.Description, req.OwnerID, req.Genre)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
 		return
@@ -262,7 +269,7 @@ func (h *ProjectsHandler) create(w http.ResponseWriter, r *http.Request) {
 
 // get 取单个
 func (h *ProjectsHandler) get(w http.ResponseWriter, _ *http.Request, id int64) {
-	p, err := h.store.Get(id)
+	p, err := h.repo.Get(id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
@@ -286,7 +293,7 @@ func (h *ProjectsHandler) update(w http.ResponseWriter, r *http.Request, id int6
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
 	}
-	p, err := h.store.Update(id, req.Name, req.Description, req.Genre)
+	p, err := h.repo.Update(id, req.Name, req.Description, req.Genre)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
@@ -301,7 +308,7 @@ func (h *ProjectsHandler) update(w http.ResponseWriter, r *http.Request, id int6
 
 // delete 删除
 func (h *ProjectsHandler) delete(w http.ResponseWriter, _ *http.Request, id int64) {
-	if err := h.store.Delete(id); err != nil {
+	if err := h.repo.Delete(id); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
 			return
