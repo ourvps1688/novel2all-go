@@ -13,10 +13,13 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/version"
 )
 
-// UserLookup 是 SessionManager.GetUserByToken 的最小接口（便于测试注入 mock）。
+// UserLookup 是 DebugHandler 依赖的最小接口（便于测试注入 mock）。
 //
 // *auth.SessionManager 自动实现该接口。
 type UserLookup interface {
+	// GetTokenFromRequest 从 HTTP 请求中提取 session token（cookie / header）。
+	GetTokenFromRequest(r *http.Request) string
+	// GetUserByToken 通过 token 查找 user。
 	GetUserByToken(ctx context.Context, token string) (*store.User, error)
 }
 
