@@ -118,7 +118,7 @@ func TestDefaultRoutes(t *testing.T) {
 	}
 }
 
-func TestDashScope_UsesOpenAICompat(t *testing.T) {
+func TestDashScope_UsesAnthropicCompat(t *testing.T) {
 	p := NewDashScope("test-key")
 	if p.Name() != ProviderDashScope {
 		t.Errorf("Name=%s, want=%s", p.Name(), ProviderDashScope)
@@ -126,9 +126,44 @@ func TestDashScope_UsesOpenAICompat(t *testing.T) {
 	if !p.Available() {
 		t.Error("Available 应为 true")
 	}
-	// 类型断言确保是 OpenAI 协议
-	if _, ok := p.(*OpenAICompat); !ok {
-		t.Error("dashscope 应该是 OpenAI 协议")
+	// Sprint A1.14: dashscope 已切到 Anthropic 协议
+	if _, ok := p.(*AnthropicCompat); !ok {
+		t.Error("dashscope 应该是 Anthropic 协议（Sprint A1.14）")
+	}
+}
+
+func TestDeepSeek_UsesAnthropicCompat(t *testing.T) {
+	p := NewDeepSeek("test-key")
+	if p.Name() != ProviderDeepSeek {
+		t.Errorf("Name=%s, want=%s", p.Name(), ProviderDeepSeek)
+	}
+	if !p.Available() {
+		t.Error("Available 应为 true")
+	}
+	// Sprint A1.13: deepseek 已切到 Anthropic 协议
+	if _, ok := p.(*AnthropicCompat); !ok {
+		t.Error("deepseek 应该是 Anthropic 协议（Sprint A1.13）")
+	}
+}
+
+func TestMinimax_HasDefaults(t *testing.T) {
+	p := NewMinimax("test-key")
+	if _, ok := p.(*AnthropicCompat); !ok {
+		t.Fatal("minimax 应该是 Anthropic 协议")
+	}
+	// Sprint A1.20: minimax 应注入 MiniMax-M3 专属 defaults
+	ac := p.(*AnthropicCompat)
+	if !ac.HasMinimaxDefaults() {
+		t.Error("minimax 应自动注入 MiniMax-M3 defaults (temperature=1.0, top_p=0.95)")
+	}
+}
+
+func TestDashScope_NoMinimaxDefaults(t *testing.T) {
+	p := NewDashScope("test-key")
+	ac := p.(*AnthropicCompat)
+	// Sprint A1.20: dashscope 不注入 MiniMax defaults
+	if ac.HasMinimaxDefaults() {
+		t.Error("dashscope 不应注入 MiniMax defaults（仅 minimax 注入）")
 	}
 }
 
