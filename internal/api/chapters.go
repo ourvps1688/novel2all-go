@@ -332,6 +332,9 @@ func (h *ChapterHandler) save(w http.ResponseWriter, r *http.Request, chapter in
 		req.ProjectRoot = "."
 	}
 	prosePath := chapterProsePath(req.ProjectRoot, chapter)
+	// Sprint V1.0.1 P2: per-file mutex 防止与 expand/rewrite/insert/rollback 交错.
+	// save 不读 before (前端送完整内容), 但写仍需排他, 否则与并发 expand 覆盖丢失.
+	defer LockChapterFile(prosePath)()
 	if err := os.MkdirAll(filepath.Dir(prosePath), 0o755); err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
 		return
@@ -466,6 +469,8 @@ func (h *ChapterHandler) delete(w http.ResponseWriter, r *http.Request, chapter 
 		projectRoot = "."
 	}
 	prosePath := chapterProsePath(projectRoot, chapter)
+	// Sprint V1.0.1 P2: per-file mutex 防止与并发 save/expand 交错 (delete vs write).
+	defer LockChapterFile(prosePath)()
 	if err := os.Remove(prosePath); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			http.Error(w, fmt.Sprintf(`{"error":"chapter %d not found"}`, chapter), http.StatusNotFound)

@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ourvps1688/novel2all-go/internal/auth"
@@ -246,6 +247,9 @@ func (a *ChapterActions) expand(w http.ResponseWriter, r *http.Request, chapter 
 	start := time.Now()
 
 	prosePath := chapterProsePath(req.ProjectRoot, chapter)
+	// Sprint V1.0.1 P2: per-file mutex 防止并发 expand/rewrite/save 覆盖丢失.
+	// 取排他锁串行化 read-modify-write (LLM 调 + 写 backup + 写 prosePath).
+	defer LockChapterFile(prosePath)()
 	before, err := os.ReadFile(prosePath)
 	if err != nil {
 		respondActionError(w, err, http.StatusNotFound)
@@ -290,6 +294,8 @@ func (a *ChapterActions) rewrite(w http.ResponseWriter, r *http.Request, chapter
 	start := time.Now()
 
 	prosePath := chapterProsePath(req.ProjectRoot, chapter)
+	// Sprint V1.0.1 P2: per-file mutex (见 expand).
+	defer LockChapterFile(prosePath)()
 	before, err := os.ReadFile(prosePath)
 	if err != nil {
 		respondActionError(w, err, http.StatusNotFound)
@@ -332,6 +338,9 @@ func (a *ChapterActions) review(w http.ResponseWriter, r *http.Request, chapter 
 	start := time.Now()
 
 	prosePath := chapterProsePath(req.ProjectRoot, chapter)
+	// Sprint V1.0.1 P2: per-file mutex. review 不写文件, 但读取需防
+	// 与并发 expand/rewrite 交错 (LLM 评估中途内容变更导致 review 结果无意义).
+	defer LockChapterFile(prosePath)()
 	content, err := os.ReadFile(prosePath)
 	if err != nil {
 		respondActionError(w, err, http.StatusNotFound)
@@ -369,6 +378,8 @@ func (a *ChapterActions) insert(w http.ResponseWriter, r *http.Request, chapter 
 	start := time.Now()
 
 	prosePath := chapterProsePath(req.ProjectRoot, chapter)
+	// Sprint V1.0.1 P2: per-file mutex (见 expand).
+	defer LockChapterFile(prosePath)()
 	before, err := os.ReadFile(prosePath)
 	if err != nil {
 		respondActionError(w, err, http.StatusNotFound)
@@ -424,6 +435,11 @@ func (a *ChapterActions) rollback(w http.ResponseWriter, r *http.Request, chapte
 	if projectRoot == "" {
 		projectRoot = "."
 	}
+	prosePath := chapterProsePath(projectRoot, chapter)
+	// Sprint V1.0.1 P2: per-file mutex (见 expand).
+	// key 用 prosePath (非 backupPath) 保证与 expand/rewrite/save 互斥 — rollback 写入
+	// 是覆盖 prosePath, 与其他写路径竞争同一文件. backup 文件不锁 (rollback 不写 backup).
+	defer LockChapterFile(prosePath)()
 
 	proseDir := chapterProseDir(projectRoot)
 	pattern := fmt.Sprintf("第%03d章.md.bak.*", chapter)
@@ -455,7 +471,6 @@ func (a *ChapterActions) rollback(w http.ResponseWriter, r *http.Request, chapte
 		respondActionError(w, err, http.StatusInternalServerError)
 		return
 	}
-	prosePath := chapterProsePath(projectRoot, chapter)
 	if err := os.WriteFile(prosePath, backupData, 0o644); err != nil {
 		respondActionError(w, err, http.StatusInternalServerError)
 		return
@@ -520,11 +535,24 @@ func respondActionError(w http.ResponseWriter, err error, status int) {
 
 func backupChapterFile(projectRoot string, chapter int, content []byte) (string, error) {
 	prosePath := chapterProsePath(projectRoot, chapter)
-	backupPath := fmt.Sprintf("%s.bak.%d", prosePath, time.Now().Unix())
+	// Sprint V1.0.1 P2: 用 UnixNano + atomic counter 消除同秒撞名.
+	// 旧实现 time.Now().Unix() 秒级 timestamp, 同一秒内多次 backup 会撞名
+	// 导致第一次 backup 静默丢失. P2 加 per-file mutex 后, 同一章节两次 backup
+	// 不再并发, 但仍可能在同一秒内连续发生 (e.g. expand + insert), 用 Nano + 进程内
+	// 计数器彻底消除碰撞.
+	backupPath := fmt.Sprintf("%s.bak.%d.%d", prosePath, time.Now().UnixNano(), nextBackupSuffix())
 	if err := os.WriteFile(backupPath, content, 0o644); err != nil {
 		return "", err
 	}
 	return backupPath, nil
+}
+
+// backupSuffix 进程内单调递增计数器, 保证同一纳秒内多次 backup 文件名唯一.
+var backupSuffix uint64
+
+// nextBackupSuffix 原子递增并返回新值 (从 1 起, 0 表示溢出但实际不可能).
+func nextBackupSuffix() uint64 {
+	return atomic.AddUint64(&backupSuffix, 1)
 }
 
 func (a *ChapterActions) callLLMAppend(ctx context.Context, req ActionRequest, chapter int, skill, contextText string) (string, error) {
