@@ -16,12 +16,21 @@ import (
 // AnthropicCompat 是 Anthropic 兼容协议 provider 的基类。
 // minimax 必须用这个协议（其 Anthropic 端点是 /v1/messages）。
 // anthropic 自身也用这个协议。
+//
+// Sprint A1.20 (2026-09-18): 支持 provider-specific 默认值注入
+//   - MiniMax 用 UseMinimaxDefaults() 注入 temperature=1.0, top_p=0.95, thinking=off
+//   - 其他 provider（dashscope / deepseek / anthropic）不注入，保持原协议行为
 type AnthropicCompat struct {
 	name    ProviderName
 	apiKey  string
 	baseURL string
 	model   string
 	client  *http.Client
+
+	// Provider-specific 默认值（Sprint A1.20）
+	defaultTemperature float64 // 0 = 不注入, 使用 Request.Temperature 或协议默认
+	defaultTopP        float64 // 0 = 不注入
+	defaultThinking    bool    // true = 注入 thinking={"type":"adaptive"}
 }
 
 func NewAnthropicCompat(name ProviderName, apiKey, baseURL, defaultModel string) *AnthropicCompat {
@@ -34,6 +43,25 @@ func NewAnthropicCompat(name ProviderName, apiKey, baseURL, defaultModel string)
 			Timeout: 180 * time.Second,
 		},
 	}
+}
+
+// UseMinimaxDefaults 注入 MiniMax-M3 专属默认值 (Sprint A1.20)
+//
+// MiniMax 官方推荐 (https://platform.minimax.cn/docs/api-reference/text-anthropic-api):
+//   - temperature: 1.0  (推荐值)
+//   - top_p:      0.95  (M3 默认值，M2.x 是 0.9)
+//   - thinking:   默认关闭 (需显式 thinking={"type":"adaptive"} 才启用)
+//
+// 调用后所有通过该 provider 发出的请求都会注入这些默认值（除非 Request 显式覆盖）。
+func (p *AnthropicCompat) UseMinimaxDefaults() {
+	p.defaultTemperature = 1.0
+	p.defaultTopP = 0.95
+	p.defaultThinking = false
+}
+
+// HasMinimaxDefaults 返回是否已注入 MiniMax defaults (测试用)
+func (p *AnthropicCompat) HasMinimaxDefaults() bool {
+	return p.defaultTemperature == 1.0 && p.defaultTopP == 0.95
 }
 
 func (p *AnthropicCompat) Name() ProviderName { return p.name }
@@ -128,6 +156,7 @@ func (p *AnthropicCompat) Chat(ctx context.Context, req Request) (*Response, err
 	if req.OverrideModel != "" {
 		model = req.OverrideModel
 	}
+	p.applyProviderDefaults(&req) // Sprint A1.20
 	ar, err := toAntRequest(model, req)
 	if err != nil {
 		return nil, err
@@ -173,6 +202,7 @@ func (p *AnthropicCompat) ChatStream(ctx context.Context, req Request, ch chan<-
 	if req.OverrideModel != "" {
 		model = req.OverrideModel
 	}
+	p.applyProviderDefaults(&req) // Sprint A1.20
 	ar, err := toAntRequest(model, req)
 	if err != nil {
 		ch <- Chunk{Err: err}
@@ -397,4 +427,16 @@ func toAntRequest(model string, req Request) (antRequest, error) {
 	}
 	ar.Messages = msgs
 	return ar, nil
+}
+
+// applyProviderDefaults 应用 provider-specific 默认值（Sprint A1.20）
+//
+// 如果 provider 注入了 defaultTemperature/defaultTopP/defaultThinking，
+// 且 Request 未显式设置对应字段（Temperature == 0），则应用默认值。
+//
+// 此函数在 Chat/ChatStream 调 do() 之前调用。
+func (p *AnthropicCompat) applyProviderDefaults(req *Request) {
+	if req.Temperature == 0 && p.defaultTemperature > 0 {
+		req.Temperature = p.defaultTemperature
+	}
 }
