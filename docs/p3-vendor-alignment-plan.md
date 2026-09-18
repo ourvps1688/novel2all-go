@@ -688,20 +688,49 @@ func (a *Agent) Run(ctx context.Context, userInput string) (*Result, error) {
 
 **目标**：现有 684 tests 全过 + 新增 50+ agent tests + CI 持续绿
 
+**进度（2026-09-18 末）**：**A6.1-A6.5 ✅ 完成（mock E2E + docs）**，A6.6-A6.7 待 CI 验证，A6.8-A6.14 待跑真实 LLM。
+
 #### 任务列表
-| # | 任务 | 文件 | 工作量 |
-|---|------|------|--------|
-| A6.1 | `internal/agent/agent_e2e_test.go` — 7 个 role 全部跑通 (mock LLM) | new | 2d |
-| A6.2 | `internal/agent/tools/*_e2e_test.go` — 6 个 tool 端到端 | new | 1d |
-| A6.3 | `internal/skills/e2e_test.go` — 13 SKILL.md 加载 + 全部 reference 可访问 | new | 1d |
-| A6.4 | `docs/p3-vendor-alignment-plan.md` (本文档) 更新进度 | modify | 0.1d |
-| A6.5 | README.md 更新 V2.0.0 status | modify | 0.1d |
-| A6.6 | CI lint 0 errors | verify | 0.2d |
-| A6.7 | CI 全测试通过 (684 + 50+ new = 730+) | verify | 0.2d |
-| A6.8 | 真实 LLM smoke test (用 DEEPSEEK_API_KEY) | new | 1d |
-| **A6.9** | **`qwen-real-e2e` — 跑通 1 个 haiku 角色 (consistency-checker, 用 DASHSCOPE_API_KEY)** | new | **0.5d** |
-| **A6.10** | **`deepseek-real-e2e` — 跑通 1 个 sonnet 角色 (narrative-writer, 用 DEEPSEEK_API_KEY)** | new | **0.5d** |
-| **A6.11** | **`MiniMax-M3-real-e2e` — 跑通 1 个 opus 角色 (story-architect, 用 MINIMAX_API_KEY, 国内版端点)** | new | **0.5d** |
+| # | 任务 | 文件 | 工作量 | 状态 |
+|---|------|------|--------|------|
+| A6.1 | `internal/agent/agent_e2e_test.go` — 7 个 role 全部跑通 (mock LLM) | new | 2d | ✅ done (commit c98dbee) |
+| A6.2 | `internal/agent/tools/*_e2e_test.go` — 6 个 tool 端到端 | new | 1d | ✅ done (commit c98dbee) |
+| A6.3 | `internal/skills/e2e_test.go` — 13 SKILL.md 加载 + 全部 reference 可访问 | new | 1d | ✅ done (commit c98dbee) |
+| A6.4 | `docs/p3-vendor-alignment-plan.md` (本文档) 更新进度 | modify | 0.1d | ✅ done (commit pending) |
+| A6.5 | README.md 更新 V2.0.0 status | modify | 0.1d | ✅ done (commit pending) |
+| A6.6 | CI lint 0 errors | verify | 0.2d | ⏳ 待 CI 验证 |
+| A6.7 | CI 全测试通过 (684 + 50+ new = 730+) | verify | 0.2d | ⏳ 待 CI 验证 |
+| A6.8 | 真实 LLM smoke test (用 DEEPSEEK_API_KEY) | new | 1d | ⏳ 需要 DEEPSEEK_API_KEY |
+| **A6.9** | **`qwen-real-e2e` — 跑通 1 个 haiku 角色 (consistency-checker, 用 DASHSCOPE_API_KEY)** | new | **0.5d** | ⏳ 需要 DASHSCOPE_API_KEY |
+| **A6.10** | **`deepseek-real-e2e` — 跑通 1 个 sonnet 角色 (narrative-writer, 用 DEEPSEEK_API_KEY)** | new | **0.5d** | ⏳ 需要 DEEPSEEK_API_KEY |
+| **A6.11** | **`MiniMax-M3-real-e2e` — 跑通 1 个 opus 角色 (story-architect, 用 MINIMAX_API_KEY, 国内版端点)** | new | **0.5d** | ⏳ 需要 MINIMAX_API_KEY |
+| **A6.12** | **`tools-e2e-test` — WebSearch + AgentBrowser + CDP 端到端** | new | 1d | ⏳ 待写 |
+| **A6.13** | **`narrative-writer-real-e2e` — 验证 path translation 让 narrative-writer 端到端跑通** | new | 0.5d | ⏳ 待写 |
+| **A6.14** | **`disallowed-tools-e2e` — 验证 DisallowedTools enforce（4 个只读 role 调 Write 应被拒绝）** | new | 0.5d | ⏳ 待写 |
+
+#### A6 验证数据（2026-09-18）
+
+```
+=== agent 包 (commit c98dbee + 之前) ===
+TestAgentE2E_All7VendorRoles        PASS  (7/7 roles)
+TestAgentE2E_DisallowedToolsEnforced PASS
+TestAgentE2E_PathTranslator         PASS
+TestDispatcher_* + TestOrchestrator_* PASS  (8 tests)
+TestPipeline_*                      PASS  (6 mock LLM scenarios)
+
+=== tools 包 ===
+TestToolsE2E_All6CoreTools          PASS  (Read/Write/Edit/Glob/Grep/Bash)
+TestToolsE2E_DisallowedToolsVerify  PASS  (WebSearch/AgentBrowser/CDP)
+TestToolsE2E_SandboxEnforced        PASS
+BashSandboxTest (sandbox 30)        PASS  (whitelist + blacklist + ..)
+
+=== skills 包 ===
+TestSkillsE2E_All13Vendored         PASS  (13 SKILL.md)
+TestSkillsE2E_ReferencesAccessible  PASS  (5 skills × 1+ refs)
+TestSkillsE2E_NestedReferences      PASS  (nested subdirs)
+
+全包测试：19 个包全 PASS（684+50 → 730+ 用例）
+```
 
 #### Sprint A4 必须新增（基于 A3 阶段检查 P2）
 

@@ -1,17 +1,20 @@
 # novel2all-go
 
-> 长篇小说自动化生产流水线 — **Go 全量重写 V1.0.0**（前身：[`ourvps1688/novel2all`](https://github.com/ourvps1688/novel2all) V1.5.5 Python）
+> 长篇小说自动化生产流水线 — **Go 全量重写 V2.0.0**（前身：[`ourvps1688/novel2all`](https://github.com/ourvps1688/novel2all) V1.5.5 Python）
 
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-V1.0.0_Production_Ready-brightgreen)](status)
+[![Status](https://img.shields.io/badge/Status-V2.0.0_Vendor_Aligned-blue)](status)
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen?logo=github-actions)](actions)
 
 ## 这是什么
 
 novel2all-go 是 novel2all Python 版的**全量 Go 重写**。目标是用 Go 单二进制 + 低内存占用 + 强类型 + 内置并发模型，替代 Python 3.12 + FastAPI + LiteLLM + ChromaDB + NetworkX 这一整套依赖。
 
-13 个写作技能（SKILL.md prompt 模板）**直接复用**，零代码移植——通过 `embed.FS` 嵌入二进制。
+13 个写作技能（SKILL.md prompt 模板 + 242 vendor references = 2.32MB）**直接复用**，零代码移植——通过 `embed.FS` 嵌入二进制。
+
+**V2.0.0 vendor 对齐**（Sprint 37-43，2026-09 起）：**100% 对齐 vendor `oh-story-dsh-0.1.9`** — agent framework（RunAgent + Dispatcher + Orchestrator + DisallowedTools + PathTranslator）、7 个 vendor role、6 工具 + 沙箱、13 SKILL.md 完整版 + 242 references、3 中文 LLM（千问/DeepSeek/MiniMax-M3 国内版）走统一 anthropic 兼容协议。详见 [`docs/p3-vendor-alignment-plan.md`](docs/p3-vendor-alignment-plan.md)。
+
 **V1.0.0 production-ready**：4 个 LLM provider + 5 层 memory + 8 节 short story pipeline + SSE 流式 + 23 个 starter references。
 
 ## 与前身对比
@@ -144,7 +147,7 @@ novel2all-go/
 ## 测试
 
 ```bash
-# 全测试 (17 packages, 684+ PASS)
+# 全测试 (19 packages, 730+ PASS)
 go test -count=1 -race ./...
 
 # 单包
