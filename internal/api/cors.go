@@ -73,9 +73,7 @@ func DefaultCORSConfig() CORSConfig {
 // 行为:
 //   - 请求无 Origin 头 (same-origin / 非浏览器): 直接 next.ServeHTTP, 不注入 CORS 头
 //   - Origin 不在白名单: 直接 next.ServeHTTP, 不注入 CORS 头 (浏览器会自动 reject)
-//   - Origin 匹配: 注入 Access-Control-Allow-* 头
-//     - AllowOrigins 含 "*" 且 AllowCreds=true: 回显请求 Origin (而非 "*")
-//     - 否则按匹配规则返回精确 origin 或 "*"
+//   - Origin 匹配: 注入 Access-Control-Allow-* 头; AllowOrigins 含 "*" 且 AllowCreds=true 时回显请求 Origin (而非 "*"), 否则按匹配规则返回精确 origin 或 "*"
 //   - OPTIONS 方法 (preflight): 额外写 Max-Age 头 + 返回 204 No Content, 不调 next
 //   - 其他方法: 调 next.ServeHTTP (CORS 头已注入, 由 next 写 body)
 //
