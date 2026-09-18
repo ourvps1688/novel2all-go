@@ -178,14 +178,16 @@ func newRequestAsUser(method, url string, body io.Reader, user *store.User) *htt
 
 func TestProjectsHandler_CreateAndGet(t *testing.T) {
 	h := NewProjectsHandler()
+	alice := &store.User{ID: 1, Role: "user", Username: "alice"}
 
+	// POST create
 	body, _ := json.Marshal(map[string]string{
 		"name":  "Test Novel",
 		"slug":  "test-novel",
 		"genre": "fantasy",
 	})
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/projects", bytes.NewReader(body))
+	req := newRequestAsUser(http.MethodPost, "/api/projects", bytes.NewReader(body), alice)
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status=%d body=%s", rec.Code, rec.Body.String())
@@ -193,9 +195,13 @@ func TestProjectsHandler_CreateAndGet(t *testing.T) {
 
 	var p Project
 	_ = json.Unmarshal(rec.Body.Bytes(), &p)
+	if p.OwnerID != alice.ID {
+		t.Errorf("created project OwnerID=%d, want %d (P0-B 从 context 注入)", p.OwnerID, alice.ID)
+	}
 
+	// GET (alice 读自己的项目, owner check pass)
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/api/projects/1/", http.NoBody)
+	req = newRequestAsUser(http.MethodGet, "/api/projects/1/", http.NoBody, alice)
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get status=%d", rec.Code)
@@ -209,8 +215,10 @@ func TestProjectsHandler_CreateAndGet(t *testing.T) {
 
 func TestProjectsHandler_GetNotFound(t *testing.T) {
 	h := NewProjectsHandler()
+	admin := &store.User{ID: 999, Role: "admin", Username: "admin"}
+
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/projects/999/", http.NoBody)
+	req := newRequestAsUser(http.MethodGet, "/api/projects/999/", http.NoBody, admin)
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status=%d, want 404", rec.Code)
@@ -219,22 +227,26 @@ func TestProjectsHandler_GetNotFound(t *testing.T) {
 
 func TestProjectsHandler_UpdateAndDelete(t *testing.T) {
 	h := NewProjectsHandler()
+	alice := &store.User{ID: 1, Role: "user", Username: "alice"}
 
 	// Create
 	body, _ := json.Marshal(map[string]string{"name": "A", "slug": "a"})
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/projects", bytes.NewReader(body))
+	req := newRequestAsUser(http.MethodPost, "/api/projects", bytes.NewReader(body), alice)
 	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: status=%d body=%s", rec.Code, rec.Body.String())
+	}
 	var p Project
 	_ = json.Unmarshal(rec.Body.Bytes(), &p)
 
-	// Update
+	// Update (alice 改自己的项目)
 	body, _ = json.Marshal(map[string]string{"name": "A-updated", "genre": "scifi"})
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPut, "/api/projects/1/", bytes.NewReader(body))
+	req = newRequestAsUser(http.MethodPut, "/api/projects/1/", bytes.NewReader(body), alice)
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("update status=%d", rec.Code)
+		t.Fatalf("update status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	var upd Project
 	_ = json.Unmarshal(rec.Body.Bytes(), &upd)
@@ -242,12 +254,170 @@ func TestProjectsHandler_UpdateAndDelete(t *testing.T) {
 		t.Errorf("update failed: %+v", upd)
 	}
 
-	// Delete
+	// Delete (alice 删自己的项目)
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodDelete, "/api/projects/1/", http.NoBody)
+	req = newRequestAsUser(http.MethodDelete, "/api/projects/1/", http.NoBody, alice)
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("delete status=%d, want 204", rec.Code)
+	}
+}
+
+// =====================================================================
+// Sprint V1.0.1 P0-B CRUD owner isolation tests
+//
+// 验证: alice 创建的项目, bob 不能 get/update/delete.
+// admin 可以跨 user 操作.
+// =====================================================================
+
+// TestProjectsHandler_Get_OwnerIsolation 验证: bob 不能 get alice 的项目.
+func TestProjectsHandler_Get_OwnerIsolation(t *testing.T) {
+	s := NewProjectStore()
+	_, _ = s.Create("Alice's Novel", "alice-1", "", 1 /*alice*/, "")
+	h := &ProjectsHandler{repo: s}
+
+	alice := &store.User{ID: 1, Role: "user", Username: "alice"}
+	bob := &store.User{ID: 2, Role: "user", Username: "bob"}
+	admin := &store.User{ID: 999, Role: "admin", Username: "admin"}
+
+	// alice 看自己 → 200
+	rec := httptest.NewRecorder()
+	req := newRequestAsUser(http.MethodGet, "/api/projects/1/", http.NoBody, alice)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("alice 看自己应 200, 实际 %d", rec.Code)
+	}
+
+	// bob 看 alice 的 → 403
+	rec = httptest.NewRecorder()
+	req = newRequestAsUser(http.MethodGet, "/api/projects/1/", http.NoBody, bob)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("bob 看 alice 应 403, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// admin 看 alice 的 → 200 (admin bypass)
+	rec = httptest.NewRecorder()
+	req = newRequestAsUser(http.MethodGet, "/api/projects/1/", http.NoBody, admin)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("admin 看 alice 应 200, 实际 %d", rec.Code)
+	}
+}
+
+// TestProjectsHandler_Update_OwnerIsolation 验证: bob 不能 update alice 的项目.
+func TestProjectsHandler_Update_OwnerIsolation(t *testing.T) {
+	s := NewProjectStore()
+	_, _ = s.Create("Alice's Novel", "alice-1", "", 1, "")
+	h := &ProjectsHandler{repo: s}
+
+	bob := &store.User{ID: 2, Role: "user", Username: "bob"}
+
+	body, _ := json.Marshal(map[string]string{"name": "Hacked"})
+	rec := httptest.NewRecorder()
+	req := newRequestAsUser(http.MethodPut, "/api/projects/1/", bytes.NewReader(body), bob)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("bob update alice 应 403, 实际 %d", rec.Code)
+	}
+
+	// 验证项目未被修改
+	p, _ := s.Get(1)
+	if p.Name == "Hacked" {
+		t.Errorf("bob 越权 update 成功, name=%q", p.Name)
+	}
+}
+
+// TestProjectsHandler_Delete_OwnerIsolation 验证: bob 不能 delete alice 的项目.
+func TestProjectsHandler_Delete_OwnerIsolation(t *testing.T) {
+	s := NewProjectStore()
+	_, _ = s.Create("Alice's Novel", "alice-1", "", 1, "")
+	h := &ProjectsHandler{repo: s}
+
+	bob := &store.User{ID: 2, Role: "user", Username: "bob"}
+
+	rec := httptest.NewRecorder()
+	req := newRequestAsUser(http.MethodDelete, "/api/projects/1/", http.NoBody, bob)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("bob delete alice 应 403, 实际 %d", rec.Code)
+	}
+
+	// 验证项目未被删
+	if _, err := s.Get(1); err != nil {
+		t.Errorf("bob 越权 delete 成功, Get(1) err=%v", err)
+	}
+}
+
+// TestProjectsHandler_Create_OwnerIDOverride 验证: 即使 request body 含 owner_id, 也用 context user.ID.
+//
+// P0-B 防越权: 恶意 user A 创建项目假装属于 user B (例如想栽赃).
+func TestProjectsHandler_Create_OwnerIDOverride(t *testing.T) {
+	s := NewProjectStore()
+	h := &ProjectsHandler{repo: s}
+
+	alice := &store.User{ID: 1, Role: "user", Username: "alice"}
+
+	// alice POST 时, body 故意伪造 owner_id=999
+	body, _ := json.Marshal(map[string]any{
+		"name":     "Spoof",
+		"slug":     "spoof-1",
+		"owner_id": 999, // 想栽赃给 user 999
+	})
+	rec := httptest.NewRecorder()
+	req := newRequestAsUser(http.MethodPost, "/api/projects", bytes.NewReader(body), alice)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var p Project
+	_ = json.Unmarshal(rec.Body.Bytes(), &p)
+	if p.OwnerID != alice.ID {
+		t.Errorf("owner_id 应被忽略, 强制用 context user.ID=%d, 实际 OwnerID=%d",
+			alice.ID, p.OwnerID)
+	}
+}
+
+// TestProjectsHandler_Create_NoUser_Returns401 验证: create 无 user → 401.
+func TestProjectsHandler_Create_NoUser_Returns401(t *testing.T) {
+	h := NewProjectsHandler()
+	body, _ := json.Marshal(map[string]string{"name": "X", "slug": "x"})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/projects", bytes.NewReader(body))
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("create 无 user 应 401, 实际 %d", rec.Code)
+	}
+}
+
+// TestProjectsHandler_Update_NoUser_Returns401 验证: update 无 user → 401.
+func TestProjectsHandler_Update_NoUser_Returns401(t *testing.T) {
+	s := NewProjectStore()
+	_, _ = s.Create("Pre", "pre", "", 1, "")
+	h := &ProjectsHandler{repo: s}
+
+	body, _ := json.Marshal(map[string]string{"name": "X"})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/projects/1/", bytes.NewReader(body))
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("update 无 user 应 401, 实际 %d", rec.Code)
+	}
+}
+
+// TestProjectsHandler_Delete_NoUser_Returns401 验证: delete 无 user → 401.
+func TestProjectsHandler_Delete_NoUser_Returns401(t *testing.T) {
+	s := NewProjectStore()
+	_, _ = s.Create("Pre", "pre", "", 1, "")
+	h := &ProjectsHandler{repo: s}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/api/projects/1/", http.NoBody)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("delete 无 user 应 401, 实际 %d", rec.Code)
 	}
 }
 

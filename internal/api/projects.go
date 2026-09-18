@@ -278,8 +278,14 @@ func (h *ProjectsHandler) list(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// create 新建项目
+// create 新建项目 — Sprint V1.0.1 P0-B: owner_id 从 context user 注入, 忽略 request body 的 owner_id.
 func (h *ProjectsHandler) create(w http.ResponseWriter, r *http.Request) {
+	user, ok := UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	var req struct {
 		Name        string `json:"name"`
 		Slug        string `json:"slug"`
@@ -291,7 +297,10 @@ func (h *ProjectsHandler) create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
 	}
-	p, err := h.repo.Create(req.Name, req.Slug, req.Description, req.OwnerID, req.Genre)
+
+	// 安全: 即使 request body 含 owner_id, 也用 context user 的 ID
+	// 防止恶意 user A 创建项目假装属于 user B (P0-B 防越权)
+	p, err := h.repo.Create(req.Name, req.Slug, req.Description, user.ID, req.Genre)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
 		return
@@ -301,23 +310,21 @@ func (h *ProjectsHandler) create(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(p)
 }
 
-// get 取单个
-func (h *ProjectsHandler) get(w http.ResponseWriter, _ *http.Request, id int64) {
-	p, err := h.repo.Get(id)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
-			return
-		}
-		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+// get 取单个 — Sprint V1.0.1 P0-B: owner check (admin bypass)
+func (h *ProjectsHandler) get(w http.ResponseWriter, r *http.Request, id int64) {
+	p, ok := h.loadOwnedProject(w, r, id)
+	if !ok {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(p)
 }
 
-// update 更新
+// update 更新 — Sprint V1.0.1 P0-B: owner check (admin bypass)
 func (h *ProjectsHandler) update(w http.ResponseWriter, r *http.Request, id int64) {
+	if _, ok := h.loadOwnedProject(w, r, id); !ok {
+		return
+	}
 	var req struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
@@ -327,7 +334,7 @@ func (h *ProjectsHandler) update(w http.ResponseWriter, r *http.Request, id int6
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
 	}
-	p, err := h.repo.Update(id, req.Name, req.Description, req.Genre)
+	updated, err := h.repo.Update(id, req.Name, req.Description, req.Genre)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
@@ -337,11 +344,14 @@ func (h *ProjectsHandler) update(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(p)
+	_ = json.NewEncoder(w).Encode(updated)
 }
 
-// delete 删除
-func (h *ProjectsHandler) delete(w http.ResponseWriter, _ *http.Request, id int64) {
+// delete 删除 — Sprint V1.0.1 P0-B: owner check (admin bypass)
+func (h *ProjectsHandler) delete(w http.ResponseWriter, r *http.Request, id int64) {
+	if _, ok := h.loadOwnedProject(w, r, id); !ok {
+		return
+	}
 	if err := h.repo.Delete(id); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
@@ -351,6 +361,38 @@ func (h *ProjectsHandler) delete(w http.ResponseWriter, _ *http.Request, id int6
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// loadOwnedProject 加载 project 并验证 user 访问权 (Sprint V1.0.1 P0-B helper).
+//
+// 行为:
+//   - 无 user in context → 401 + (nil, false)
+//   - project 不存在 → 404 + (nil, false)
+//   - admin → (project, true) (无 OwnerID 检查)
+//   - user.ID == project.OwnerID → (project, true)
+//   - 其他 → 403 + (nil, false)
+//
+// 返回 *Project 避免重复 Get (handler 拿到 project 后直接用).
+func (h *ProjectsHandler) loadOwnedProject(w http.ResponseWriter, r *http.Request, id int64) (*Project, bool) {
+	user, ok := UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return nil, false
+	}
+	p, err := h.repo.Get(id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
+			return nil, false
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return nil, false
+	}
+	if auth.IsAdmin(user) || p.OwnerID == user.ID {
+		return p, true
+	}
+	http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+	return nil, false
 }
 
 // parseInt64 安全解析
