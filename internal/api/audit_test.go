@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -11,7 +12,9 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
-// newTestAuditHandler 创建临时 DB + 写入测试 audit entries
+// newTestAuditHandler 创建临时 DB + 写入测试 audit entries (Sprint V1.0.1 P3: 移除 session 参数).
+//
+// 鉴权已移到 mux-level middleware. 直接 handler 调用需用 auditReqAdmin helper 注入 admin user context.
 func newTestAuditHandler(t *testing.T) (*AuditHandler, *store.DB) {
 	t.Helper()
 	dir := t.TempDir()
@@ -48,40 +51,25 @@ func newTestAuditHandler(t *testing.T) (*AuditHandler, *store.DB) {
 		}
 	}
 
-	session := newMockLookup("admin-token", "user-token")
-	return NewAuditHandler(db, session), db
+	return NewAuditHandler(db), db
 }
 
-func TestAudit_List_RequiresAuth(t *testing.T) {
-	h, _ := newTestAuditHandler(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/audit", http.NoBody)
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", rr.Code)
+// auditReqAdmin 构造带 admin user context 的 request (用于测试 admin-only handler).
+func auditReqAdmin(method, url string, body []byte) *http.Request {
+	var bodyReader *bytes.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
 	}
+	req := httptest.NewRequest(method, url, bodyReader)
+	admin := &store.User{ID: 999, Role: "admin", Username: "test-admin"}
+	ctx := context.WithValue(req.Context(), userCtxValue, admin)
+	return req.WithContext(ctx)
 }
 
-func TestAudit_List_RequiresAdmin(t *testing.T) {
+func TestAudit_List_OK(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "user-token"})
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403, got %d", rr.Code)
-	}
-}
-
-func TestAudit_List_AdminSuccess(t *testing.T) {
-	h, _ := newTestAuditHandler(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/audit", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := auditReqAdmin(http.MethodGet, "/api/audit", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -105,8 +93,7 @@ func TestAudit_List_AdminSuccess(t *testing.T) {
 func TestAudit_List_FilterByEvent(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit?event=login_fail", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := auditReqAdmin(http.MethodGet, "/api/audit?event=login_fail", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -131,8 +118,7 @@ func TestAudit_List_FilterByEvent(t *testing.T) {
 func TestAudit_List_FilterBySuccess(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit?success=false", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := auditReqAdmin(http.MethodGet, "/api/audit?success=false", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -151,8 +137,7 @@ func TestAudit_List_LimitAndOffset(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
 	// limit=2 offset=0
-	req := httptest.NewRequest(http.MethodGet, "/api/audit?limit=2&offset=0", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := auditReqAdmin(http.MethodGet, "/api/audit?limit=2&offset=0", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	var resp AuditAdminListResponse
@@ -163,8 +148,7 @@ func TestAudit_List_LimitAndOffset(t *testing.T) {
 	firstID := resp.Entries[0].ID
 
 	// limit=2 offset=2
-	req = httptest.NewRequest(http.MethodGet, "/api/audit?limit=2&offset=2", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req = auditReqAdmin(http.MethodGet, "/api/audit?limit=2&offset=2", nil)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	_ = json.NewDecoder(rr.Body).Decode(&resp)
@@ -180,8 +164,7 @@ func TestAudit_Get_Success(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
 	// 取最新一条（最大 ID）
-	listReq := httptest.NewRequest(http.MethodGet, "/api/audit?limit=1", http.NoBody)
-	listReq.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	listReq := auditReqAdmin(http.MethodGet, "/api/audit?limit=1", nil)
 	listRR := httptest.NewRecorder()
 	h.ServeHTTP(listRR, listReq)
 	var listResp AuditAdminListResponse
@@ -189,8 +172,7 @@ func TestAudit_Get_Success(t *testing.T) {
 	targetID := listResp.Entries[0].ID
 
 	// GET /api/audit/{id}
-	req := httptest.NewRequest(http.MethodGet, "/api/audit/"+intToStr(targetID), http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := auditReqAdmin(http.MethodGet, "/api/audit/"+intToStr(targetID), nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -209,8 +191,7 @@ func TestAudit_Get_Success(t *testing.T) {
 func TestAudit_Get_NotFound(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit/999999", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := auditReqAdmin(http.MethodGet, "/api/audit/999999", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -222,8 +203,7 @@ func TestAudit_Get_NotFound(t *testing.T) {
 func TestAudit_Get_InvalidID(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit/abc", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := auditReqAdmin(http.MethodGet, "/api/audit/abc", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -235,30 +215,12 @@ func TestAudit_Get_InvalidID(t *testing.T) {
 func TestAudit_MethodNotAllowed(t *testing.T) {
 	h, _ := newTestAuditHandler(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/audit", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := auditReqAdmin(http.MethodPost, "/api/audit", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected 405 for POST, got %d", rr.Code)
-	}
-}
-
-func TestAudit_NilSessionReturns503(t *testing.T) {
-	dir := t.TempDir()
-	db, _ := store.Open(context.Background(), dir+"/test.db")
-	defer func() { _ = db.Close() }()
-	_ = db.Migrate(context.Background())
-
-	h := NewAuditHandler(db, nil)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/audit", http.NoBody)
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected 503 with nil session, got %d", rr.Code)
 	}
 }
 

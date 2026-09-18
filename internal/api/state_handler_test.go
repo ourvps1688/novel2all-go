@@ -1,54 +1,48 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
-// newTestStateHandler 创建临时 state handler + mock session
-func newTestStateHandler(t *testing.T) (*StateHandler, *ProjectStore, *mockUserLookup) {
+// newTestStateHandler 创建临时 state handler (Sprint V1.0.1 P3: 移除 session 参数).
+//
+// 返回 (*StateHandler, *ProjectStore). 鉴权已移到 mux-level middleware,
+// 直接 handler 调用不走鉴权. 测试若需模拟 admin user context, 用 stateReqAdmin helper.
+func newTestStateHandler(t *testing.T) (*StateHandler, *ProjectStore) {
 	t.Helper()
 	dir := t.TempDir()
-	store := NewProjectStore()
-	p := NewStatePersistor(filepath.Join(dir, "state.json"), store)
-	session := newMockLookup("admin-token", "user-token")
-	return NewStateHandler(p, session), store, session
+	ps := NewProjectStore()
+	p := NewStatePersistor(filepath.Join(dir, "state.json"), ps)
+	return NewStateHandler(p), ps
 }
 
-func TestStateHandler_Info_RequiresAuth(t *testing.T) {
-	h, _, _ := newTestStateHandler(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/state", http.NoBody)
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 without token, got %d", rr.Code)
+// stateReqAdmin 构造带 admin user context 的 request (用于测试 admin-only handler).
+//
+// 注: handler 不再做 inline admin check; 测试需手动注入 admin user context.
+func stateReqAdmin(method, url string, body []byte) *http.Request {
+	var bodyReader *bytes.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
 	}
+	req := httptest.NewRequest(method, url, bodyReader)
+	admin := &store.User{ID: 999, Role: "admin", Username: "test-admin"}
+	ctx := context.WithValue(req.Context(), userCtxValue, admin)
+	return req.WithContext(ctx)
 }
 
-func TestStateHandler_Info_RequiresAdmin(t *testing.T) {
-	h, _, _ := newTestStateHandler(t)
+func TestStateHandler_Info_OK(t *testing.T) {
+	h, _ := newTestStateHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/state", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "user-token"})
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403 for non-admin, got %d", rr.Code)
-	}
-}
-
-func TestStateHandler_Info_AdminSuccess(t *testing.T) {
-	h, _, _ := newTestStateHandler(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/state", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := stateReqAdmin(http.MethodGet, "/api/state", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -73,7 +67,7 @@ func TestStateHandler_Info_AdminSuccess(t *testing.T) {
 }
 
 func TestStateHandler_Save_RoundTrip(t *testing.T) {
-	h, store, _ := newTestStateHandler(t)
+	h, store := newTestStateHandler(t)
 
 	// 1. 创建 project
 	if _, err := store.Create("My Novel", "novel-1", "test", 1, "fantasy"); err != nil {
@@ -82,8 +76,7 @@ func TestStateHandler_Save_RoundTrip(t *testing.T) {
 	atomicStoreInt64(&cacheHits, 42)
 
 	// 2. Save
-	req := httptest.NewRequest(http.MethodPost, "/api/state/save", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := stateReqAdmin(http.MethodPost, "/api/state/save", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -102,10 +95,9 @@ func TestStateHandler_Save_RoundTrip(t *testing.T) {
 	p2 := NewStatePersistor(dir, store2)
 
 	// 4. Reload via handler (新 handler 但用同一 persistor 路径)
-	h2 := NewStateHandler(p2, newMockLookup("admin-token", "user-token"))
+	h2 := NewStateHandler(p2)
 
-	req = httptest.NewRequest(http.MethodPost, "/api/state/reload", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req = stateReqAdmin(http.MethodPost, "/api/state/reload", nil)
 	rr = httptest.NewRecorder()
 	h2.ServeHTTP(rr, req)
 
@@ -126,7 +118,7 @@ func TestStateHandler_Save_RoundTrip(t *testing.T) {
 }
 
 func TestStateHandler_Reset(t *testing.T) {
-	h, store, _ := newTestStateHandler(t)
+	h, store := newTestStateHandler(t)
 
 	// 1. 创建 project + save
 	if _, err := store.Create("To Delete", "del", "", 1, ""); err != nil {
@@ -137,8 +129,7 @@ func TestStateHandler_Reset(t *testing.T) {
 	}
 
 	// 2. Reset via handler
-	req := httptest.NewRequest(http.MethodPost, "/api/state/reset", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := stateReqAdmin(http.MethodPost, "/api/state/reset", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -156,11 +147,10 @@ func TestStateHandler_Reset(t *testing.T) {
 }
 
 func TestStateHandler_MethodNotAllowed(t *testing.T) {
-	h, _, _ := newTestStateHandler(t)
+	h, _ := newTestStateHandler(t)
 
 	// POST /api/state (without subpath) → 405
-	req := httptest.NewRequest(http.MethodPost, "/api/state", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := stateReqAdmin(http.MethodPost, "/api/state", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusMethodNotAllowed {
@@ -168,8 +158,7 @@ func TestStateHandler_MethodNotAllowed(t *testing.T) {
 	}
 
 	// GET /api/state/save → 405
-	req = httptest.NewRequest(http.MethodGet, "/api/state/save", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req = stateReqAdmin(http.MethodGet, "/api/state/save", nil)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusMethodNotAllowed {
@@ -178,31 +167,25 @@ func TestStateHandler_MethodNotAllowed(t *testing.T) {
 }
 
 func TestStateHandler_UnknownSubPath(t *testing.T) {
-	h, _, _ := newTestStateHandler(t)
+	h, _ := newTestStateHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/state/unknown", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := stateReqAdmin(http.MethodGet, "/api/state/unknown", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
-
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for unknown subpath, got %d", rr.Code)
 	}
 }
 
 func TestStateHandler_NilPersistorReturns503(t *testing.T) {
-	// nil session 不应该 panic
-	session := newMockLookup("admin-token", "user-token")
-	// 用 NewStateHandler 接受 nil
-	// 实际上 NewStateHandler 会接受 nil (只是不能 Save/Load)
-	// 改测 nil session
-	_ = session // avoid unused
-	h := NewStateHandler(nil, nil)
-	req := httptest.NewRequest(http.MethodGet, "/api/state", http.NoBody)
+	// Sprint V1.0.1 P3: 移除 session 后, NewStateHandler 只接 persistor.
+	// 仍保留 "nil persistor → 503" 测试 (验证 handler 防御性检查).
+	h := NewStateHandler(nil)
+	req := stateReqAdmin(http.MethodGet, "/api/state", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected 503 with nil session, got %d", rr.Code)
+		t.Errorf("expected 503 with nil persistor, got %d", rr.Code)
 	}
 }
 

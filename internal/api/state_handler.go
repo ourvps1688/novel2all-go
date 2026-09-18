@@ -1,15 +1,6 @@
-package api
+// Package api 提供 novel2all-go HTTP handlers.
 
-import (
-	"encoding/json"
-	"errors"
-	"net/http"
-	"strings"
-
-	"github.com/ourvps1688/novel2all-go/internal/auth"
-)
-
-// StateHandler 提供 /api/state/* 端点（admin only）
+// state_handler.go 提供 /api/state/* 端点（admin only）.
 //
 // 路由分发：
 //
@@ -17,23 +8,31 @@ import (
 //	POST   /api/state/save     → 立即保存到 disk
 //	POST   /api/state/reload   → 从 disk 重新加载到内存
 //	POST   /api/state/reset    → 清空内存 + 删除 state file
+//
+// Sprint V1.0.1 P3: admin 鉴权已移到 mux-level middleware (RegisterAdminRoutes 包装 RequireAuth+RequireAdmin).
+// handler 假设 caller 已过 admin guard, 直接执行业务逻辑.
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+)
+
+// StateHandler 提供 /api/state/* 端点（admin only）
 type StateHandler struct {
 	persistor *StatePersistor
-	session   UserLookup
 }
 
-// NewStateHandler 创建 StateHandler
-func NewStateHandler(p *StatePersistor, s UserLookup) *StateHandler {
-	return &StateHandler{persistor: p, session: s}
+// NewStateHandler 创建 StateHandler.
+//
+// Sprint V1.0.1 P3: 移除 session 参数 (admin 鉴权已移到 mux-level middleware).
+func NewStateHandler(p *StatePersistor) *StateHandler {
+	return &StateHandler{persistor: p}
 }
 
-// ServeHTTP 路由分发 + admin 鉴权
+// ServeHTTP 路由分发 (admin 鉴权在 RegisterAdminRoutes mux-level 完成)
 func (h *StateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// admin 鉴权
-	if !h.requireAdmin(w, r) {
-		return
-	}
-
 	path := strings.TrimPrefix(r.URL.Path, "/api/state")
 	path = strings.Trim(path, "/")
 
@@ -65,27 +64,6 @@ func (h *StateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
-}
-
-// requireAdmin 通用 admin 鉴权（失败时写 401/403 响应）
-//
-// 返回 true = 通过，false = 已写错误响应。
-func (h *StateHandler) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	if h.session == nil {
-		http.Error(w, `{"error":"state endpoints disabled"}`, http.StatusServiceUnavailable)
-		return false
-	}
-	token := h.session.GetTokenFromRequest(r)
-	user, err := h.session.GetUserByToken(r.Context(), token)
-	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-		return false
-	}
-	if !auth.IsAdmin(user) {
-		http.Error(w, `{"error":"admin required"}`, http.StatusForbidden)
-		return false
-	}
-	return true
 }
 
 // handleInfo GET /api/state
@@ -153,6 +131,3 @@ func infoTimestamp(t any) string {
 	}
 	return ""
 }
-
-// 防止 unused 警告
-var _ = errors.New

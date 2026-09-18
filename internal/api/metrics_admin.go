@@ -2,14 +2,12 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
-	"github.com/ourvps1688/novel2all-go/internal/auth"
 	"github.com/ourvps1688/novel2all-go/internal/obs"
 )
 
-// MetricsAdminHandler 提供 /api/metrics/* admin 端点
+// MetricsAdminHandler 提供 /api/metrics/* admin 端点.
 //
 // 路由：
 //
@@ -17,34 +15,22 @@ import (
 //
 // 注意：GET /api/metrics（Prometheus text）和 /debug/info 是 metrics 观测，
 // 不需要 admin。本 handler 只负责 admin 操作（reset）。
+//
+// Sprint V1.0.1 P3: admin 鉴权已移到 mux-level middleware (RegisterAdminRoutes 包装 RequireAuth+RequireAdmin).
+// handler 假设 caller 已过 admin guard, 直接执行业务逻辑.
 type MetricsAdminHandler struct {
 	metrics *obs.Metrics
-	session UserLookup
 }
 
-// NewMetricsAdminHandler 创建
-func NewMetricsAdminHandler(m *obs.Metrics, s UserLookup) *MetricsAdminHandler {
-	return &MetricsAdminHandler{metrics: m, session: s}
+// NewMetricsAdminHandler 创建.
+//
+// Sprint V1.0.1 P3: 移除 session 参数 (admin 鉴权已移到 mux-level middleware).
+func NewMetricsAdminHandler(m *obs.Metrics) *MetricsAdminHandler {
+	return &MetricsAdminHandler{metrics: m}
 }
 
-// ServeHTTP 路由分发 + admin 鉴权
+// ServeHTTP 路由分发 (admin 鉴权在 RegisterAdminRoutes mux-level 完成)
 func (h *MetricsAdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// admin 鉴权
-	if h.session == nil {
-		http.Error(w, `{"error":"metrics admin endpoints disabled"}`, http.StatusServiceUnavailable)
-		return
-	}
-	token := h.session.GetTokenFromRequest(r)
-	user, err := h.session.GetUserByToken(r.Context(), token)
-	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-	if !auth.IsAdmin(user) {
-		http.Error(w, `{"error":"admin required"}`, http.StatusForbidden)
-		return
-	}
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -105,6 +91,3 @@ func sumMap(m map[string]int64) int64 {
 	}
 	return total
 }
-
-// 防止 unused 警告
-var _ = errors.New

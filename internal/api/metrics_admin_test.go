@@ -1,44 +1,34 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/ourvps1688/novel2all-go/internal/obs"
+	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
+// newTestMetricsAdminHandler 创建临时 metrics admin handler (Sprint V1.0.1 P3: 移除 session 参数).
 func newTestMetricsAdminHandler(t *testing.T) (*MetricsAdminHandler, *obs.Metrics) {
 	t.Helper()
 	metrics := obs.NewMetrics("test", "test", "test")
-	session := newMockLookup("admin-token", "user-token")
-	return NewMetricsAdminHandler(metrics, session), metrics
+	return NewMetricsAdminHandler(metrics), metrics
 }
 
-func TestMetricsAdmin_Reset_RequiresAuth(t *testing.T) {
-	h, _ := newTestMetricsAdminHandler(t)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/metrics/reset", http.NoBody)
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 without token, got %d", rr.Code)
+// metricsReqAdmin 构造带 admin user context 的 request.
+func metricsReqAdmin(method, url string, body []byte) *http.Request {
+	var bodyReader *bytes.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
 	}
-}
-
-func TestMetricsAdmin_Reset_RequiresAdmin(t *testing.T) {
-	h, _ := newTestMetricsAdminHandler(t)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/metrics/reset", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "user-token"})
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403 for non-admin, got %d", rr.Code)
-	}
+	req := httptest.NewRequest(method, url, bodyReader)
+	admin := &store.User{ID: 999, Role: "admin", Username: "test-admin"}
+	ctx := context.WithValue(req.Context(), userCtxValue, admin)
+	return req.WithContext(ctx)
 }
 
 func TestMetricsAdmin_Reset_AdminSuccess(t *testing.T) {
@@ -54,8 +44,7 @@ func TestMetricsAdmin_Reset_AdminSuccess(t *testing.T) {
 	metrics.IncSSEActive()
 
 	// Reset via handler
-	req := httptest.NewRequest(http.MethodPost, "/api/metrics/reset", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := metricsReqAdmin(http.MethodPost, "/api/metrics/reset", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -117,8 +106,7 @@ func TestMetricsAdmin_Reset_AdminSuccess(t *testing.T) {
 func TestMetricsAdmin_MethodNotAllowed(t *testing.T) {
 	h, _ := newTestMetricsAdminHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/metrics/reset", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := metricsReqAdmin(http.MethodGet, "/api/metrics/reset", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -128,11 +116,10 @@ func TestMetricsAdmin_MethodNotAllowed(t *testing.T) {
 }
 
 func TestMetricsAdmin_NilMetricsReturns503(t *testing.T) {
-	session := newMockLookup("admin-token", "user-token")
-	h := NewMetricsAdminHandler(nil, session)
+	// Sprint V1.0.1 P3: 仍保留 "nil metrics → 503" 测试 (handler 防御性检查).
+	h := NewMetricsAdminHandler(nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/metrics/reset", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := metricsReqAdmin(http.MethodPost, "/api/metrics/reset", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +13,7 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
+// newTestBackupHandler 创建临时 backup handler (Sprint V1.0.1 P3: 移除 session 参数).
 func newTestBackupHandler(t *testing.T) (*BackupHandler, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -21,40 +24,25 @@ func newTestBackupHandler(t *testing.T) (*BackupHandler, string) {
 	_ = os.WriteFile(dbPath, []byte("fake"), 0o644)
 
 	mgr := store.NewBackupManager(backupDir, statePath, dbPath, 10)
-	session := newMockLookup("admin-token", "user-token")
-	return NewBackupHandler(mgr, session), backupDir
+	return NewBackupHandler(mgr), backupDir
 }
 
-func TestBackup_Create_RequiresAuth(t *testing.T) {
-	h, _ := newTestBackupHandler(t)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/backup", http.NoBody)
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", rr.Code)
+// backupReqAdmin 构造带 admin user context 的 request.
+func backupReqAdmin(method, url string, body []byte) *http.Request {
+	var bodyReader *bytes.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
 	}
+	req := httptest.NewRequest(method, url, bodyReader)
+	admin := &store.User{ID: 999, Role: "admin", Username: "test-admin"}
+	ctx := context.WithValue(req.Context(), userCtxValue, admin)
+	return req.WithContext(ctx)
 }
 
-func TestBackup_Create_RequiresAdmin(t *testing.T) {
+func TestBackup_Create_OK(t *testing.T) {
 	h, _ := newTestBackupHandler(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/backup", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "user-token"})
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403, got %d", rr.Code)
-	}
-}
-
-func TestBackup_Create_AdminSuccess(t *testing.T) {
-	h, _ := newTestBackupHandler(t)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/backup", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := backupReqAdmin(http.MethodPost, "/api/backup", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -75,13 +63,12 @@ func TestBackup_Create_AdminSuccess(t *testing.T) {
 	}
 }
 
-func TestBackup_List_AdminSuccess(t *testing.T) {
+func TestBackup_List_OK(t *testing.T) {
 	h, _ := newTestBackupHandler(t)
 
 	// 先创建 2 个 backup
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodPost, "/api/backup", http.NoBody)
-		req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+		req := backupReqAdmin(http.MethodPost, "/api/backup", nil)
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
 		if rr.Code != http.StatusCreated {
@@ -90,8 +77,7 @@ func TestBackup_List_AdminSuccess(t *testing.T) {
 	}
 
 	// 列出
-	req := httptest.NewRequest(http.MethodGet, "/api/backup", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := backupReqAdmin(http.MethodGet, "/api/backup", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
@@ -115,25 +101,11 @@ func TestBackup_List_AdminSuccess(t *testing.T) {
 	}
 }
 
-func TestBackup_List_RequiresAdmin(t *testing.T) {
-	h, _ := newTestBackupHandler(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/backup", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "user-token"})
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403 for non-admin, got %d", rr.Code)
-	}
-}
-
 func TestBackup_MethodNotAllowed(t *testing.T) {
 	h, _ := newTestBackupHandler(t)
 
 	// PUT /api/backup → 405
-	req := httptest.NewRequest(http.MethodPut, "/api/backup", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := backupReqAdmin(http.MethodPut, "/api/backup", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusMethodNotAllowed {
@@ -141,8 +113,7 @@ func TestBackup_MethodNotAllowed(t *testing.T) {
 	}
 
 	// POST /api/backup/unknown → 404
-	req = httptest.NewRequest(http.MethodPost, "/api/backup/unknown", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req = backupReqAdmin(http.MethodPost, "/api/backup/unknown", nil)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {
@@ -151,17 +122,14 @@ func TestBackup_MethodNotAllowed(t *testing.T) {
 }
 
 func TestBackup_NilManagerReturns503(t *testing.T) {
-	session := newMockLookup("admin-token", "user-token")
-	h := NewBackupHandler(nil, session)
+	// Sprint V1.0.1 P3: 仍保留 "nil manager → 503" 测试 (handler 防御性检查).
+	h := NewBackupHandler(nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/backup", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-token"})
+	req := backupReqAdmin(http.MethodPost, "/api/backup", nil)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
-	// nil manager 会 panic in Create, 应该 500
-	// (但 requireAdmin 通过, handler 进入 handleCreate)
-	if rr.Code != http.StatusInternalServerError && rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected 500/503 with nil manager, got %d", rr.Code)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 with nil manager, got %d", rr.Code)
 	}
 }

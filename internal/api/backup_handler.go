@@ -7,6 +7,9 @@
 //
 // 注意：restore endpoint 故意不做（避免误删数据）
 // restore 由人工操作：cp data/backups/novel2all-X.tar.gz /tmp/restore && tar -xzf
+//
+// Sprint V1.0.1 P3: admin 鉴权已移到 mux-level middleware (RegisterAdminRoutes 包装 RequireAuth+RequireAdmin).
+// handler 假设 caller 已过 admin guard, 直接执行业务逻辑.
 package api
 
 import (
@@ -14,30 +17,26 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ourvps1688/novel2all-go/internal/auth"
 	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
 // BackupHandler /api/backup/* handler
 type BackupHandler struct {
 	manager *store.BackupManager
-	session UserLookup
 }
 
-// NewBackupHandler 创建
-func NewBackupHandler(mgr *store.BackupManager, s UserLookup) *BackupHandler {
-	return &BackupHandler{manager: mgr, session: s}
+// NewBackupHandler 创建.
+//
+// Sprint V1.0.1 P3: 移除 session 参数 (admin 鉴权已移到 mux-level middleware).
+func NewBackupHandler(mgr *store.BackupManager) *BackupHandler {
+	return &BackupHandler{manager: mgr}
 }
 
-// ServeHTTP 路由分发 + admin 鉴权
+// ServeHTTP 路由分发 (admin 鉴权在 RegisterAdminRoutes mux-level 完成)
 func (h *BackupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// nil manager 不 panic
 	if h.manager == nil {
 		http.Error(w, `{"error":"backup manager not initialized"}`, http.StatusServiceUnavailable)
-		return
-	}
-	// admin 鉴权
-	if !h.requireAdmin(w, r) {
 		return
 	}
 
@@ -57,25 +56,6 @@ func (h *BackupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
-}
-
-// requireAdmin 通用 admin 鉴权（与 state_handler / audit 一致模式）
-func (h *BackupHandler) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	if h.session == nil {
-		http.Error(w, `{"error":"backup endpoints disabled"}`, http.StatusServiceUnavailable)
-		return false
-	}
-	token := h.session.GetTokenFromRequest(r)
-	user, err := h.session.GetUserByToken(r.Context(), token)
-	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-		return false
-	}
-	if !auth.IsAdmin(user) {
-		http.Error(w, `{"error":"admin required"}`, http.StatusForbidden)
-		return false
-	}
-	return true
 }
 
 // handleCreate POST /api/backup

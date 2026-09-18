@@ -20,6 +20,7 @@ import (
 //
 // RegisterAdminRoutes 一次性注册 state/metrics/audit/backup 等 admin 端点.
 // Sprint V1.0.1 P3: 用 RequireAuth + RequireAdmin chain 替代 inline admin check.
+// handler 构造函数不再需要 session 参数 (鉴权已移到 middleware).
 func RegisterAdminRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Session == nil {
 		return
@@ -30,21 +31,21 @@ func RegisterAdminRoutes(mux *http.ServeMux, deps Deps) {
 
 	// /api/state/* (admin only) - state 持久化管理
 	if deps.State != nil {
-		mux.Handle("/api/state/", authGuard(adminGuard(NewStateHandler(deps.State, deps.Session))))
+		mux.Handle("/api/state/", authGuard(adminGuard(NewStateHandler(deps.State))))
 	}
 
 	// /api/metrics/reset (admin only) - 重置 metrics counters
 	if deps.Metrics != nil {
-		mux.Handle("/api/metrics/reset", authGuard(adminGuard(NewMetricsAdminHandler(deps.Metrics, deps.Session))))
+		mux.Handle("/api/metrics/reset", authGuard(adminGuard(NewMetricsAdminHandler(deps.Metrics))))
 	}
 
 	// /api/audit (admin only) - 审计日志查询
 	if deps.Store != nil {
-		mux.Handle("/api/audit", authGuard(adminGuard(NewAuditHandler(deps.Store, deps.Session))))
+		mux.Handle("/api/audit", authGuard(adminGuard(NewAuditHandler(deps.Store))))
 	}
 
 	// /api/backup (admin only) - 备份管理
 	if deps.Backup != nil {
-		mux.Handle("/api/backup", authGuard(adminGuard(NewBackupHandler(deps.Backup, deps.Session))))
+		mux.Handle("/api/backup", authGuard(adminGuard(NewBackupHandler(deps.Backup))))
 	}
 }

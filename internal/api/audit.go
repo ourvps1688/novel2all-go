@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ourvps1688/novel2all-go/internal/auth"
 	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
@@ -52,24 +51,23 @@ type AuditAdminListResponse struct {
 	Offset  int                       `json:"offset"`
 }
 
-// AuditHandler /api/audit/* handler
+// AuditHandler /api/audit/* handler.
+//
+// Sprint V1.0.1 P3: admin 鉴权已移到 mux-level middleware (RegisterAdminRoutes 包装 RequireAuth+RequireAdmin).
+// handler 假设 caller 已过 admin guard, 直接执行业务逻辑.
 type AuditHandler struct {
-	db      *store.DB
-	session UserLookup
+	db *store.DB
 }
 
-// NewAuditHandler 创建
-func NewAuditHandler(db *store.DB, s UserLookup) *AuditHandler {
-	return &AuditHandler{db: db, session: s}
+// NewAuditHandler 创建.
+//
+// Sprint V1.0.1 P3: 移除 session 参数 (admin 鉴权已移到 mux-level middleware).
+func NewAuditHandler(db *store.DB) *AuditHandler {
+	return &AuditHandler{db: db}
 }
 
-// ServeHTTP 路由分发 + admin 鉴权
+// ServeHTTP 路由分发 (admin 鉴权在 RegisterAdminRoutes mux-level 完成)
 func (h *AuditHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// admin 鉴权
-	if !h.requireAdmin(w, r) {
-		return
-	}
-
 	path := strings.TrimPrefix(r.URL.Path, "/api/audit")
 	path = strings.Trim(path, "/")
 
@@ -94,25 +92,6 @@ func (h *AuditHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.handleGet(w, r, id)
-}
-
-// requireAdmin 通用 admin 鉴权（与 state_handler.go 同模式）
-func (h *AuditHandler) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	if h.session == nil {
-		http.Error(w, `{"error":"audit endpoints disabled"}`, http.StatusServiceUnavailable)
-		return false
-	}
-	token := h.session.GetTokenFromRequest(r)
-	user, err := h.session.GetUserByToken(r.Context(), token)
-	if err != nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-		return false
-	}
-	if !auth.IsAdmin(user) {
-		http.Error(w, `{"error":"admin required"}`, http.StatusForbidden)
-		return false
-	}
-	return true
 }
 
 // handleList GET /api/audit
