@@ -201,6 +201,9 @@ func Run(cfg *config.Config) error {
 	handler := api.LoggingMiddleware(logger, metrics, traces, mux)
 	// 套一层 security headers middleware (Sprint 21)
 	handler = api.NewSecurityHeadersMiddleware(handler, nil)
+	// 套一层 CORS middleware (Sprint V1.0.1 P4)
+	// 必须放在最外层, 让 OPTIONS preflight 短路不进入 logging / metrics.
+	handler = api.NewCORSMiddleware(handler, api.DefaultCORSConfig())
 
 	// 8. HTTP server
 	srv := &http.Server{
