@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ourvps1688/novel2all-go/internal/auth"
 )
 
 // Project 一个小说项目
@@ -50,6 +52,23 @@ func (s *ProjectStore) List() []*Project {
 	out := make([]*Project, 0, len(s.data))
 	for _, p := range s.data {
 		// 拷贝，避免外部修改
+		cp := *p
+		out = append(out, &cp)
+	}
+	return out
+}
+
+// ListByOwner 按 owner_id 过滤 (Sprint V1.0.1 P0-B owner filter).
+//
+// 返回所有 OwnerID == ownerID 的项目 (deep copy, 避免外部修改内存).
+func (s *ProjectStore) ListByOwner(ownerID int64) []*Project {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*Project, 0)
+	for _, p := range s.data {
+		if p.OwnerID != ownerID {
+			continue
+		}
 		cp := *p
 		out = append(out, &cp)
 	}
@@ -234,9 +253,24 @@ func (h *ProjectsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// list 列出所有项目
-func (h *ProjectsHandler) list(w http.ResponseWriter, _ *http.Request) {
-	projects := h.repo.List()
+// list 列出项目 — admin 看全部, 普通 user 只看自己 (Sprint V1.0.1 P0-B owner filter).
+//
+// 要求 context 中有 *store.User (由 mux-level RequireAuth 注入).
+// 无 user → 401 (handler 单元测试需自己注入 user context).
+func (h *ProjectsHandler) list(w http.ResponseWriter, r *http.Request) {
+	user, ok := UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var projects []*Project
+	if auth.IsAdmin(user) {
+		projects = h.repo.List()
+	} else {
+		projects = h.repo.ListByOwner(user.ID)
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"projects": projects,

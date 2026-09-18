@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -64,7 +65,7 @@ func TestProjectStore_UpdateAndDelete(t *testing.T) {
 func TestProjectsHandler_ListEmpty(t *testing.T) {
 	h := NewProjectsHandler()
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/projects", http.NoBody)
+	req := newRequestAsUser(http.MethodGet, "/api/projects", http.NoBody, &store.User{ID: 1, Role: "admin"})
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200", rec.Code)
@@ -74,6 +75,105 @@ func TestProjectsHandler_ListEmpty(t *testing.T) {
 	if resp["count"].(float64) != 0 {
 		t.Errorf("count=%v, want 0", resp["count"])
 	}
+}
+
+// TestProjectsHandler_List_NoUser_Returns401 验证: list handler 无 user context → 401.
+//
+// Sprint V1.0.1 P0-B: list 现在必须从 context 取 user. 无 user (例如直接调用未注入)
+// 视为 unauthenticated. mux-level RequireAuth 已先拦截, 这是 handler 层的双层防御.
+func TestProjectsHandler_List_NoUser_Returns401(t *testing.T) {
+	h := NewProjectsHandler()
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/projects", http.NoBody)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("无 user 应 401, 实际 %d", rec.Code)
+	}
+}
+
+// TestProjectsHandler_List_OwnerFilter 验证: 普通 user 只看自己的项目.
+//
+// alice 创项目, bob 创项目, alice list 只见 alice, bob list 只见 bob, admin list 全部.
+func TestProjectsHandler_List_OwnerFilter(t *testing.T) {
+	s := NewProjectStore()
+	_, _ = s.Create("Alice's Novel", "alice-1", "", 1 /*alice*/, "fantasy")
+	_, _ = s.Create("Bob's Novel", "bob-1", "", 2 /*bob*/, "scifi")
+	h := &ProjectsHandler{repo: s}
+
+	// alice list → 只见 1 个 (自己的)
+	rec := httptest.NewRecorder()
+	req := newRequestAsUser(http.MethodGet, "/api/projects", http.NoBody, &store.User{ID: 1, Role: "user"})
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("alice list: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Projects []*Project `json:"projects"`
+		Count    int        `json:"count"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Count != 1 {
+		t.Errorf("alice 应见 1 个项目, 实际 %d", resp.Count)
+	}
+	if len(resp.Projects) > 0 && resp.Projects[0].OwnerID != 1 {
+		t.Errorf("alice 见到非自己的项目: %+v", resp.Projects[0])
+	}
+
+	// bob list → 只见 1 个 (自己的)
+	rec = httptest.NewRecorder()
+	req = newRequestAsUser(http.MethodGet, "/api/projects", http.NoBody, &store.User{ID: 2, Role: "user"})
+	h.ServeHTTP(rec, req)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Count != 1 {
+		t.Errorf("bob 应见 1 个项目, 实际 %d", resp.Count)
+	}
+	if len(resp.Projects) > 0 && resp.Projects[0].OwnerID != 2 {
+		t.Errorf("bob 见到非自己的项目: %+v", resp.Projects[0])
+	}
+
+	// admin list → 见 2 个 (全部)
+	rec = httptest.NewRecorder()
+	req = newRequestAsUser(http.MethodGet, "/api/projects", http.NoBody, &store.User{ID: 999, Role: "admin"})
+	h.ServeHTTP(rec, req)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Count != 2 {
+		t.Errorf("admin 应见 2 个项目, 实际 %d", resp.Count)
+	}
+}
+
+// TestProjectsHandler_List_OwnerFilter_EmptyResult 验证: user 没项目时 list 返回空 (而非全列).
+func TestProjectsHandler_List_OwnerFilter_EmptyResult(t *testing.T) {
+	s := NewProjectStore()
+	// 项目不属于 charlie (id=3)
+	_, _ = s.Create("Alice", "alice-1", "", 1, "")
+	h := &ProjectsHandler{repo: s}
+
+	rec := httptest.NewRecorder()
+	req := newRequestAsUser(http.MethodGet, "/api/projects", http.NoBody, &store.User{ID: 3, Role: "user", Username: "charlie"})
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	var resp struct {
+		Count int `json:"count"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Count != 0 {
+		t.Errorf("charlie 应见 0 个项目 (全不是他的), 实际 %d", resp.Count)
+	}
+}
+
+// newRequestAsUser 创建带 *store.User context 的 request (用于直接 handler 测试).
+//
+// 复用 auth_middleware.go 的 userCtxValue (同包, 可访问未导出 key).
+// 用法: req := newRequestAsUser(http.MethodGet, "/api/projects", nil, &store.User{ID: 1, Role: "admin"})
+func newRequestAsUser(method, url string, body io.Reader, user *store.User) *http.Request {
+	req := httptest.NewRequest(method, url, body)
+	if user != nil {
+		ctx := context.WithValue(req.Context(), userCtxValue, user)
+		req = req.WithContext(ctx)
+	}
+	return req
 }
 
 func TestProjectsHandler_CreateAndGet(t *testing.T) {

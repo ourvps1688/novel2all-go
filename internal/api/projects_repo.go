@@ -12,6 +12,8 @@ import (
 // 兼容现有的 ProjectStore (内存) + store.ProjectsStore (SQLite)，便于 Sprint 15 commit D 切换
 type ProjectsRepo interface {
 	List() []*Project
+	// ListByOwner 按 owner_id 过滤项目 (Sprint V1.0.1 P0-B owner filter)
+	ListByOwner(ownerID int64) []*Project
 	Get(id int64) (*Project, error)
 	Create(name, slug, desc string, ownerID int64, genre string) (*Project, error)
 	Update(id int64, name, desc, genre string) (*Project, error)
@@ -36,6 +38,24 @@ func (a *SQLiteProjectsAdapter) List() []*Project {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	rows, err := a.s.List(ctx)
+	if err != nil {
+		return nil
+	}
+	out := make([]*Project, 0, len(rows))
+	for _, p := range rows {
+		out = append(out, projectStoreToAPI(p))
+	}
+	return out
+}
+
+// ListByOwner 按 owner 过滤 (Sprint V1.0.1 P0-B owner filter).
+//
+// 委托给 store.ProjectsStore.ListByOwner (store 层已有 SQLite 实现).
+// 失败时返回 nil (与 List 一致).
+func (a *SQLiteProjectsAdapter) ListByOwner(ownerID int64) []*Project {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	rows, err := a.s.ListByOwner(ctx, ownerID)
 	if err != nil {
 		return nil
 	}
