@@ -136,3 +136,81 @@ func TestAuthHandler_Me_Authorized(t *testing.T) {
 		t.Errorf("期望 200，实际=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+// =====================================================================
+// Sprint V1.0.1 P0-A: 验证 /api/auth/* 路由公开 (不受 RequireAuth wrap)
+//
+// 上方 TestAuthHandler_* 测试 AuthHandler 单元; 此处验证 mux-level
+// auth flow: register + login + /me 通过完整 Router 走通.
+// =====================================================================
+
+// TestAuthMux_FullFlow_RegisterLoginMe 通过完整 api.Router 跑 register → login → /me.
+//
+// 关键: /api/auth/* 在路由中是 PUBLIC, 不被 RequireAuth wrap.
+// 期望所有 endpoint 都 200/201, 不出现 401.
+func TestAuthMux_FullFlow_RegisterLoginMe(t *testing.T) {
+	mux := setupAuthMuxForProjects(t)
+
+	// 1. register
+	body, _ := json.Marshal(RegisterRequest{Username: "v101_user", Password: "v101pass"})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("register 应 201, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 2. login
+	body, _ = json.Marshal(LoginRequest{Username: "v101_user", Password: "v101pass"})
+	req = httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login 应 200, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+	loginResp := rec.Result()
+	defer func() { _ = loginResp.Body.Close() }()
+	cookies := loginResp.Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("login 未设置 cookie")
+	}
+
+	// 3. /me (公开 + cookie)
+	req = httptest.NewRequest(http.MethodGet, "/api/auth/me", http.NoBody)
+	req.AddCookie(cookies[0])
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("/me 应 200, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// setupAuthMuxForProjects 构造最小 mux 用于测试 /api/auth/* + 受保护端点交互.
+//
+// 复用 projects_test.go 的 setupProjectsAuthMux 风格.
+func setupAuthMuxForProjects(t *testing.T) http.Handler {
+	t.Helper()
+
+	dsn := filepath.Join(t.TempDir(), "test_v101.db")
+	db, err := store.Open(context.Background(), dsn)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := db.Migrate(context.Background()); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	sm := auth.NewSessionManager(db, auth.DefaultSessionConfig())
+	limiter := auth.NewRateLimiter(5, 1*time.Minute, 30*time.Second)
+
+	deps := Deps{
+		Store:   db,
+		Session: sm,
+		Limiter: limiter,
+	}
+	deps.SetProjectStore(NewSQLiteProjectsAdapter(store.NewProjectsStore(db)))
+	return Router(deps)
+}

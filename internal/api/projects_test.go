@@ -2,11 +2,18 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/ourvps1688/novel2all-go/internal/auth"
+	"github.com/ourvps1688/novel2all-go/internal/store"
+	"github.com/ourvps1688/novel2all-go/internal/testfixtures"
 )
 
 func TestProjectStore_CreateAndGet(t *testing.T) {
@@ -141,5 +148,115 @@ func TestProjectsHandler_UpdateAndDelete(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("delete status=%d, want 204", rec.Code)
+	}
+}
+
+// =====================================================================
+// Sprint V1.0.1 P0-A mux-level auth wire 集成测试 (用 full api.Router)
+//
+// 验证: 注册的 mux-level RequireAuth wrap 在端到端路径上生效.
+// 直接 handler 调用 (上方 TestProjectsHandler_*) 不受影响 — 它们不走 mux.
+// =====================================================================
+
+// setupProjectsAuthMux 构造含 /api/auth/* + /api/projects/* 的完整 mux (用 api.Router).
+//
+// 最小依赖: SQLite + SessionManager + RateLimiter + ProjectsStore.
+// 返回 mux 和一个 cleanup 函数 (test 用 t.Cleanup).
+func setupProjectsAuthMux(t *testing.T) http.Handler {
+	t.Helper()
+
+	ctx := context.Background()
+	dsn := filepath.Join(t.TempDir(), "test.db")
+	db, err := store.Open(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	sm := auth.NewSessionManager(db, auth.DefaultSessionConfig())
+	limiter := auth.NewRateLimiter(5, 1*time.Minute, 30*time.Second)
+
+	// 构造 Deps — 只填 Router 需要的最小字段 (Projects 只需 projectStore + session).
+	deps := Deps{
+		Store:   db,
+		Session: sm,
+		Limiter: limiter,
+	}
+	deps.SetProjectStore(NewSQLiteProjectsAdapter(store.NewProjectsStore(db)))
+
+	mux := Router(deps)
+	if mux == nil {
+		t.Fatal("Router 返回 nil")
+	}
+	return mux
+}
+
+// TestProjectsMux_RequiresAuth_NoCookie_401 验证: /api/projects (mux-level) 无 cookie → 401.
+//
+// 直接证明 RequireAuth 在 mux.Handle wrap 中生效.
+func TestProjectsMux_RequiresAuth_NoCookie_401(t *testing.T) {
+	mux := setupProjectsAuthMux(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/projects/", http.NoBody)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("无 cookie 应 401, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestProjectsMux_RequiresAuth_WithCookie_OK 验证: 带 cookie → 200 (requireauth 透明).
+//
+// 用 testfixtures.LoginAs 拿 cookie (复用 batch 1 的 helper).
+func TestProjectsMux_RequiresAuth_WithCookie_OK(t *testing.T) {
+	mux := setupProjectsAuthMux(t)
+	cookie := testfixtures.LoginAs(t, mux, "alice_v101", "alicepass")
+
+	resp := testfixtures.AuthedRequest(t, mux, http.MethodGet, "/api/projects/", nil, cookie)
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("带 cookie 应 200, 实际 %d", resp.StatusCode)
+	}
+}
+
+// TestProjectsMux_Create_RequiresAuth 验证: POST /api/projects 也需 cookie (不仅 GET).
+func TestProjectsMux_Create_RequiresAuth(t *testing.T) {
+	mux := setupProjectsAuthMux(t)
+
+	body, _ := json.Marshal(map[string]string{"name": "Test", "slug": "test-v101"})
+
+	// 无 cookie
+	req := httptest.NewRequest(http.MethodPost, "/api/projects/", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("POST 无 cookie 应 401, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 带 cookie
+	cookie := testfixtures.LoginAs(t, mux, "bob_v101", "bobpass")
+	resp := testfixtures.AuthedRequest(t, mux, http.MethodPost, "/api/projects/", body, cookie)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("POST 带 cookie 应 201, 实际 %d", resp.StatusCode)
+	}
+}
+
+// TestProjectsMux_InvalidCookie_Returns401 验证: 伪造 cookie token → 401.
+func TestProjectsMux_InvalidCookie_Returns401(t *testing.T) {
+	mux := setupProjectsAuthMux(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/projects/", http.NoBody)
+	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "fake-token-xyz"})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("伪造 cookie 应 401, 实际 %d", rec.Code)
 	}
 }

@@ -151,8 +151,14 @@ func registerAuthRoutes(mux *http.ServeMux, deps Deps) {
 }
 
 // registerContentRoutes 注册 skills + roles + cache + status + models + chapters + characters
+//
+// Sprint V1.0.1 P0-A: 受保护 endpoint (cache/chapters/characters/relationships/foreshadows/memory)
+// 用 RequireAuth(deps.Session) wrap; 公开 endpoint (skills/roles/status/models) 不 wrap.
 func registerContentRoutes(mux *http.ServeMux, deps Deps) {
-	// Skills API
+	// 鉴权 guard — 复用 session, session=nil 时 RequireAuth 返回 503 (防未授权访问)
+	authGuard := RequireAuth(deps.Session)
+
+	// Skills API (公开)
 	if deps.Loader != nil && deps.Router != nil {
 		executor := skills.NewExecutor(deps.Loader, deps.Router)
 		skillsHandler := NewSkillsHandler(executor, deps.Loader)
@@ -165,23 +171,23 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 		_ = skillsHandler // 显式保留
 	}
 
-	// Roles API
+	// Roles API (公开)
 	mux.Handle("/api/roles", NewRolesHandler())
 
-	// Cache API
-	mux.Handle("/api/cache/", NewCacheHandler())
+	// Cache API (受保护 P0-A) — 包括 stats + prompt-stats + migrate 等所有子路径
+	mux.Handle("/api/cache/", authGuard(NewCacheHandler()))
 
-	// Status API
+	// Status API (公开)
 	mux.Handle("/api/status", NewStatusHandler())
 
-	// Models API（/api/model/{current,switch} + /api/models/）
+	// Models API（/api/model/{current,switch} + /api/models/） (公开)
 	if deps.Router != nil {
 		modelsHandler := NewModelsHandler(deps.Router)
 		mux.Handle("/api/model/", modelsHandler)
 		mux.Handle("/api/models/", modelsHandler)
 	}
 
-	// Chapters API（filesystem + LLM actions）
+	// Chapters API（filesystem + LLM actions） (受保护 P0-A)
 	if deps.Loader != nil && deps.Router != nil {
 		executor := skills.NewExecutor(deps.Loader, deps.Router)
 		actions := NewChapterActions(executor)
@@ -189,42 +195,46 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 		if deps.ChaptersMeta != nil {
 			chaptersHandler.SetMetaStore(deps.ChaptersMeta)
 		}
-		mux.Handle("/api/chapters", chaptersHandler)
-		mux.Handle("/api/chapters/", chaptersHandler)
-		mux.Handle("/api/chapter/", chaptersHandler)
+		mux.Handle("/api/chapters", authGuard(chaptersHandler))
+		mux.Handle("/api/chapters/", authGuard(chaptersHandler))
+		mux.Handle("/api/chapter/", authGuard(chaptersHandler))
 	} else {
 		chaptersHandler := NewChapterHandler()
 		if deps.ChaptersMeta != nil {
 			chaptersHandler.SetMetaStore(deps.ChaptersMeta)
 		}
-		mux.Handle("/api/chapters", chaptersHandler)
-		mux.Handle("/api/chapters/", chaptersHandler)
-		mux.Handle("/api/chapter/", chaptersHandler)
+		mux.Handle("/api/chapters", authGuard(chaptersHandler))
+		mux.Handle("/api/chapters/", authGuard(chaptersHandler))
+		mux.Handle("/api/chapter/", authGuard(chaptersHandler))
 	}
 
-	// Characters + Relationships + Foreshadows API（JSON 持久化）
+	// Characters + Relationships + Foreshadows API (受保护 P0-A, JSON 持久化)
 	charactersHandler := NewCharactersHandler()
-	mux.Handle("/api/characters", charactersHandler)
-	mux.Handle("/api/characters/", charactersHandler)
-	mux.Handle("/api/relationships", charactersHandler)
-	mux.Handle("/api/relationships/", charactersHandler)
-	mux.Handle("/api/foreshadows", charactersHandler)
-	mux.Handle("/api/foreshadows/", charactersHandler)
+	mux.Handle("/api/characters", authGuard(charactersHandler))
+	mux.Handle("/api/characters/", authGuard(charactersHandler))
+	mux.Handle("/api/relationships", authGuard(charactersHandler))
+	mux.Handle("/api/relationships/", authGuard(charactersHandler))
+	mux.Handle("/api/foreshadows", authGuard(charactersHandler))
+	mux.Handle("/api/foreshadows/", authGuard(charactersHandler))
 
-	// Sprint 25: Memory API (长记忆系统)
+	// Sprint 25: Memory API (长记忆系统) (受保护 P0-A)
 	// 注: projectRoot = 当前目录, Sprint 26+ 改成从 cfg 读
 	memoryHandler := NewMemoryHandler(".")
-	mux.Handle("/api/memory", memoryHandler)
-	mux.Handle("/api/memory/", memoryHandler)
+	mux.Handle("/api/memory", authGuard(memoryHandler))
+	mux.Handle("/api/memory/", authGuard(memoryHandler))
 }
 
 // registerProjectRoutes 注册 projects + write + tracking
+//
+// Sprint V1.0.1 P0-A: 全部 endpoint 用 RequireAuth(deps.Session) wrap (受保护).
 func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
-	// Projects API（内存版）
-	// 共享 ProjectStore: 切片 10 让 StatePersistor 可以持久化 projects
-	mux.Handle("/api/projects/", NewProjectsHandlerWithRepo(deps.projectStore))
+	authGuard := RequireAuth(deps.Session)
 
-	// Write + Tracking API（流式写作）
+	// Projects API (受保护 P0-A)
+	// 共享 ProjectStore: 切片 10 让 StatePersistor 可以持久化 projects
+	mux.Handle("/api/projects/", authGuard(NewProjectsHandlerWithRepo(deps.projectStore)))
+
+	// Write + Tracking API (受保护 P0-A, 流式写作)
 	if deps.Loader != nil && deps.Router != nil {
 		executor := skills.NewExecutor(deps.Loader, deps.Router)
 		var writeHandler *WriteHandler
@@ -236,15 +246,15 @@ func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 		}
 		// Sprint 28: 注入 PipelineTaskManager 支持 SSE 流式
 		writeHandler.taskMgr = NewPipelineTaskManager()
-		mux.Handle("/api/write/", writeHandler)
+		mux.Handle("/api/write/", authGuard(writeHandler))
 		// Sprint 28: 取消任务端点 (POST /api/write/cancel/{task_id})
-		mux.HandleFunc("/api/write/cancel/", writeHandler.handleWriteCancel)
+		mux.Handle("/api/write/cancel/", authGuard(http.HandlerFunc(writeHandler.handleWriteCancel)))
 		// Sprint 28: 列出活跃任务 (GET /api/write/active)
-		mux.HandleFunc("/api/write/active", writeHandler.handleWriteActive)
+		mux.Handle("/api/write/active", authGuard(http.HandlerFunc(writeHandler.handleWriteActive)))
 		// Sprint 28: SSE 流式 + 切模型 (POST /api/write/stream/model)
-		mux.HandleFunc("/api/write/stream/model", writeHandler.handleWriteStreamModel)
+		mux.Handle("/api/write/stream/model", authGuard(http.HandlerFunc(writeHandler.handleWriteStreamModel)))
 	}
-	mux.Handle("/api/tracking", NewTrackingHandler())
+	mux.Handle("/api/tracking", authGuard(NewTrackingHandler()))
 }
 
 // registerOpsRoutes 注册 metrics + debug（切片 9）+ state + metrics admin（切片 10）+ audit（切片 11）
@@ -276,13 +286,15 @@ func registerDebugRoute(mux *http.ServeMux, deps Deps) {
 	mux.Handle("/debug/", debugHandler)
 }
 
-// registerAIRoutes P1-C: chroma + graph（无 admin 鉴权）
+// registerAIRoutes P1-C: chroma + graph.
+//
+// Sprint V1.0.1 P0-A: graph 受保护 (含用户项目角色关系), chroma 公开 (共享向量 DB).
 func registerAIRoutes(mux *http.ServeMux, deps Deps) {
 	if deps.Chroma != nil {
 		mux.Handle("/api/chroma/", NewChromaHandler(deps.Chroma))
 	}
 	if deps.Graph != nil {
-		mux.Handle("/api/graph/", NewGraphHandler(deps.Graph))
+		mux.Handle("/api/graph/", RequireAuth(deps.Session)(NewGraphHandler(deps.Graph)))
 	}
 }
 
