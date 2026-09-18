@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ourvps1688/novel2all-go/internal/agent"
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 )
 
@@ -112,6 +113,28 @@ func (r *MultiAgentReviewer) Review(ctx context.Context, chapter int, content st
 
 	report.Summary = summarizeReport(report)
 	return report, nil
+}
+
+// ReviewWithAgents 使用 agent framework 并行审稿 (Sprint A5.7)
+//
+// 与 Review() 区别：用 internal/agent.RunAgent() 走统一 agent 框架
+// （可复用 tool / memory / model mapping / path translator）。
+// router=nil 时返 stub（同 Review）。
+//
+// 完整实现路线：
+//   - Sprint A5.7 完整实现：4 个 reviewer agent 并行（A5.4 Orchestrator.RunParallel）
+//   - 每个 reviewer 用 agent.Run() 跑完整 maxTurns + tool_call 循环
+//   - 4 个结果合并成 ReviewReport
+func (r *MultiAgentReviewer) ReviewWithAgents(
+	ctx context.Context,
+	chapter int,
+	content string,
+	state *TrackingState,
+	agents *agent.ReviewerAgentSet,
+) (*ReviewReport, error) {
+	// Sprint A5.7 stub：fallback 到原 Review() 实现
+	// 完整实现需要构造 4 个 AgentSpec + A5.4 Orchestrator
+	return r.Review(ctx, chapter, content, state)
 }
 
 // reviewByRole 单个 role 审稿 (Sprint 26: router 可用时调 LLM).
