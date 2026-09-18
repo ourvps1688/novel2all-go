@@ -81,14 +81,13 @@ func toAgentSpec(s *roles.RoleSpec) *AgentSpec {
 		return nil
 	}
 	return &AgentSpec{
-		Name:         s.Name,
-		// Alias omitted (AgentSpec has no Alias)
-		Description:  s.Description,
-		Tools:        s.Tools,
-		Model:        s.Model,
-		MaxTurns:     s.MaxTurns,
-		Memory:       s.Memory,
-		Skills:       s.Skills,
+		Name:        s.Name,
+		Description: s.Description,
+		Tools:       s.Tools,
+		Model:       s.Model,
+		MaxTurns:    s.MaxTurns,
+		Memory:      s.Memory,
+		Skills:      s.Skills,
 		SystemPrompt: s.SystemPrompt,
 	}
 }
