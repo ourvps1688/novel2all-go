@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -228,7 +229,13 @@ func TestProjectsMux_RequiresAuth_WithCookie_OK(t *testing.T) {
 func TestProjectsMux_Create_RequiresAuth(t *testing.T) {
 	mux := setupProjectsAuthMux(t)
 
-	body, _ := json.Marshal(map[string]string{"name": "Test", "slug": "test-v101"})
+	body, _ := json.Marshal(map[string]string{
+		"name":        "Test",
+		"slug":        "test-v101",
+		"description": "Test project",
+		"owner_id":    "0", // 实际从 context 注入, body 字段忽略
+		"genre":       "fantasy",
+	})
 
 	// 无 cookie
 	req := httptest.NewRequest(http.MethodPost, "/api/projects/", bytes.NewReader(body))
@@ -243,7 +250,8 @@ func TestProjectsMux_Create_RequiresAuth(t *testing.T) {
 	resp := testfixtures.AuthedRequest(t, mux, http.MethodPost, "/api/projects/", body, cookie)
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
-		t.Errorf("POST 带 cookie 应 201, 实际 %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Errorf("POST 带 cookie 应 201, 实际 %d body=%s", resp.StatusCode, string(bodyBytes))
 	}
 }
 

@@ -121,8 +121,6 @@ func TestLoginAs_ReuseUserIsIdempotent(t *testing.T) {
 // 这里我们用 sub-test + t.Run 不能直接捕获, 改用一个反向验证: 不验证失败路径,
 // 而是验证 happy path 在 mux 缺路由时确实会 fail (通过 sub-test 的失败标志).
 func TestLoginAs_BadMuxRoutes_Fails(t *testing.T) {
-	emptyMux := http.NewServeMux()
-
 	// 调用 LoginAs; 因为 mux 无 /api/auth/register, register 返回 404 → t.Fatal → goroutine 终止
 	// 我们用 defer 检测测试函数是否被 runtime.Goexit 中断 (这本身无法 recover)
 	// 改用更简单方式: 不跑这个子测试, 留注释说明.
