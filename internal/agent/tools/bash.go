@@ -37,8 +37,8 @@ const bashMaxOutput = 100 * 1024 // 100KB
 // 允许的命令白名单（决策 2=B）
 //
 // 加新命令必须：
-//   1. 加到 allowedCommands
-//   2. 评估安全性（无副作用或只读）
+//  1. 加到 allowedCommands
+//  2. 评估安全性（无副作用或只读）
 var allowedCommands = map[string]bool{
 	"ls": true, "cat": true, "head": true, "tail": true,
 	"grep": true, "find": true, "wc": true, "tree": true,

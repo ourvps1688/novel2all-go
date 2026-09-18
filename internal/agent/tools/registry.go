@@ -12,11 +12,12 @@ import (
 // Agent framework 通过 Registry 查找 + 调用 Tool。
 //
 // 用法：
-//   reg := tools.NewRegistry()
-//   reg.Register(NewReadTool(sandbox))
-//   reg.Register(NewBashTool(sandbox))
-//   tool, _ := reg.Get("Read")
-//   result, err := tool.Execute(ctx, []byte(`{"path": "..."}`))
+//
+//	reg := tools.NewRegistry()
+//	reg.Register(NewReadTool(sandbox))
+//	reg.Register(NewBashTool(sandbox))
+//	tool, _ := reg.Get("Read")
+//	result, err := tool.Execute(ctx, []byte(`{"path": "..."}`))
 type Registry struct {
 	mu    sync.RWMutex
 	tools map[string]Tool
