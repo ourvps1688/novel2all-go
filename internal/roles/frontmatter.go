@@ -9,14 +9,14 @@ import (
 // frontmatter 解析后的字段（仅支持 vendor role 实际用到的子集）
 // Sprint A5.13: DisallowedTools 字段已支持（vendor 4 个只读 role 使用）
 type frontmatter struct {
-	Name             string
-	Description      string
-	Tools            []string
-	DisallowedTools  []string
-	Model            string
-	MaxTurns         int
-	Memory           string
-	Skills           []string
+	Name            string
+	Description     string
+	Tools           []string
+	DisallowedTools []string
+	Model           string
+	MaxTurns        int
+	Memory          string
+	Skills          []string
 }
 
 // parseYAMLFrontmatter 解析 role .md 文件的 frontmatter + body
