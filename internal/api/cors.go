@@ -96,10 +96,8 @@ func NewCORSMiddleware(next http.Handler, cfg CORSConfig) http.Handler {
 	if cfg.MaxAge == 0 {
 		cfg.MaxAge = 86400
 	}
-	if !cfg.AllowCreds {
-		// 零值默认 AllowCreds=true（DefaultCORSConfig 的语义）
-		cfg.AllowCreds = true
-	}
+	// AllowCreds 是 bool — 零值 false 不应被默默改成 true（会破坏 WildcardNoCreds_LiteralStar 测试语义）
+	// 调用方应显式用 DefaultCORSConfig() 构造或手动设 AllowCreds
 
 	allowOriginSet := make(map[string]struct{}, len(cfg.AllowOrigins))
 	hasWildcard := false

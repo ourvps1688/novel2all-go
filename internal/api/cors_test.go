@@ -245,9 +245,9 @@ func TestCORS_MultipleSpecificOrigins(t *testing.T) {
 	}
 }
 
-// TestCORS_ZeroConfig_AppliesDefaults 验证: 零值 CORSConfig → 用 DefaultCORSConfig 行为.
+// TestCORS_ZeroConfig_AppliesDefaults 验证: 零值 CORSConfig → 自动套用切片/Map/MaxAge 默认.
 //
-// 防止调用方传零值导致 middleware 不工作.
+// 注意：AllowCreds 是 bool, 零值 false 不被改 — 调用方应显式用 DefaultCORSConfig() 设 true.
 func TestCORS_ZeroConfig_AppliesDefaults(t *testing.T) {
 	handler := NewCORSMiddleware(corsTestNext(), CORSConfig{})
 
@@ -259,12 +259,13 @@ func TestCORS_ZeroConfig_AppliesDefaults(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("零值 config 应仍正常工作, got status %d", rec.Code)
 	}
-	// 零值 + 默认 (wildcard + creds) → 应回显 origin
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://any.com" {
-		t.Errorf("零值 config 应回显 origin, got=%q", got)
+	// 零值 + Wildcard + AllowCreds=false → Allow-Origin 应保留字面 "*"
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("零值 config (Wildcard + NoCreds) Allow-Origin=%q, want *", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != boolStrTrue {
-		t.Errorf("零值 config 应有 AllowCreds=true (默认), got=%q", got)
+	// 零值 config 不应写 Allow-Credentials (AllowCreds 零值 false)
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "" {
+		t.Errorf("零值 config 不应写 Allow-Credentials, got=%q", got)
 	}
 	if got := rec.Header().Get("Access-Control-Max-Age"); got != "86400" {
 		t.Errorf("零值 config 应有默认 MaxAge=86400, got=%q", got)
