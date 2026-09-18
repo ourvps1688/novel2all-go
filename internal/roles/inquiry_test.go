@@ -42,10 +42,10 @@ func TestInquiry_AllRolesDump(t *testing.T) {
 }
 
 // truncateForLog 截断长字符串用于日志输出
-func truncateForLog(s string, max int) string {
+func truncateForLog(s string, maxLen int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) > max {
-		return s[:max] + "..."
+	if len(s) > maxLen {
+		return s[:maxLen] + "..."
 	}
 	return s
 }
