@@ -33,6 +33,12 @@ func NewStateHandler(p *StatePersistor) *StateHandler {
 
 // ServeHTTP 路由分发 (admin 鉴权在 RegisterAdminRoutes mux-level 完成)
 func (h *StateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// nil persistor → 503 (防御性, 与 backup_handler / metrics_admin 一致)
+	if h.persistor == nil {
+		http.Error(w, `{"error":"state persistor not initialized"}`, http.StatusServiceUnavailable)
+		return
+	}
+
 	path := strings.TrimPrefix(r.URL.Path, "/api/state")
 	path = strings.Trim(path, "/")
 

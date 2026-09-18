@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -29,7 +30,7 @@ func newTestStateHandler(t *testing.T) (*StateHandler, *ProjectStore) {
 //
 // 注: handler 不再做 inline admin check; 测试需手动注入 admin user context.
 func stateReqAdmin(method, url string, body []byte) *http.Request {
-	var bodyReader *bytes.Reader
+	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
 	}
@@ -67,10 +68,10 @@ func TestStateHandler_Info_OK(t *testing.T) {
 }
 
 func TestStateHandler_Save_RoundTrip(t *testing.T) {
-	h, store := newTestStateHandler(t)
+	h, stateStore := newTestStateHandler(t)
 
 	// 1. 创建 project
-	if _, err := store.Create("My Novel", "novel-1", "test", 1, "fantasy"); err != nil {
+	if _, err := stateStore.Create("My Novel", "novel-1", "test", 1, "fantasy"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	atomicStoreInt64(&cacheHits, 42)
@@ -118,10 +119,10 @@ func TestStateHandler_Save_RoundTrip(t *testing.T) {
 }
 
 func TestStateHandler_Reset(t *testing.T) {
-	h, store := newTestStateHandler(t)
+	h, stateStore := newTestStateHandler(t)
 
 	// 1. 创建 project + save
-	if _, err := store.Create("To Delete", "del", "", 1, ""); err != nil {
+	if _, err := stateStore.Create("To Delete", "del", "", 1, ""); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if err := h.persistor.Save(); err != nil {
@@ -138,7 +139,7 @@ func TestStateHandler_Reset(t *testing.T) {
 	}
 
 	// 3. 验证内存清空 + 文件删除
-	if len(store.List()) != 0 {
+	if len(stateStore.List()) != 0 {
 		t.Error("projects should be empty after reset")
 	}
 	if atomicLoadInt64(&cacheHits) != 0 {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -56,7 +57,7 @@ func newTestAuditHandler(t *testing.T) (*AuditHandler, *store.DB) {
 
 // auditReqAdmin 构造带 admin user context 的 request (用于测试 admin-only handler).
 func auditReqAdmin(method, url string, body []byte) *http.Request {
-	var bodyReader *bytes.Reader
+	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
 	}

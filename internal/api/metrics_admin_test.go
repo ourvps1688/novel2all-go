@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,7 +22,7 @@ func newTestMetricsAdminHandler(t *testing.T) (*MetricsAdminHandler, *obs.Metric
 
 // metricsReqAdmin 构造带 admin user context 的 request.
 func metricsReqAdmin(method, url string, body []byte) *http.Request {
-	var bodyReader *bytes.Reader
+	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
 	}
