@@ -5,6 +5,14 @@
 >
 > **⚠️ 重要约束（用户确认 2026-09-18）**：MiniMax M3 使用**国内版**（`api.minimax.cn`），不是国际版（`api.minimax.io`）。Go 代码现状已正确（`internal/llm/minimax.go:14` = `https://api.minimax.cn/anthropic`），本计划文档此前误写为 `.io` 域名，已更正。
 
+> **⚠️ Sprint A3 阶段检查发现的问题（2026-09-18 16:01）**：
+> - **P0 🔴** vendor role prompt 含 `.claude/skills/...` 路径（5/7 role），需 Sprint A5 加 path translator
+> - **P1** `story-researcher` 需 WebSearch / CDP / agent-browser tools（A5+A6 加 3 个 tool）
+> - **P2** `story-deslop` skill 需 vendor 完整版替换 Sprint 35 自创小版本（A4）
+> - **P3** vendor `disallowedTools` 字段 Go 端未支持（4/7 role 用，A5 加）
+>
+> 详见 Sprint A3 后"阶段检查结果"section + Sprint A4/A5/A6 中**必须新增**任务（A4.11/A4.12, A5.9-A5.16, A6.12-A6.14）
+
 ---
 
 ## 0. vendor 完整能力盘点（100% 目标）
@@ -528,6 +536,52 @@ var (
 - ✅ 现有调用 Role 代码 100% 兼容
 - ✅ MultiAgentReviewer 用 Role 名自动 dispatch 到 agent
 
+#### Sprint A3 阶段检查结果（2026-09-18 16:01 — 完成 Sprint A3 后人工 review）
+
+##### 5 维度检查 — 全部 ✅
+
+| 维度 | 状态 | 详情 |
+|------|------|------|
+| **完整性** | ✅ | 7 个 role .md 全部 embed.FS 加载（103KB），字段完整（name/alias/model/maxTurns/memory/tools/skills/description/systemPrompt）|
+| **Tools 兼容** | ✅ | Go 端 6 tools (Read/Glob/Grep/Write/Edit/Bash) ⊇ vendor 使用的所有 tools |
+| **Model 档位** | ✅ | ModelMapping 3 档全覆盖（opus→minimax/MiniMax-M3, sonnet→deepseek/V4-Pro, haiku→dashscope/qwen3.7-plus）|
+| **Skills 引用** | ⚠️ | 7 个 role 中仅 1 个（narrative-writer 引用 `story-deslop`），Go 端已有但用 Sprint 35 自创小版本 |
+| **现有代码** | ✅ | 5 个旧 `Role` const 全部保留（向后兼容），2 个 caller (cmd/cli/roles.go + internal/skills/short_mode.go) 正常 |
+
+##### Go 端实际加载 dump（`go test -run TestInquiry_AllRolesDump` 输出）
+
+| Role | Alias | Model | Turns | Body | Skills |
+|------|-------|-------|-------|------|--------|
+| story-architect | story_outliner | opus | 30 | 11,509 chars | [] |
+| narrative-writer | chapter_writer | sonnet | 30 | 14,971 chars | [story-deslop] |
+| character-designer | story_reviewer | sonnet | 25 | 8,823 chars | [] |
+| consistency-checker | consistency_checker | haiku | 15 | 10,642 chars | [] |
+| chapter-extractor | character_extractor | haiku | 12 | 19,708 chars | [] |
+| **story-explorer** | "" (新) | haiku | 15 | 21,297 chars (最大) | [] |
+| **story-researcher** | "" (新) | sonnet | 20 | 11,863 chars | [] |
+
+##### 🚨 已知问题（必须 Sprint A4/A5 处理）
+
+| # | 问题 | 影响 | 解决 Sprint | 严重性 |
+|---|------|------|-----------|--------|
+| **P0** | **vendor role prompt 含 Claude Code 路径引用 `.claude/skills/...`**（5/7 role: story-architect / narrative-writer / character-designer / consistency-checker / story-explorer）| role prompt 告诉 LLM 去 `.claude/skills/story-setup/references/agent-references/{file}` 找文件，但 Go 项目用 `internal/skills/assets/story-setup/references/agent-references/{file}`，prompt 无法直接落地 | **A5**（Agent.Run 之前必须加 path translation layer） | 🔴 高 |
+| **P1** | **story-researcher 需 WebSearch / CDP / agent-browser tools**（prompt 含 15 WebSearch + 9 agent-browser + 38 CDP 引用）| 当前 6 tools 不含 WebSearch / CDP；A5 必须先实现新 tool 才能让 story-researcher 端到端工作 | **A5+A6** | 🟡 中（其他 6 个 role 不依赖）|
+| **P2** | **vendor story-deslop skill 完整版未移植**（Go 端 Sprint 35 自创版 2.4KB vs vendor 完整版 ~14KB）| narrative-writer 引用 story-deslop 但 prompt 内容比 vendor 简略 | **A4** | 🟡 中 |
+| **P3** | **vendor `disallowedTools` 字段未支持**（4/7 role 用：chapter-extractor / consistency-checker / story-explorer / story-researcher）| Go 端 RoleSpec 不存 disallowedTools 字段；A5 Agent.Run 时无法 enforce 工具白名单/黑名单 | **A5** | 🟡 中 |
+| **P4** | **memory scope 多样性未支持**（4/7 role 没设 memory: project，依赖 Sprint 35 默认）| Validate 默认填 `project`，可能不符合 vendor 意图（特别是 haiku 只读 role）| **A5** | 🟢 低 |
+| **P5** | **5/7 role 用 `maxTurns` 较小值**（chapter-extractor=12, consistency-checker=15, story-explorer=15）| 当前实现正确保留这些值，**无需改**；只是验证 | ✅ 已支持 |
+
+##### 5 个 role 完全可工作（无需额外处理）
+- story-architect ✅
+- character-designer ✅
+- consistency-checker ✅
+- chapter-extractor ✅
+- story-explorer ✅（路径翻译问题在 A5 统一解决）
+
+##### 2 个 role 需后续 Sprint 端到端跑通
+- **narrative-writer** ⚠️（P0 路径翻译 + P2 story-deslop 完整版）
+- **story-researcher** ⚠️（P1 WebSearch/CDP tools）
+
 ---
 
 ### Sprint A4 (1.5 周): 13 SKILL.md 完整版 + 242 References 移植
@@ -648,6 +702,83 @@ func (a *Agent) Run(ctx context.Context, userInput string) (*Result, error) {
 | **A6.9** | **`qwen-real-e2e` — 跑通 1 个 haiku 角色 (consistency-checker, 用 DASHSCOPE_API_KEY)** | new | **0.5d** |
 | **A6.10** | **`deepseek-real-e2e` — 跑通 1 个 sonnet 角色 (narrative-writer, 用 DEEPSEEK_API_KEY)** | new | **0.5d** |
 | **A6.11** | **`MiniMax-M3-real-e2e` — 跑通 1 个 opus 角色 (story-architect, 用 MINIMAX_API_KEY, 国内版端点)** | new | **0.5d** |
+
+#### Sprint A4 必须新增（基于 A3 阶段检查 P2）
+
+| # | 任务 | 文件 | 工作量 | 来自 |
+|---|------|------|--------|------|
+| **A4.11** | **复制 vendor `story-deslop/SKILL.md` 完整版（~14KB）替换 Go 端 Sprint 35 自创小版本（2.4KB）** | copy | 0.05d | A3 阶段检查 P2 |
+| **A4.12** | **所有 vendor `references/*.md` 必须 100% 复制**（不要自己缩写）| copy | （已含 A4.2） | A3 阶段检查 P2 |
+
+#### Sprint A5 必须新增（基于 A3 阶段检查 P0/P1/P3/P4）
+
+| # | 任务 | 文件 | 工作量 | 来自 |
+|---|------|------|--------|------|
+| **A5.9** | **`internal/agent/path_translator.go` — 把 vendor role prompt 中的 `.claude/skills/...` 路径翻译为 `internal/skills/assets/...`** | new | **0.5d** | A3 阶段检查 **P0 🔴** |
+| **A5.10** | **`internal/agent/tools/websearch.go` — WebSearch tool**（用 DuckDuckGo HTML scrape 或 mock 实现）| new | **1d** | A3 阶段检查 P1 |
+| **A5.11** | **`internal/agent/tools/agent_browser.go` — agent-browser tool**（调用 MCP `agent-browser` 或 mock 实现）| new | **1d** | A3 阶段检查 P1 |
+| **A5.12** | **`internal/agent/tools/cdp.go` — CDP (Chrome DevTools Protocol) tool**（驱动 headless Chrome 做网页交互）| new | **1.5d** | A3 阶段检查 P1 |
+| **A5.13** | **`internal/roles/rolespec.go` 加 `DisallowedTools []string` 字段 + parse `disallowedTools:` YAML key** | modify | 0.2d | A3 阶段检查 P3 |
+| **A5.14** | **`internal/agent/loop.go` — Agent.Run() enforce `DisallowedTools`**（LLM 想调不允许的 tool → 返回 error result 给 LLM）| modify | 0.3d | A3 阶段检查 P3 |
+| **A5.15** | **`internal/roles/rolespec.go` 加 `Memory` 字段透传**（目前 Validate() 默认 `project`，但 vendor haiku role 不填 memory 是有意的）| modify | 0.1d | A3 阶段检查 P4 |
+| **A5.16** | **`internal/agent/loop.go` — Agent.Run() 在每轮调 LLM 前检查 tool 是否在 DisallowedTools**（额外防御）| modify | 0.2d | A3 阶段检查 P3 |
+
+##### A5.9 path_translator.go 设计
+
+```go
+// PathTranslator 把 vendor role .md 中的 `.claude/skills/...` 路径
+// 翻译成 Go 项目的 `internal/skills/assets/...`。
+//
+// Sprint A3 阶段检查发现：5/7 vendor role prompt 含 Claude Code 特定路径
+// 例如 `Read 当前 Claude 部署的 canonical 路径：
+//      1. {项目根}/.claude/skills/story-setup/references/agent-references/{文件名}`
+//
+// Go 端用 embed.FS 把 SKILL.md + references 嵌入到 `internal/skills/assets/<skill>/...`
+// 不可能让 LLM 自己去 `.claude/` 找文件——必须预处理 prompt。
+type PathTranslator struct{}
+
+func (t *PathTranslator) Translate(prompt string) string {
+    // 1. 替换 `.claude/skills/X/references/Y` → `internal/skills/assets/X/references/Y`
+    // 2. 替换 `{项目根}/.claude/skills/X/SKILL.md` → `internal/skills/assets/X/SKILL.md`
+    // 3. 替换其它 Claude Code 特定路径（如 `~/.claude/...`）
+}
+```
+
+##### A5.10/A5.11/A5.12 新 tools 设计（最小可用）
+
+```go
+// A5.10 WebSearch tool
+type WebSearchTool struct{ sandbox Sandbox }
+func (t *WebSearchTool) Name() string { return "WebSearch" }
+func (t *WebSearchTool) Description() string {
+    return "搜索互联网。用 query 返回 top 10 结果（title/url/snippet）"
+}
+func (t *WebSearchTool) InputSchema() []byte { /* JSON Schema */ }
+func (t *WebSearchTool) Execute(ctx, input) (Result, error) {
+    // Sprint A5 阶段用 DuckDuckGo HTML scrape + 简单 parser
+    // Sprint A6 阶段接真实 search API (Bing/Google)
+}
+
+// A5.11 agent-browser tool
+type AgentBrowserTool struct{ sandbox Sandbox }
+func (t *AgentBrowserTool) Name() string { return "AgentBrowser" }
+// 调用 MCP agent-browser 服务（默认 localhost:8000）
+// 输入：URL + actions[] (click/fill/scroll/...)
+// 输出：提取后的页面文本 + 截图 base64
+
+// A5.12 CDP tool
+type CDPTool struct{ sandbox Sandbox }
+// 直接驱动 headless Chrome（用 chromedp 库）
+// 比 agent-browser 更底层——精确控制 DevTools Protocol
+```
+
+#### Sprint A6 必须新增（基于 A3 阶段检查）
+
+| # | 任务 | 文件 | 工作量 | 来自 |
+|---|------|------|--------|------|
+| **A6.12** | **`tools-e2e-test` — WebSearch + AgentBrowser + CDP 端到端测试** | new | 1d | A3 阶段检查 P1 |
+| **A6.13** | **`narrative-writer-real-e2e` — 验证 path translation 让 narrative-writer 端到端跑通** | new | 0.5d | A3 阶段检查 P0 |
+| **A6.14** | **`disallowed-tools-e2e` — 验证 DisallowedTools enforce（4 个只读 role 调 Write 应被拒绝）** | new | 0.5d | A3 阶段检查 P3 |
 
 #### 验收标准
 - ✅ 现有 684 tests 全过（**零 regress**）
@@ -805,7 +936,8 @@ agent.Bash("cat /etc/passwd")          // ❌ 路径含敏感
 | **8** | **MiniMax 版本** | **国内版 `api.minimax.cn`** | **用户 2026-09-18 确认；不用国际版 `.io`** |
 | **9** | **DeepSeek model 名** | **`claude-opus-4-5-20250929`（自动 → `deepseek-v4-pro`）** | **2026-09-18 实测官方自动映射** |
 | **10** | **千问 model 名** | **真实名 `qwen3.7-plus`（**不**用 claude-*，无自动映射）** | **2026-09-18 实测官方，无 API 端自动映射** |
-| **11** | **3 provider context** | **全部 1M**（MiniMax-M3 / DeepSeek-V4 / Qwen-Plus/Flash） | **2026-09-18 实测，**取消**原 64K/32K 错误** |
+| **11** | **3 provider context** | **全部 1M**（MiniMax-M3 / DeepSeek-V4 / Qwen-Plus/Flash） | **2026-09-18 实测，**取消**原 64K/32K 错误** | 
+| **12** | **vendor 路径翻译** | **A 加 path translator** | vendor `.claude/skills/...` → Go `internal/skills/assets/...`（A5 必须实现，否则 5/7 role prompt 无法落地） |
 
 **新约束**：
 - 必须 100% 实现 vendor 能力（242 references + 7 roles + 6 tools + agent framework）
@@ -819,3 +951,9 @@ agent.Bash("cat /etc/passwd")          // ❌ 路径含敏感
 - **DeepSeek 走自动映射**：`claude-opus-4-5-20250929` → 服务端自动 → `deepseek-v4-pro`（1M context）
 - **千问必须用真实 model 名**：`qwen3.7-plus` / `qwen3.8-max` / `qwen3.8-flash` 等（**千问无 claude-* 自动映射**！）
 - **DeepSeek V3 已退役**：`deepseek-chat` (V3) 2026-09-14 后可能停服，必须改 V4 model 名 (`claude-opus-*` 或 `deepseek-v4-pro` / `deepseek-flash`)
+- **Sprint A3 阶段检查发现**（2026-09-18 16:01）：
+  - **vendor role prompt 含 Claude Code 特定路径** `.claude/skills/...`（5/7 role）— **Sprint A5 必须加 path translator**
+  - **`story-researcher` 需 WebSearch/CDP/agent-browser tools**（Go 端 6 tools 不含）— Sprint A5+A6 加
+  - **`story-deslop` skill 需 vendor 完整版替换 Sprint 35 自创小版** — Sprint A4
+  - **vendor `disallowedTools` 字段未支持**（4/7 role）— Sprint A5 加 + Agent.Run enforce
+  - 详见 Sprint A3 后"阶段检查结果"section + Sprint A4/A5/A6 中新增任务 A4.11/A4.12, A5.9-A5.16, A6.12-A6.14
