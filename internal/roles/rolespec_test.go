@@ -20,6 +20,50 @@ func TestLoadAllRoleSpecs_Count(t *testing.T) {
 	}
 }
 
+// TestLoadAllRoleSpecs_DisallowedTools 验证 4 个只读 role 的 DisallowedTools 字段正确解析 (A5.13)
+func TestLoadAllRoleSpecs_DisallowedTools(t *testing.T) {
+	specs := AllRoleSpecs()
+	specMap := make(map[string]*RoleSpec)
+	for _, s := range specs {
+		specMap[s.Name] = s
+	}
+
+	// 4 个 role 用 disallowedTools（vendor 只读读系列）
+	tests := []struct {
+		name string
+		want []string
+	}{
+		{"consistency-checker", []string{"Write", "Edit", "Bash"}},
+		{"chapter-extractor", []string{"Write", "Edit", "Bash"}},
+		{"story-explorer", []string{"Write", "Edit", "Bash"}},
+		{"story-researcher", []string{"Edit"}},
+	}
+	for _, tt := range tests {
+		s, exists := specMap[tt.name]
+		if !exists {
+			t.Errorf("role %q 不存在", tt.name)
+			continue
+		}
+		if len(s.DisallowedTools) != len(tt.want) {
+			t.Errorf("%q DisallowedTools 长度=%d, want %d (got %v)", tt.name, len(s.DisallowedTools), len(tt.want), s.DisallowedTools)
+			continue
+		}
+		for i, want := range tt.want {
+			if s.DisallowedTools[i] != want {
+				t.Errorf("%q DisallowedTools[%d]=%q, want %q", tt.name, i, s.DisallowedTools[i], want)
+			}
+		}
+	}
+
+	// 2 个 role 不应有 DisallowedTools（full role: arch/writer/designer）
+	for _, name := range []string{"story-architect", "narrative-writer", "character-designer"} {
+		s := specMap[name]
+		if s != nil && len(s.DisallowedTools) != 0 {
+			t.Errorf("%q 不应有 DisallowedTools，实际=%v", name, s.DisallowedTools)
+		}
+	}
+}
+
 func TestLoadAllRoleSpecs_AllSevenNames(t *testing.T) {
 	expected := map[string]bool{
 		"story-architect":     false,

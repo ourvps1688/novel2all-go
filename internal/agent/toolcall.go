@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/ourvps1688/novel2all-go/internal/agent/tools"
@@ -16,9 +17,10 @@ import (
 //
 // 这个 adapter 把后者包成前者，使 Agent.Run() 能直接调 LLM 调 tool。
 type ToolAdapter struct {
-	mu       sync.RWMutex
-	registry *tools.Registry
-	sandbox  *tools.ExecContext
+	mu              sync.RWMutex
+	registry        *tools.Registry
+	sandbox         *tools.ExecContext
+	disallowedTools map[string]bool // A5.16 防御层
 }
 
 // NewToolAdapter 构造 adapter
@@ -71,7 +73,19 @@ func (a *ToolAdapter) LLMTools(toolNames []string) []llm.Tool {
 }
 
 // Dispatch 按 tool_call 名称 + 参数执行实际工具
+//
+// A5.16 defense-in-depth：先检查 tool 是否在 disallowed set（如有），
+// 防止 buildLLLSS 之外的绕过路径（如 LLM 恶意调 disallowed tool）。
 func (a *ToolAdapter) Dispatch(toolName string, args json.RawMessage) tools.Result {
+	a.mu.RLock()
+	disallowed := a.disallowedTools
+	a.mu.RUnlock()
+
+	if _, blocked := disallowed[toolName]; blocked {
+		return tools.ErrorResult(fmt.Sprintf(
+			"ToolAdapter: tool %q is disallowed by vendor role spec", toolName))
+	}
+
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
@@ -81,6 +95,16 @@ func (a *ToolAdapter) Dispatch(toolName string, args json.RawMessage) tools.Resu
 	}
 	result, _ := t.Execute(a.sandbox, args)
 	return result
+}
+
+// SetDisallowedTools 设置 agent-level DisallowedTools（A5.16 防御层）
+func (a *ToolAdapter) SetDisallowedTools(disallowed []string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.disallowedTools = make(map[string]bool, len(disallowed))
+	for _, name := range disallowed {
+		a.disallowedTools[name] = true
+	}
 }
 
 // toolError tool 调用失败返回的错误（带 msg 字段）

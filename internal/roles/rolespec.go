@@ -227,15 +227,16 @@ func parseRoleSpecFromMD(defaultName, content string) (*RoleSpec, error) {
 		return nil, err
 	}
 	spec := &RoleSpec{
-		Name:         fm.Name,
-		Alias:        vendorRoleMapping[fm.Name],
-		Description:  fm.Description,
-		Tools:        fm.Tools,
-		Model:        fm.Model,
-		MaxTurns:     fm.MaxTurns,
-		Memory:       fm.Memory,
-		Skills:       fm.Skills,
-		SystemPrompt: strings.TrimSpace(body),
+		Name:            fm.Name,
+		Alias:           vendorRoleMapping[fm.Name],
+		Description:     fm.Description,
+		Tools:           fm.Tools,
+		DisallowedTools: fm.DisallowedTools,
+		Model:           fm.Model,
+		MaxTurns:        fm.MaxTurns,
+		Memory:          fm.Memory,
+		Skills:          fm.Skills,
+		SystemPrompt:    strings.TrimSpace(body),
 	}
 	// vendor name 为空时用 defaultName（来自文件名）
 	if spec.Name == "" {

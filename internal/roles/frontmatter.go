@@ -8,13 +8,14 @@ import (
 
 // frontmatter 解析后的字段（仅支持 vendor role 实际用到的子集）
 type frontmatter struct {
-	Name        string
-	Description string
-	Tools       []string
-	Model       string
-	MaxTurns    int
-	Memory      string
-	Skills      []string
+	Name             string
+	Description      string
+	Tools            []string
+	DisallowedTools  []string
+	Model            string
+	MaxTurns         int
+	Memory           string
+	Skills           []string
 }
 
 // parseYAMLFrontmatter 解析 role .md 文件的 frontmatter + body
@@ -94,8 +95,8 @@ func applyFrontmatterField(fm *frontmatter, key, value string, lines []string, i
 		fm.Tools = list
 		return i + 1 + consumed, nil
 	case "disallowedTools":
-		// 暂不存入 RoleSpec（待 A5 实现），但仍消耗行
-		_, consumed := parseListValue(value, lines, i+1)
+		list, consumed := parseListValue(value, lines, i+1)
+		fm.DisallowedTools = list
 		return i + 1 + consumed, nil
 	case "model":
 		fm.Model = value

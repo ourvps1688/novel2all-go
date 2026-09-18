@@ -68,6 +68,7 @@ func RunAgent(ctx context.Context, spec *AgentSpec, cfg LoopConfig, userInput st
 		cfg.ProjectRoot = "."
 	}
 	cfg.Tools.SetSandboxRoot(cfg.ProjectRoot)
+	cfg.Tools.SetDisallowedTools(cfg.DisallowedTools) // A5.16 防御层
 
 	// 1. 准备 system prompt（路径翻译 + Claude→中文 LLM 适配）
 	systemPrompt := spec.SystemPrompt
