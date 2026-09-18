@@ -1,9 +1,9 @@
 // Package llm 提供 LLM 多 provider 路由 + 流式响应。
 //
 // P1 阶段支持 4 家 provider：
-//   - dashscope (阿里云通义千问, OpenAI 兼容)
-//   - deepseek  (OpenAI 兼容)
-//   - minimax   (⚠️ 必须用 Anthropic 兼容协议,不是 OpenAI)
+//   - dashscope (阿里云通义千问, Anthropic 兼容, base_url=/apps/anthropic)
+//   - deepseek  (Anthropic 兼容, base_url=/anthropic, claude-opus-* 自动 → deepseek-v4-pro)
+//   - minimax   (⚠️ 必须用 Anthropic 兼容协议, MiniMax-M3 国内版, 1M context)
 //   - anthropic (Anthropic 官方)
 //
 // 路由策略：按 TaskType 自动选 provider + model
@@ -54,10 +54,21 @@ type routeConfig struct {
 	Model    string
 }
 
-// 默认模型（延续 Python V1.5.5 决策）
+// 默认模型（Sprint A1.16/A1.21, 2026-09-18 更新）
+//
+// 选型逻辑（实测官方文档）：
+//   - DefaultDashScopeModel = "qwen3.7-plus"  千问真实 model 名（千问无 claude-* 自动映射）
+//   - DefaultDeepSeekModel  = "claude-opus-4-5-20250929"  DeepSeek 自动映射到 deepseek-v4-pro
+//   - DefaultMinimaxModel   = "MiniMax-M3"   国内版 1M context
+//   - DefaultAnthropicModel = "claude-3-5-sonnet-20241022"  Anthropic 官方
+//
+// 三个中文 LLM 全部 1M context（2026-09-18 实测）：
+//   - MiniMax-M3:    https://platform.minimax.cn/docs/api-reference/text-anthropic-api
+//   - DeepSeek V4:   https://api-docs.deepseek.com/quick_start/pricing
+//   - 千问 Plus:     https://help.aliyun.com/zh/model-studio/text-generation-model
 const (
-	DefaultDashScopeModel = "qwen-plus"
-	DefaultDeepSeekModel  = "deepseek-chat"
+	DefaultDashScopeModel = "qwen3.7-plus"
+	DefaultDeepSeekModel  = "claude-opus-4-5-20250929"
 	DefaultMinimaxModel   = "MiniMax-M3"
 	DefaultAnthropicModel = "claude-3-5-sonnet-20241022"
 )
