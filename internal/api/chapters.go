@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ourvps1688/novel2all-go/internal/auth"
 	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
@@ -21,22 +22,27 @@ import (
 //
 // P1-F 切片 4：基于文件系统的章节管理（项目目录下 prose/第NNN章.md）
 // Sprint 15 commit F：filesystem 是 content primary storage，SQLite 加 metadata 索引（list fast + 重启恢复）
+// Sprint V1.0.1 P0-B：save + export handler 加 owner check (admin bypass)
 //
 // 端点：
 //
 //	GET    /api/chapters                       → 列出项目下所有章节
 //	GET    /api/chapter/{N}/content/           → 读完整内容
-//	POST   /api/chapter/{N}/save/              → 保存（手动编辑）
-//	GET    /api/chapter/{N}/export/            → 导出 (md/txt)
+//	POST   /api/chapter/{N}/save/              → 保存（手动编辑, P0-B owner check）
+//	GET    /api/chapter/{N}/export/            → 导出 (md/txt, P0-B owner check)
 //	DELETE /api/chapter/{N}/                   → 删除章节文件
-//	POST   /api/chapter/{N}/expand/            → LLM 扩写
-//	POST   /api/chapter/{N}/rewrite/           → LLM 重写
-//	POST   /api/chapter/{N}/review/            → LLM review
-//	POST   /api/chapter/{N}/insert/            → LLM 插入
-//	POST   /api/chapter/{N}/rollback/          → 从 .bak 恢复
+//	POST   /api/chapter/{N}/expand/            → LLM 扩写 (P0-B owner check via actions.projects)
+//	POST   /api/chapter/{N}/rewrite/           → LLM 重写 (P0-B owner check via actions.projects)
+//	POST   /api/chapter/{N}/review/            → LLM review (P0-B owner check via actions.projects)
+//	POST   /api/chapter/{N}/insert/            → LLM 插入 (P0-B owner check via actions.projects)
+//	POST   /api/chapter/{N}/rollback/          → 从 .bak 恢复 (P0-B owner check via actions.projects)
 type ChapterHandler struct {
 	actions *ChapterActions      // LLM 操作组件（可为 nil）
 	meta    *store.ChaptersStore // SQLite metadata index（可为 nil，纯 filesystem 模式）
+
+	// Sprint V1.0.1 P0-B: 注入 ProjectsRepo, save/export handler 做 owner check.
+	// nil = 禁用 owner check (legacy 模式, 仅用于直接单元测试).
+	projects ProjectsRepo
 }
 
 // SetMetaStore 注入 SQLite metadata index（Sprint 15 commit F）
@@ -45,6 +51,16 @@ type ChapterHandler struct {
 // nil 表示纯 filesystem 模式（向后兼容）。
 func (h *ChapterHandler) SetMetaStore(s *store.ChaptersStore) {
 	h.meta = s
+}
+
+// SetProjects 注入 ProjectsRepo (Sprint V1.0.1 P0-B).
+//
+// nil = 禁用 owner check (legacy 模式).
+// 用法 (router.go):
+//
+//	h.SetProjects(deps.projectStore)  // SQLite adapter
+func (h *ChapterHandler) SetProjects(p ProjectsRepo) {
+	h.projects = p
 }
 
 const (
@@ -296,6 +312,7 @@ func (h *ChapterHandler) content(w http.ResponseWriter, r *http.Request, chapter
 // save 保存（手动编辑）
 //
 // Sprint 15 commit F: filesystem 写 content + SQLite 同步 upsert metadata
+// Sprint V1.0.1 P0-B: 加 owner check (admin bypass), project_id=0 时跳过 (legacy 兼容)
 func (h *ChapterHandler) save(w http.ResponseWriter, r *http.Request, chapter int) {
 	var req struct {
 		Content     string `json:"content"`
@@ -305,6 +322,10 @@ func (h *ChapterHandler) save(w http.ResponseWriter, r *http.Request, chapter in
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	// P0-B owner check (最先, 防止 info leak)
+	if !h.checkProjectAccess(w, r, req.ProjectID) {
 		return
 	}
 	if req.ProjectRoot == "" {
@@ -339,7 +360,20 @@ func (h *ChapterHandler) save(w http.ResponseWriter, r *http.Request, chapter in
 }
 
 // export 导出 (md/txt/epub, P1-F 切片 4 只实现 md + txt)
+// Sprint V1.0.1 P0-B: 加 owner check (admin bypass), project_id=0 时跳过 (legacy 兼容)
 func (h *ChapterHandler) export(w http.ResponseWriter, r *http.Request, chapter int) {
+	// P0-B owner check (最先, 防止 info leak)
+	projectIDStr := r.URL.Query().Get("project_id")
+	var projectID int64
+	if projectIDStr != "" {
+		if n, err := strconv.ParseInt(projectIDStr, 10, 64); err == nil {
+			projectID = n
+		}
+	}
+	if !h.checkProjectAccess(w, r, projectID) {
+		return
+	}
+
 	format := strings.ToLower(r.URL.Query().Get("format"))
 	if format == "" {
 		format = formatMD
@@ -385,6 +419,44 @@ func (h *ChapterHandler) export(w http.ResponseWriter, r *http.Request, chapter 
 	w.Header().Set("Content-Type", mimeType)
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="chapter_%03d.%s"`, chapter, ext))
 	_, _ = w.Write(body)
+}
+
+// checkProjectAccess 验证 user 对 project 有访问权 (Sprint V1.0.1 P0-B owner check helper).
+//
+// 行为:
+//   - user 不在 context → 401 + false (即使 legacy mode 也要求 user)
+//   - projectID <= 0 OR h.projects == nil → true (legacy skip, 用于直接单元测试, 仅当 user 已注入)
+//   - project 不存在 → 404 + false
+//   - admin OR user.ID == project.OwnerID → true
+//   - 其他 → 403 + false
+//
+// save / export handler 入口调用: if !h.checkProjectAccess(w, r, projectID) { return }
+func (h *ChapterHandler) checkProjectAccess(w http.ResponseWriter, r *http.Request, projectID int64) bool {
+	// 始终先验证 user (即使 legacy mode 也要求 user from context)
+	user, ok := UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return false
+	}
+	if projectID <= 0 || h.projects == nil {
+		// legacy: 无 project_id 或 projects 仓库未注入, 跳过 owner check
+		// (直接单元测试场景, 注入 admin user + project_id=0 即可)
+		return true
+	}
+	project, err := h.projects.Get(projectID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
+			return false
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return false
+	}
+	if auth.IsAdmin(user) || project.OwnerID == user.ID {
+		return true
+	}
+	http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+	return false
 }
 
 // delete 删除章节文件
