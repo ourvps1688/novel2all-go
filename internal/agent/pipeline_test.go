@@ -80,7 +80,7 @@ func TestRunAgent_NoToolCalls(t *testing.T) {
 	}
 
 	toolsReg := tools.NewRegistry()
-	cfg := AgentLoopConfig{
+	cfg := LoopConfig{
 		Tools:       NewToolAdapter(toolsReg, "/tmp"),
 		ProjectRoot: "/tmp",
 		Mapping:     DefaultModelMapping(),
@@ -152,7 +152,7 @@ func TestRunAgent_WithToolCalls(t *testing.T) {
 	toolsReg := tools.NewRegistry()
 	_ = toolsReg.Register(mockT)
 
-	cfg := AgentLoopConfig{
+	cfg := LoopConfig{
 		Router:      mockLLM,
 		Tools:       NewToolAdapter(toolsReg, "/tmp"),
 		ProjectRoot: "/tmp",
@@ -219,7 +219,7 @@ func TestRunAgent_MaxTurnsExceed(t *testing.T) {
 	toolsReg := tools.NewRegistry()
 	_ = toolsReg.Register(mockT)
 
-	cfg := AgentLoopConfig{
+	cfg := LoopConfig{
 		Router:      mockLLM,
 		Tools:       NewToolAdapter(toolsReg, "/tmp"),
 		ProjectRoot: "/tmp",
@@ -243,7 +243,7 @@ func TestRunAgent_ContextCanceled(t *testing.T) {
 	toolsReg := tools.NewRegistry()
 	_ = toolsReg.Register(mockT)
 
-	cfg := AgentLoopConfig{
+	cfg := LoopConfig{
 		Router:      mockLLM,
 		Tools:       NewToolAdapter(toolsReg, "/tmp"),
 		ProjectRoot: "/tmp",

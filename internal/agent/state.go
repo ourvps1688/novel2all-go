@@ -8,8 +8,7 @@ import (
 
 // AgentState Agent 运行期状态 (Sprint A5.3)
 //
-// 持有对话历史 + 工具 + 轮次计数 + 项目根目录。
-// 单 agent 实例每次 Run() 创建一个新 state（线程隔离）。
+//nolint:revive // stutter: agent.State 字段都是 agent 上下文，但 State 是常用名
 type AgentState struct {
 	mu sync.Mutex
 

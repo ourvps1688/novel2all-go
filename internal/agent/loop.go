@@ -13,7 +13,9 @@ import (
 var _ LLMChat = (*llm.Router)(nil) // compile-time check
 
 // AgentLoopConfig Agent.Run() 依赖的配置 (Sprint A5.1)
-type AgentLoopConfig struct {
+//
+//nolint:revive // stutter: agent.LoopConfig 字段都是 agent 上下文，但 LoopConfig 是常用名
+type LoopConfig struct {
 	// Router LLM 路由器（接口便于测试 mock）
 	Router LLMChat
 
@@ -49,7 +51,7 @@ type LLMChat interface {
 //  3. 超过 maxTurns → error
 //
 // 返回 Result.Content（LLM final answer）+ Tokens 统计。
-func RunAgent(ctx context.Context, spec *AgentSpec, cfg AgentLoopConfig, userInput string) (*Result, error) {
+func RunAgent(ctx context.Context, spec *AgentSpec, cfg LoopConfig, userInput string) (*Result, error) {
 	if cfg.Router == nil {
 		return nil, fmt.Errorf("agent.Run: Router required")
 	}
@@ -83,7 +85,7 @@ func RunAgent(ctx context.Context, spec *AgentSpec, cfg AgentLoopConfig, userInp
 	// 3. 决定 LLM provider + model（vendor model → 实际 model）
 	_, realModel, err := cfg.Mapping.Map(spec.Model)
 	if err != nil {
-		return nil, fmt.Errorf("agent.Run: %v", err)
+		return nil, fmt.Errorf("agent.Run: %w", err)
 	}
 
 	// 4. messages 起始

@@ -94,7 +94,7 @@ func NewAgent(spec *AgentSpec) *Agent {
 //
 // 实际逻辑在 RunAgent() 里。Agent.Run 包装 cfg 注入，方便调用。
 func (a *Agent) Run(ctx context.Context, userInput string) (*Result, error) {
-	return RunAgent(ctx, a.Spec, AgentLoopConfig{
+	return RunAgent(ctx, a.Spec, LoopConfig{
 		Router:          a.Router,
 		Tools:           a.Tools,
 		Mapping:         a.Mapping,
