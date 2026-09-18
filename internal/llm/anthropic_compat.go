@@ -81,6 +81,7 @@ type antRequest struct {
 	Messages    []antMessage `json:"messages"`
 	Stream      bool         `json:"stream,omitempty"`
 	Temperature float64      `json:"temperature,omitempty"`
+	TopP        float64      `json:"top_p,omitempty"`
 }
 
 type antMessage struct {
@@ -106,6 +107,8 @@ type antRequestWithTools struct {
 	System    string       `json:"system,omitempty"`
 	Messages  []antToolMsg `json:"messages"`
 	Tools     []antTool    `json:"tools,omitempty"`
+	Temperature float64    `json:"temperature,omitempty"`
+	TopP        float64    `json:"top_p,omitempty"`
 }
 
 // antTool tool 定义 (Anthropic 用 input_schema 而非 parameters)
@@ -183,8 +186,17 @@ func (p *AnthropicCompat) Chat(ctx context.Context, req Request) (*Response, err
 	if len(data.Content) == 0 {
 		return nil, fmt.Errorf("%s: no content", p.name)
 	}
+
+	// 拼接所有 type="text" 块（跳过 type="thinking" 块）
+	// Sprint A1.20: MiniMax-M3 默认开启 thinking，响应可能含 thinking + text 块
+	var contentText string
+	for _, blk := range data.Content {
+		if blk.Type == "text" {
+			contentText += blk.Text
+		}
+	}
 	return &Response{
-		Content:   data.Content[0].Text,
+		Content:   contentText,
 		Provider:  p.name,
 		Model:     model,
 		TokensIn:  data.Usage.InputTokens,
@@ -278,6 +290,14 @@ func (p *AnthropicCompat) ChatWithTools(ctx context.Context, req ChatWithToolsRe
 	if req.OverrideModel != "" {
 		model = req.OverrideModel
 	}
+	// 把 Provider 默认值（MiniMax defaults 等）应用到 Request 上
+	// Sprint A1.20：必须先应用，再读 req.Temperature / req.TopP
+	if p.defaultTemperature > 0 && req.Temperature == 0 {
+		req.Temperature = p.defaultTemperature
+	}
+	if p.defaultTopP > 0 && req.TopP == 0 {
+		req.TopP = p.defaultTopP
+	}
 
 	// 1. 拆 Messages: system → ar.System, user/assistant → ar.Messages
 	var systemPrompt string
@@ -313,11 +333,13 @@ func (p *AnthropicCompat) ChatWithTools(ctx context.Context, req ChatWithToolsRe
 	}
 
 	body := antRequestWithTools{
-		Model:     model,
-		MaxTokens: maxTokens,
-		System:    systemPrompt,
-		Messages:  toolMsgs,
-		Tools:     tools,
+		Model:       model,
+		MaxTokens:   maxTokens,
+		System:      systemPrompt,
+		Messages:    toolMsgs,
+		Tools:       tools,
+		Temperature: req.Temperature,
+		TopP:        req.TopP,
 	}
 
 	resp, err := p.doWithTools(ctx, body)
@@ -406,6 +428,7 @@ func toAntRequest(model string, req Request) (antRequest, error) {
 		MaxTokens:   req.MaxTokens,
 		Stream:      req.Stream,
 		Temperature: req.Temperature,
+		TopP:        req.TopP,
 	}
 	if ar.MaxTokens == 0 {
 		ar.MaxTokens = 4096
@@ -432,11 +455,14 @@ func toAntRequest(model string, req Request) (antRequest, error) {
 // applyProviderDefaults 应用 provider-specific 默认值（Sprint A1.20）
 //
 // 如果 provider 注入了 defaultTemperature/defaultTopP/defaultThinking，
-// 且 Request 未显式设置对应字段（Temperature == 0），则应用默认值。
+// 且 Request 未显式设置对应字段（Temperature/TopP == 0），则应用默认值。
 //
 // 此函数在 Chat/ChatStream 调 do() 之前调用。
 func (p *AnthropicCompat) applyProviderDefaults(req *Request) {
 	if req.Temperature == 0 && p.defaultTemperature > 0 {
 		req.Temperature = p.defaultTemperature
+	}
+	if req.TopP == 0 && p.defaultTopP > 0 {
+		req.TopP = p.defaultTopP
 	}
 }

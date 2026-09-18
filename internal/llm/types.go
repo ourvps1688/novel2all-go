@@ -52,6 +52,7 @@ type Request struct {
 	OverrideModel    string       // 空 = 用路由默认 model
 	MaxTokens        int          // 0 = 用 provider 默认
 	Temperature      float64      // 0 = 用 provider 默认
+	TopP             float64      // 0 = 用 provider 默认（Sprint A1.20 MiniMax defaults）
 	// 流式（默认 true）
 	Stream bool
 }

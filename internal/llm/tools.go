@@ -110,6 +110,7 @@ type ChatWithToolsRequest struct {
 	// 控制参数.
 	MaxTokens   int
 	Temperature float64
+	TopP        float64 // Sprint A1.20 MiniMax defaults (top_p=0.95)
 
 	// MaxToolRounds 限制 multi-turn 轮数 (默认 5, 防 LLM 死循环).
 	MaxToolRounds int
