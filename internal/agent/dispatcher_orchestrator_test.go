@@ -162,7 +162,9 @@ func TestOrchestrator_RunSequential_StopOnError(t *testing.T) {
 func TestToolAdapter_DisallowedTools(t *testing.T) {
 	reg := tools.NewRegistry()
 	readTool := &mockTool{name: "Read", description: "r", schema: []byte(`{}`)}
-	reg.Register(readTool)
+	if err := reg.Register(readTool); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
 
 	a := NewToolAdapter(reg, "/tmp")
 	a.SetDisallowedTools([]string{"Write", "Edit"})
@@ -198,7 +200,7 @@ func makeMockAgent(content string) *Agent {
 	}
 	toolsReg := tools.NewRegistry()
 	// 给 agent 注册一个 Read tool（orchestrator 不会真用，但 RunAgent 需要它）
-	_ = toolsReg.Register(&mockTool{name: "Read", description: "r", schema: []byte(`{}`)})
+	_ = toolsReg.Register(&mockTool{name: mockToolName, description: "r", schema: []byte(`{}`)})
 
 	return &Agent{
 		Spec: &AgentSpec{
@@ -215,3 +217,6 @@ func makeMockAgent(content string) *Agent {
 		DisallowedTools: []string{},
 	}
 }
+
+// mockToolName 常量提取（goconst 3+ 复用，避免在多个测试用例里重复字面量）
+const mockToolName = "Read"
