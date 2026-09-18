@@ -68,32 +68,40 @@ func (s *AgentSpec) Validate() error {
 	return nil
 }
 
-// Agent 运行时实例 (Sprint A1.1)
+// Agent 运行时实例 (Sprint A1.1 + Sprint A5 完整化)
 //
-// 包含 AgentSpec + LLM router + memory + tools + state。
-// Sprint A5 才实现 Agent.Run() 主循环；A1 阶段只构建数据结构。
+// 包含 AgentSpec + LLM router + tools + state。
+// Sprint A5 实现 Agent.Run() 主循环。
 type Agent struct {
 	Spec *AgentSpec
 
-	// Sprint A5 才填充：
-	//   ProjectRoot string
-	//   Tools    map[string]Tool
-	//   LLM      *llm.Router
-	//   Memory   *memory.MemoryManager
-	//   State    *AgentState
+	// Sprint A5 填充：
+	Router          LLMChat         // LLM 路由（interface，便于测试 mock + 防 Go interface-nil 陷阱）
+	Tools           *ToolAdapter    // agent/tools → llm.Tool 适配
+	Mapping         *ModelMapping   // vendor model → Go provider
+	State           *AgentState     // 运行期状态
+	Translator      *PathTranslator // A5.9 vendor 路径翻译
+	ProjectRoot     string          // 沙箱根
+	DisallowedTools []string        // A5.13/14/16 vendor DisallowedTools enforce
 }
 
-// NewAgent 从 AgentSpec 构造 Agent 实例（基础版本，A1 不含 Run 循环）
+// NewAgent 从 AgentSpec 构造 Agent 实例（基础版本）
 func NewAgent(spec *AgentSpec) *Agent {
 	return &Agent{Spec: spec}
 }
 
-// Run 入口（占位 — Sprint A5 实现完整 maxTurns + tool call 循环）
+// Run 入口 (Sprint A5.1 实现)
 //
-// A1 阶段：返回 "not implemented" 错误，确保测试可断言。
-// A5 阶段：实现完整循环（每轮调 LLM → 解析 tool_use → 调 Tool.Handler → 把 result 塞回 messages）。
+// 实际逻辑在 RunAgent() 里。Agent.Run 包装 cfg 注入，方便调用。
 func (a *Agent) Run(ctx context.Context, userInput string) (*Result, error) {
-	return nil, fmt.Errorf("agent.Run: not implemented yet (planned for Sprint A5, see docs/p3-vendor-alignment-plan.md A5.1)")
+	return RunAgent(ctx, a.Spec, AgentLoopConfig{
+		Router:          a.Router,
+		Tools:           a.Tools,
+		Mapping:         a.Mapping,
+		ProjectRoot:     a.ProjectRoot,
+		Translator:      a.Translator,
+		DisallowedTools: a.DisallowedTools,
+	}, userInput)
 }
 
 // Result Agent.Run 返回值 (Sprint A5 才完整实现, A1 阶段先定义结构)

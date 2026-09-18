@@ -92,15 +92,15 @@ func TestNewAgent(t *testing.T) {
 	}
 }
 
-func TestAgent_Run_NotImplemented(t *testing.T) {
-	// Sprint A1 阶段：Run 还未实现，应返回明确错误
+func TestAgent_Run_MissingRouter(t *testing.T) {
+	// Sprint A5: Agent.Run 现在真实实现，缺 Router 应报明确错误
 	spec := &AgentSpec{Name: "story-architect", Model: "opus"}
 	a := NewAgent(spec)
 	_, err := a.Run(testCtx(), "test input")
 	if err == nil {
-		t.Error("Run 应返回 not implemented 错误")
+		t.Error("Run 应返回 missing Router 错误")
 	}
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("错误信息应含 'not implemented'，实际=%q", err.Error())
+	if !strings.Contains(err.Error(), "Router") {
+		t.Errorf("错误信息应含 'Router'，实际=%q", err.Error())
 	}
 }
