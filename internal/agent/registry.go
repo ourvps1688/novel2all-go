@@ -10,10 +10,11 @@ import (
 // 按 name 查 Agent 实例。线程安全（sync.RWMutex）。
 //
 // 用法：
-//   reg := agent.NewRegistry()
-//   reg.Register(spec)              // 注册一个 AgentSpec
-//   agent, err := reg.Get("story-architect")
-//   agents := reg.List()             // 列出所有
+//
+//	reg := agent.NewRegistry()
+//	reg.Register(spec)              // 注册一个 AgentSpec
+//	agent, err := reg.Get("story-architect")
+//	agents := reg.List()             // 列出所有
 type Registry struct {
 	mu    sync.RWMutex
 	items map[string]*Agent
