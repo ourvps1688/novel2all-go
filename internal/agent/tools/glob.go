@@ -93,14 +93,14 @@ func (t *GlobTool) Execute(ctx *ExecContext, input []byte) (Result, error) {
 		return SuccessResult(fmt.Sprintf("Glob: no files matched pattern %q", in.Pattern)), nil
 	}
 
-	var sb_out strings.Builder
-	fmt.Fprintf(&sb_out, "Glob matched %d file(s):\n", len(relMatches))
+	var sbOut strings.Builder
+	fmt.Fprintf(&sbOut, "Glob matched %d file(s):\n", len(relMatches))
 	for _, m := range relMatches {
-		sb_out.WriteString("- ")
-		sb_out.WriteString(m)
-		sb_out.WriteByte('\n')
+		sbOut.WriteString("- ")
+		sbOut.WriteString(m)
+		sbOut.WriteByte('\n')
 	}
-	return SuccessResult(sb_out.String()), nil
+	return SuccessResult(sbOut.String()), nil
 }
 
 // splitPattern 拆分 pattern 为 dir + file 部分

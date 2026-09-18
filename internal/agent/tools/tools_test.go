@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -221,11 +222,17 @@ func TestWrite_AutoCreateParentDir(t *testing.T) {
 	sb, dir := setupSandbox(t)
 	tool := NewWriteTool(sb)
 	ctx := &ExecContext{Root: sb.Root()}
-	out, _ := tool.Execute(ctx, []byte(`{"path": "deep/nested/file.txt", "content": "x"}`))
+	nestedPath := filepath.Join("deep", "nested", "file.txt")
+	// 用 json.Marshal 避免 Windows 路径反斜杠转义问题
+	input, _ := json.Marshal(map[string]string{
+		"path":    nestedPath,
+		"content": "x",
+	})
+	out, _ := tool.Execute(ctx, input)
 	if out.IsError {
 		t.Errorf("Write 应自动创建父目录：%s", out.Content)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "deep/nested/file.txt")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, nestedPath)); err != nil {
 		t.Errorf("文件未创建：%v", err)
 	}
 }
