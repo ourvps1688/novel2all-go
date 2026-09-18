@@ -29,10 +29,9 @@ import (
 //
 // 零值不安全 — 用 DefaultCORSConfig() 构造.
 type CORSConfig struct {
-	// AllowOrigins 允许的 origin 列表. 支持:
-//   - 精确匹配: "https://example.com"
-//   - 通配符:   "*" (允许所有 origin; 与 AllowCreds=true 组合时会强制回显 Origin)
-// 默认: ["*"]
+	// AllowOrigins 允许的 origin 列表. 支持: 精确匹配 ("https://example.com") 或通配符 ("*").
+	// 通配符 + AllowCreds=true 组合时会强制回显 Origin (规避浏览器 reject).
+	// 默认: ["*"].
 	AllowOrigins []string
 
 	// AllowMethods 允许的 HTTP method 列表 (用于 preflight Allow-Methods 头).
