@@ -69,7 +69,7 @@ func TestCDPTool_Basic(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.cmd, func(t *testing.T) {
 			c := NewCDPTool()
-			res, _ := c.Execute(nil, []byte(fmt.Sprintf(`{"command":"%s","params":%s}`, tt.cmd, tt.params)))
+			res, _ := c.Execute(nil, []byte(fmt.Sprintf(`{"command":%q,"params":%s}`, tt.cmd, tt.params)))
 			if res.IsError {
 				t.Errorf("应成功：%v", res.Content)
 			}

@@ -32,7 +32,7 @@ type SkillTaskRunner struct {
 //
 // 当前为 stub：fallback 到直接调用 router。
 // 完整实现：构造 AgentSpec + Tools + 调用 RunAgent。
-func (r *SkillTaskRunner) Run(ctx context.Context, skillName string, userInput string) (string, error) {
+func (r *SkillTaskRunner) Run(ctx context.Context, skillName, userInput string) (string, error) {
 	if r.Router == nil {
 		return "", ErrAgentRunnerRequired
 	}
