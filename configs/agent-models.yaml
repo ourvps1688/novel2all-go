@@ -1,0 +1,36 @@
+# Agent 模型映射配置 (Sprint A1.10)
+#
+# 用户可改这里覆盖 vendor model (opus/sonnet/haiku) → Go provider model 的映射。
+# 不改也行，会用 internal/agent.DefaultModelMapping() 的默认值。
+#
+# 2026-09-18 默认值（实测 3 个中文 LLM 全部 1M context）：
+#   - opus:   minimax / MiniMax-M3         (国内版 1M, 写作最强)
+#   - sonnet: deepseek / claude-opus-4-5-*  (DeepSeek 自动映射 → deepseek-v4-pro)
+#   - haiku:  dashscope / qwen3.7-plus      (千问真实名, 1M context)
+#
+# 千问 DashScope 走 anthropic 兼容 API 必须用真实 model 名（千问无 claude-* 自动映射）。
+# DeepSeek 走 claude-opus-* 触发服务端自动映射（千问没这个机制）。
+# MiniMax 走真实 MiniMax-M3（无映射）。
+
+model_mapping:
+  opus:
+    provider: minimax
+    model: "MiniMax-M3"
+  sonnet:
+    provider: deepseek
+    model: "claude-opus-4-5-20250929"
+  haiku:
+    provider: dashscope
+    model: "qwen3.7-plus"
+
+# 备选示例（用户可换模型）：
+# model_mapping:
+#   opus:
+#     provider: deepseek
+#     model: "claude-opus-4-5-20250929"  # DeepSeek V4-Pro 也可当 opus 用
+#   sonnet:
+#     provider: dashscope
+#     model: "qwen3.8-max"               # 千问最强也可当 sonnet
+#   haiku:
+#     provider: deepseek
+#     model: "claude-haiku-3-5-20241022" # → deepseek-flash (便宜)
