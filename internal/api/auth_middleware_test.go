@@ -29,7 +29,7 @@ func newFakeLookup() *fakeUserLookup {
 			"admin-tok": {
 				ID:        1,
 				Username:  "admin1",
-				Role:      "admin",
+				Role:      roleAdmin,
 				Disabled:  false,
 				CreatedAt: now,
 			},
@@ -140,7 +140,7 @@ func TestRequireAuth_AdminCookie_OK(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("期望 200, 实际 %d", rec.Code)
 	}
-	if seenUser == nil || seenUser.Role != "admin" {
+	if seenUser == nil || seenUser.Role != roleAdmin {
 		t.Errorf("admin user 应被注入 context, got=%+v", seenUser)
 	}
 }
