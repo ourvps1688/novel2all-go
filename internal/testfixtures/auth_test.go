@@ -3,6 +3,7 @@ package testfixtures
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -56,6 +57,11 @@ func setupAuthMux(t *testing.T) http.Handler {
 			Role:     "user",
 		})
 		if err != nil {
+			// 与生产 api.AuthHandler.register 行为一致: 已存在 → 409, 其他 → 400
+			if errors.Is(err, store.ErrUserExists) {
+				http.Error(w, `{"error":"username already taken"}`, http.StatusConflict)
+				return
+			}
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 			return
 		}
@@ -217,8 +223,9 @@ func TestAuthedRequest_NilBody_OmitsContentType(t *testing.T) {
 		seenContentType = r.Header.Get("Content-Type")
 		w.WriteHeader(http.StatusOK)
 	})
-
-	_ = AuthedRequest(t, mux, http.MethodGet, "/empty", nil, nil)
+	// 简化 mux 用 http.HandlerFunc 闭包, 不需要显式 Close resp.Body (mux.ServeHTTP 同步完成)
+	resp := AuthedRequest(t, mux, http.MethodGet, "/empty", nil, nil)
+	defer func() { _ = resp.Body.Close() }()
 
 	if seenContentType != "" {
 		t.Errorf("nil body 不应设 Content-Type, got=%q", seenContentType)

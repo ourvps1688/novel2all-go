@@ -229,11 +229,11 @@ func TestProjectsMux_RequiresAuth_WithCookie_OK(t *testing.T) {
 func TestProjectsMux_Create_RequiresAuth(t *testing.T) {
 	mux := setupProjectsAuthMux(t)
 
-	body, _ := json.Marshal(map[string]string{
+	body, _ := json.Marshal(map[string]any{
 		"name":        "Test",
 		"slug":        "test-v101",
 		"description": "Test project",
-		"owner_id":    "0", // 实际从 context 注入, body 字段忽略
+		"owner_id":    0, // 实际从 context 注入, body 字段忽略
 		"genre":       "fantasy",
 	})
 
