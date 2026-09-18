@@ -16,7 +16,7 @@ import (
 // AuthHandler 暴露 /api/auth/* 路由
 type AuthHandler struct {
 	manager *auth.SessionManager
-	limiter *auth.RateLimiter
+	limiter auth.Limiter
 }
 
 // 常量（goconst 建议）
@@ -26,7 +26,7 @@ const (
 )
 
 // NewAuthHandler 创建
-func NewAuthHandler(m *auth.SessionManager, l *auth.RateLimiter) *AuthHandler {
+func NewAuthHandler(m *auth.SessionManager, l auth.Limiter) *AuthHandler {
 	return &AuthHandler{manager: m, limiter: l}
 }
 

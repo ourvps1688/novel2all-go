@@ -35,6 +35,11 @@ type Config struct {
 	LLM    LLMConfig
 	Skills SkillsConfig
 	GitHub GitHubConfig
+
+	// Sprint V1.0.1 P5: Redis 限流器配置.
+	// REDIS_URL 空 → 用内存版 RateLimiter (单进程 OK).
+	// REDIS_URL 非空 → 用 RedisLimiter (多进程共享).
+	Redis RedisConfig
 }
 
 // HTTPConfig HTTP 服务配置
@@ -75,6 +80,14 @@ type GitHubConfig struct {
 	Repo  string // owner/repo
 }
 
+// RedisConfig Redis 限流器配置 (Sprint V1.0.1 P5).
+//
+// URL 格式: "host:port" 或 "redis://user:pass@host:port/db".
+// URL 为空时 server.Run 用内存版 RateLimiter (单进程 OK, 多进程需各自限流).
+type RedisConfig struct {
+	URL string
+}
+
 // Load 从指定路径加载 .env + 环境变量，返回校验后的 Config
 func Load(envPath string) (*Config, error) {
 	// 1. 先加载 .env 文件（如果存在），把里面的值注入到环境变量
@@ -112,6 +125,9 @@ func Load(envPath string) (*Config, error) {
 		GitHub: GitHubConfig{
 			Token: getEnv("GHCR_TOKEN", ""),
 			Repo:  getEnv("NOVEL2ALL_REPO", defaultRepoOwner),
+		},
+		Redis: RedisConfig{
+			URL: getEnv("REDIS_URL", ""),
 		},
 	}
 

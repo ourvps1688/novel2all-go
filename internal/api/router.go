@@ -20,7 +20,8 @@ type Deps struct {
 	Loader  *skills.Loader
 	Router  *llm.Router
 	Session *auth.SessionManager
-	Limiter *auth.RateLimiter
+	// Limiter 限流器 (Sprint V1.0.1 P5 改 interface: 内存版 / Redis 版都实现 Limiter)
+	Limiter auth.Limiter
 	// Store 用于 project share API
 	Store *store.DB
 

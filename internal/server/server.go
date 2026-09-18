@@ -45,6 +45,10 @@ import (
 //  8. http.Server.ListenAndServe + 优雅关闭
 //
 // 阻塞, 不会返回 nil 直到收到 shutdown signal.
+//
+//	每个阶段顺序依赖, 不易拆函数 (共享 rootCtx/rootCancel/srv). 未来可分阶段函数化.
+//
+//nolint:gocyclo // Sprint V1.0.1 P5 加 Redis limiter 切换 if-else 后为 16.
 func Run(cfg *config.Config) error {
 	// 1. logger
 	logger := obs.New(cfg.Log.Level, cfg.Log.Format)
@@ -103,8 +107,22 @@ func Run(cfg *config.Config) error {
 	}
 
 	sessionManager := auth.NewSessionManager(db, auth.DefaultSessionConfig())
-	limiter := auth.NewRateLimiter(5, 5*time.Minute, 5*time.Minute)
-	logger.Info("auth_ready", "session_ttl", auth.DefaultSessionConfig().TTL.String())
+
+	// Sprint V1.0.1 P5: 根据 REDIS_URL 自动选择 limiter 实现.
+	// - REDIS_URL 空: 用内存版 RateLimiter (单进程 OK)
+	// - REDIS_URL 非空: 用 RedisLimiter (多进程共享限流计数)
+	var limiter auth.Limiter
+	if cfg.Redis.URL != "" {
+		redisLimiter, err := auth.NewRedisLimiter(cfg.Redis.URL, 5, 5*time.Minute, 5*time.Minute)
+		if err != nil {
+			return fmt.Errorf("init redis limiter: %w", err)
+		}
+		limiter = redisLimiter
+		logger.Info("auth_ready", "limiter", "redis", "addr", cfg.Redis.URL)
+	} else {
+		limiter = auth.NewRateLimiter(5, 5*time.Minute, 5*time.Minute)
+		logger.Info("auth_ready", "limiter", "memory", "session_ttl", auth.DefaultSessionConfig().TTL.String())
+	}
 
 	// 4. metrics + traces
 	v := version.Get()
