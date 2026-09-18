@@ -10,6 +10,8 @@ import (
 // TestToolsE2E_All6CoreTools 6 个 core tool 端到端 (Sprint A6.2)
 //
 // 真实 sandbox 测试：创建临时目录 + 测试文件，验证 Read/Write/Edit/Bash/Glob/Grep 端到端。
+//
+//nolint:gocyclo // 6 个 sub-test 累积复杂度（每个 sub-test 含多个 assertions），拆分会丢失共享 setup
 func TestToolsE2E_All6CoreTools(t *testing.T) {
 	dir := t.TempDir()
 	testFile := filepath.Join(dir, "test.txt")
@@ -19,12 +21,19 @@ func TestToolsE2E_All6CoreTools(t *testing.T) {
 	}
 
 	reg := NewRegistry()
-	reg.Register(NewReadTool(nil))
-	reg.Register(NewWriteTool(nil))
-	reg.Register(NewEditTool(nil))
-	reg.Register(NewGlobTool(nil))
-	reg.Register(NewGrepTool(nil))
-	reg.Register(NewBashTool(nil))
+	coreTools := []Tool{
+		NewReadTool(nil),
+		NewWriteTool(nil),
+		NewEditTool(nil),
+		NewGlobTool(nil),
+		NewGrepTool(nil),
+		NewBashTool(nil),
+	}
+	for _, tool := range coreTools {
+		if err := reg.Register(tool); err != nil {
+			t.Fatalf("register %s: %v", tool.Name(), err)
+		}
+	}
 
 	execCtx := &ExecContext{Root: dir}
 
@@ -105,9 +114,16 @@ func TestToolsE2E_All6CoreTools(t *testing.T) {
 // TestToolsE2E_DisallowedToolsVerify 3 个新 mock tool (Sprint A5.10/11/12)
 func TestToolsE2E_DisallowedToolsVerify(t *testing.T) {
 	reg := NewRegistry()
-	reg.Register(NewWebSearchTool())
-	reg.Register(NewAgentBrowserTool())
-	reg.Register(NewCDPTool())
+	mockTools := []Tool{
+		NewWebSearchTool(),
+		NewAgentBrowserTool(),
+		NewCDPTool(),
+	}
+	for _, tool := range mockTools {
+		if err := reg.Register(tool); err != nil {
+			t.Fatalf("register %s: %v", tool.Name(), err)
+		}
+	}
 	execCtx := &ExecContext{Root: "/tmp"}
 
 	t.Run("WebSearch", func(t *testing.T) {
@@ -148,7 +164,9 @@ func TestToolsE2E_DisallowedToolsVerify(t *testing.T) {
 func TestToolsE2E_SandboxEnforced(t *testing.T) {
 	dir := t.TempDir()
 	reg := NewRegistry()
-	reg.Register(NewReadTool(nil))
+	if err := reg.Register(NewReadTool(nil)); err != nil {
+		t.Fatalf("register Read: %v", err)
+	}
 
 	execCtx := &ExecContext{Root: dir}
 	res, _ := reg.Dispatch("Read", execCtx, []byte(`{"path": "../etc/passwd"}`))

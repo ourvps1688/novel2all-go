@@ -29,16 +29,15 @@ func TestAgentE2E_All7VendorRoles(t *testing.T) {
 		spec := spec
 		t.Run(spec.Name, func(t *testing.T) {
 			toolsReg := tools.NewRegistry()
-			toolsReg.Register(&mockToolForRole{
-				name:        "Read",
-				description: "Read file",
-				schema:      []byte(`{}`),
-			})
-			toolsReg.Register(&mockToolForRole{
-				name:        "Write",
-				description: "Write file",
-				schema:      []byte(`{}`),
-			})
+			roleMocks := []*mockToolForRole{
+				{name: "Read", description: "Read file", schema: []byte(`{}`)},
+				{name: "Write", description: "Write file", schema: []byte(`{}`)},
+			}
+			for _, mt := range roleMocks {
+				if err := toolsReg.Register(mt); err != nil {
+					t.Fatalf("register %s: %v", mt.name, err)
+				}
+			}
 
 			adapter := NewToolAdapter(toolsReg, "/tmp")
 			adapter.SetDisallowedTools(spec.DisallowedTools)
@@ -85,7 +84,7 @@ func toAgentSpec(s *roles.RoleSpec) *AgentSpec {
 		return nil
 	}
 	return &AgentSpec{
-		Name: s.Name,
+		Name:         s.Name,
 		// Alias omitted (AgentSpec has no Alias)
 		Description:  s.Description,
 		Tools:        s.Tools,
@@ -120,8 +119,15 @@ func TestAgentE2E_DisallowedToolsEnforced(t *testing.T) {
 		t.Skipf("character_extractor role not loaded: %v", err)
 	}
 	toolsReg := tools.NewRegistry()
-	toolsReg.Register(&mockToolForRole{name: "Read", description: "r", schema: []byte(`{}`)})
-	toolsReg.Register(&mockToolForRole{name: "Write", description: "w", schema: []byte(`{}`)})
+	rwMocks := []*mockToolForRole{
+		{name: "Read", description: "r", schema: []byte(`{}`)},
+		{name: "Write", description: "w", schema: []byte(`{}`)},
+	}
+	for _, mt := range rwMocks {
+		if err := toolsReg.Register(mt); err != nil {
+			t.Fatalf("register %s: %v", mt.name, err)
+		}
+	}
 
 	adapter := NewToolAdapter(toolsReg, "/tmp")
 	adapter.SetDisallowedTools(spec.DisallowedTools)
