@@ -19,7 +19,7 @@ type frontmatter struct {
 
 // parseYAMLFrontmatter 解析 role .md 文件的 frontmatter + body
 //
-// 与 agent 包的 Frontmatter parser 等价，但内嵌避免循环依赖。
+// 与 agent 包 Frontmatter parser 等价，但内嵌避免循环依赖。
 // 支持：字符串 / 多行 description (|) / inline 列表 [a, b] / multi-line 列表 / 整数 / 注释
 func parseYAMLFrontmatter(content string) (frontmatter, string, error) {
 	scanner := bufio.NewScanner(strings.NewReader(content))
@@ -53,6 +53,7 @@ func parseYAMLFrontmatter(content string) (frontmatter, string, error) {
 	return fm, body, nil
 }
 
+// parseFrontmatterFields 解析 frontmatter 字段列表（拆降低 parseYAMLFrontmatter 圈复杂度）
 func parseFrontmatterFields(lines []string) (frontmatter, error) {
 	var fm frontmatter
 	i := 0
@@ -71,45 +72,62 @@ func parseFrontmatterFields(lines []string) (frontmatter, error) {
 		key := strings.TrimSpace(raw[:colonIdx])
 		value := strings.TrimSpace(raw[colonIdx+1:])
 
-		switch key {
-		case "name":
-			fm.Name = value
-		case "description":
-			if value == "|" || value == ">" {
-				multiline, consumed := readIndentedBlock(lines, i+1)
-				fm.Description = strings.TrimRight(multiline, "\n")
-				i += 1 + consumed
-				continue
-			}
-			fm.Description = value
-		case "tools", "disallowedTools":
-			list, consumed := parseListValue(value, lines, i+1)
-			if key == "tools" {
-				fm.Tools = list
-			} else {
-				// disallowedTools 暂不存入 RoleSpec（待 A5 实现）
-			}
-			i += 1 + consumed
-			continue
-		case "model":
-			fm.Model = value
-		case "maxTurns":
-			var n int
-			if _, err := fmt.Sscanf(value, "%d", &n); err != nil {
-				return fm, fmt.Errorf("maxTurns: %w", err)
-			}
-			fm.MaxTurns = n
-		case "memory":
-			fm.Memory = value
-		case "skills":
-			list, consumed := parseListValue(value, lines, i+1)
-			fm.Skills = list
-			i += 1 + consumed
-			continue
+		next, err := applyFrontmatterField(&fm, key, value, lines, i)
+		if err != nil {
+			return fm, err
 		}
-		i++
+		i = next
 	}
 	return fm, nil
+}
+
+// applyFrontmatterField 应用单个字段，返回下一行索引
+func applyFrontmatterField(fm *frontmatter, key, value string, lines []string, i int) (int, error) {
+	switch key {
+	case "name":
+		fm.Name = value
+		return i + 1, nil
+	case "description":
+		return applyDescriptionField(fm, value, lines, i)
+	case "tools":
+		list, consumed := parseListValue(value, lines, i+1)
+		fm.Tools = list
+		return i + 1 + consumed, nil
+	case "disallowedTools":
+		// 暂不存入 RoleSpec（待 A5 实现），但仍消耗行
+		_, consumed := parseListValue(value, lines, i+1)
+		return i + 1 + consumed, nil
+	case "model":
+		fm.Model = value
+		return i + 1, nil
+	case "maxTurns":
+		var n int
+		if _, err := fmt.Sscanf(value, "%d", &n); err != nil {
+			return i + 1, fmt.Errorf("maxTurns: %w", err)
+		}
+		fm.MaxTurns = n
+		return i + 1, nil
+	case "memory":
+		fm.Memory = value
+		return i + 1, nil
+	case "skills":
+		list, consumed := parseListValue(value, lines, i+1)
+		fm.Skills = list
+		return i + 1 + consumed, nil
+	}
+	// 未知 key 跳过
+	return i + 1, nil
+}
+
+// applyDescriptionField 处理 description（含多行 |）
+func applyDescriptionField(fm *frontmatter, value string, lines []string, i int) (int, error) {
+	if value == "|" || value == ">" {
+		multiline, consumed := readIndentedBlock(lines, i+1)
+		fm.Description = strings.TrimRight(multiline, "\n")
+		return i + 1 + consumed, nil
+	}
+	fm.Description = value
+	return i + 1, nil
 }
 
 func readIndentedBlock(lines []string, start int) (string, int) {
