@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ourvps1688/novel2all-go/internal/auth"
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 	"github.com/ourvps1688/novel2all-go/internal/memory"
 	"github.com/ourvps1688/novel2all-go/internal/skills"
@@ -39,8 +40,11 @@ const (
 )
 
 // ActionRequest 通用 body 字段
+//
+// Sprint V1.0.1 P0-B: ProjectID 用于 owner check (0 = 跳过 check, legacy 模式).
 type ActionRequest struct {
 	ProjectRoot string `json:"project_root"`
+	ProjectID   int64  `json:"project_id,omitempty"`
 	Instruction string `json:"instruction,omitempty"`
 	Position    int    `json:"position,omitempty"`
 }
@@ -119,6 +123,10 @@ type ChapterActions struct {
 	// Sprint 35: 注入 ReferencesLoader, 让 buildActionSystemPrompt 拼 references 段.
 	// nil = 跳过 references (V0.30 mock 路径).
 	refLoader ReferencesLoader
+
+	// Sprint V1.0.1 P0-B: 注入 ProjectsRepo, 5 个 action 入口做 owner check.
+	// nil = 禁用 owner check (legacy 模式, 仅用于直接单元测试).
+	projects ProjectsRepo
 }
 
 // NewChapterActions 创建
@@ -162,6 +170,56 @@ func NewChapterActionsWithMemory(executor *skills.Executor, memMgr *memory.Memor
 	return &ChapterActions{executor: executor, memMgr: memMgr}
 }
 
+// NewChapterActionsWithProjects 创建带 projects 仓库的 ChapterActions (Sprint V1.0.1 P0-B).
+//
+// 用于 5 个 chapter action 的 owner check (Sprint V1.0.1 P0-B 阻止越权写章节).
+// projects == nil → 禁用 owner check (legacy 模式, 直接单元测试用).
+//
+// 用法 (router.go):
+//
+//	projects := deps.projectStore  // SQLite adapter
+//	actions := NewChapterActionsWithProjects(executor, projects)
+func NewChapterActionsWithProjects(executor *skills.Executor, projects ProjectsRepo) *ChapterActions {
+	return &ChapterActions{executor: executor, projects: projects}
+}
+
+// checkProjectAccess 验证 user 对 project 有访问权 (P0-B owner check helper).
+//
+// 行为:
+//   - user 不在 context → 401 + false
+//   - req.ProjectID <= 0 OR a.projects == nil → true (legacy skip, 用于直接调用测试)
+//   - project 不存在 → 404 + false
+//   - admin OR user.ID == project.OwnerID → true
+//   - 其他 → 403 + false
+//
+// 每个 action 入口调用: if !a.checkProjectAccess(w, r, req) { return }
+func (a *ChapterActions) checkProjectAccess(w http.ResponseWriter, r *http.Request, req ActionRequest) bool {
+	user, ok := UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return false
+	}
+	if req.ProjectID <= 0 || a.projects == nil {
+		// legacy: 无 project_id 或 projects 仓库未注入, 跳过 owner check
+		// (直接单元测试场景, 注入 admin user + project_id=0 即可)
+		return true
+	}
+	project, err := a.projects.Get(req.ProjectID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
+			return false
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return false
+	}
+	if auth.IsAdmin(user) || project.OwnerID == user.ID {
+		return true
+	}
+	http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+	return false
+}
+
 // DispatchAction 分发到对应 action
 func (a *ChapterActions) DispatchAction(w http.ResponseWriter, r *http.Request, chapter int, action string) {
 	switch action {
@@ -182,6 +240,9 @@ func (a *ChapterActions) DispatchAction(w http.ResponseWriter, r *http.Request, 
 
 func (a *ChapterActions) expand(w http.ResponseWriter, r *http.Request, chapter int) {
 	req := parseActionRequest(r)
+	if !a.checkProjectAccess(w, r, req) {
+		return
+	}
 	start := time.Now()
 
 	prosePath := chapterProsePath(req.ProjectRoot, chapter)
@@ -223,6 +284,9 @@ func (a *ChapterActions) expand(w http.ResponseWriter, r *http.Request, chapter 
 
 func (a *ChapterActions) rewrite(w http.ResponseWriter, r *http.Request, chapter int) {
 	req := parseActionRequest(r)
+	if !a.checkProjectAccess(w, r, req) {
+		return
+	}
 	start := time.Now()
 
 	prosePath := chapterProsePath(req.ProjectRoot, chapter)
@@ -262,6 +326,9 @@ func (a *ChapterActions) rewrite(w http.ResponseWriter, r *http.Request, chapter
 
 func (a *ChapterActions) review(w http.ResponseWriter, r *http.Request, chapter int) {
 	req := parseActionRequest(r)
+	if !a.checkProjectAccess(w, r, req) {
+		return
+	}
 	start := time.Now()
 
 	prosePath := chapterProsePath(req.ProjectRoot, chapter)
@@ -292,6 +359,9 @@ func (a *ChapterActions) review(w http.ResponseWriter, r *http.Request, chapter 
 
 func (a *ChapterActions) insert(w http.ResponseWriter, r *http.Request, chapter int) {
 	req := parseActionRequest(r)
+	if !a.checkProjectAccess(w, r, req) {
+		return
+	}
 	if req.Position <= 0 {
 		http.Error(w, `{"error":"missing 'position' (1-based line number)"}`, http.StatusBadRequest)
 		return
@@ -347,6 +417,9 @@ func (a *ChapterActions) insert(w http.ResponseWriter, r *http.Request, chapter 
 
 func (a *ChapterActions) rollback(w http.ResponseWriter, r *http.Request, chapter int) {
 	req := parseActionRequest(r)
+	if !a.checkProjectAccess(w, r, req) {
+		return
+	}
 	projectRoot := req.ProjectRoot
 	if projectRoot == "" {
 		projectRoot = "."
@@ -406,6 +479,13 @@ func parseActionRequest(r *http.Request) ActionRequest {
 	}
 	if req.ProjectRoot == "" {
 		req.ProjectRoot = r.URL.Query().Get("project_root")
+	}
+	if req.ProjectID == 0 {
+		if p := r.URL.Query().Get("project_id"); p != "" {
+			if n, err := strconv.ParseInt(p, 10, 64); err == nil {
+				req.ProjectID = n
+			}
+		}
 	}
 	if req.Instruction == "" {
 		req.Instruction = r.URL.Query().Get("instruction")
