@@ -1,0 +1,25 @@
+# 强制 LF-only（避免 Windows CRLF 触发 CI lint "File is not gofmt-ed" 错误）
+#
+# GitHub Actions 在 ubuntu-latest 上跑 lint，go fmt -s 期望 LF。
+# Windows 默认 checkout 时会按 core.autocrlf 转换行尾，
+# 可能导致本来 LF 的文件被转为 CRLF，触发 "File is not gofmt-ed with -s" lint 错误。
+#
+# 解决方案：所有文本文件强制 LF-only。
+
+# 默认（所有文本文件）= LF
+* text=auto eol=lf
+
+# 二进制文件保持原样
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
