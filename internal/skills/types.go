@@ -1,28 +1,15 @@
-// Package skills 提供 novel2all-go 的 skill 加载与执行能力。
-//
-// 13 个 SKILL.md 通过 embed.FS 嵌入二进制，运行时无需文件系统。
-// SKILL.md 格式：
-//
-//	---
-//	name: story-x
-//	description: "..."
-//	---
-//
-//	# title
-//
-//	body body（作为 LLM system prompt）
 package skills
 
-// Skill 加载后的技能定义
-type Skill struct {
-	Name        string // 来自 frontmatter name
-	Description string // 来自 frontmatter description
-	Body        string // frontmatter 之后的 markdown body
-	// SourcePath 原始文件名（用于 debug + 日志）
-	SourcePath string
-}
+// Package skills 提供 novel2all-go 的 skill 加载与执行能力。
+//
+// Sprint A4 改造：13 个 SKILL.md + 242 references 通过 embed.FS 嵌入二进制。
+// 目录结构：assets/<skill>/SKILL.md + assets/<skill>/references/[<subdir>/]*.md
+//
+// 按需加载（决策 3=B）：
+//   - NewLoader() 加载所有 SKILL.md frontmatter + body + 列出 references 元数据
+//   - LoadReference(skill, refPath) 按需读 reference content（带 L1 cache）
 
-// ExecuteInput 执行输入
+// ExecuteInput skill 执行输入（保持向后兼容，Sprint 32+ 引入）
 type ExecuteInput struct {
 	// SkillName skill 名（不含 .md）
 	SkillName string
@@ -31,7 +18,6 @@ type ExecuteInput struct {
 	UserInput string
 
 	// SystemInput 系统消息（V0.30+ Sprint 32）.
-	//
 	// 拼接顺序: SystemInput → skill.Body → UserInput.
 	// 空 = 走原路径（只 skill.Body + UserInput）保持 V0.29 兼容.
 	SystemInput string
@@ -49,7 +35,7 @@ type ExecuteInput struct {
 	Model string
 }
 
-// ExecuteResult 执行结果（非流式）
+// ExecuteResult skill 执行结果（非流式）
 type ExecuteResult struct {
 	Content   string
 	Provider  string
