@@ -53,7 +53,7 @@ func (t *AgentBrowserTool) Execute(ctx *ExecContext, input []byte) (Result, erro
 
 	// Mock 返回 HTML + actions 序列
 	content := fmt.Sprintf("Browser session:\n")
-	content += fmt.Sprintf("URL: %s\n", in.URL)
+	content += "URL: " + in.URL + "\n"
 	content += "HTML content (mock):\n"
 	content += "  <html><body><h1>Mock Page</h1><p>This is MOCK content.</p></body></html>\n"
 	if len(in.Actions) > 0 {
