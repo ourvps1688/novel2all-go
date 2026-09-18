@@ -188,10 +188,14 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 	}
 
 	// Chapters API（filesystem + LLM actions） (受保护 P0-A)
+	//
+	// Sprint V1.0.1 P3: wire deps.projectStore (ProjectsRepo) 到 ChapterHandler + ChapterActions
+	// 用于 save/export + 5 个 action 的 owner check (P0-B). nil 时禁用 owner check (legacy).
 	if deps.Loader != nil && deps.Router != nil {
 		executor := skills.NewExecutor(deps.Loader, deps.Router)
-		actions := NewChapterActions(executor)
+		actions := NewChapterActionsWithProjects(executor, deps.projectStore)
 		chaptersHandler := NewChapterHandlerWithActions(actions)
+		chaptersHandler.SetProjects(deps.projectStore)
 		if deps.ChaptersMeta != nil {
 			chaptersHandler.SetMetaStore(deps.ChaptersMeta)
 		}
@@ -200,6 +204,7 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 		mux.Handle("/api/chapter/", authGuard(chaptersHandler))
 	} else {
 		chaptersHandler := NewChapterHandler()
+		chaptersHandler.SetProjects(deps.projectStore)
 		if deps.ChaptersMeta != nil {
 			chaptersHandler.SetMetaStore(deps.ChaptersMeta)
 		}
