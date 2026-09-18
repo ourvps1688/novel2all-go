@@ -14,6 +14,8 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -28,23 +30,45 @@ type disallowedToolsE2EFixture struct {
 	registry *tools.Registry
 	adapter  *ToolAdapter
 	tools    []string
+	dir      string // t.TempDir()，含 test.txt / x.txt 测试文件
 }
 
-func newDisallowedToolsE2EFixture() *disallowedToolsE2EFixture {
-	reg := tools.NewRegistry()
-	_ = reg.Register(tools.NewReadTool(nil))
-	_ = reg.Register(tools.NewWriteTool(nil))
-	_ = reg.Register(tools.NewEditTool(nil))
-	_ = reg.Register(tools.NewBashTool(nil))
-	_ = reg.Register(tools.NewWebSearchTool())
+func newDisallowedToolsE2EFixture(t *testing.T) *disallowedToolsE2EFixture {
+	t.Helper()
+	dir := t.TempDir()
+	// ReadTool 需要 test.txt 存在；EditTool 需要 x.txt 含 "a" 才匹配 old_string
+	if err := os.WriteFile(filepath.Join(dir, "test.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatalf("setup test.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "x.txt"), []byte("aaa"), 0o644); err != nil {
+		t.Fatalf("setup x.txt: %v", err)
+	}
 
-	adapter := NewToolAdapter(reg, "/tmp")
+	reg := tools.NewRegistry()
+	if err := reg.Register(tools.NewReadTool(nil)); err != nil {
+		t.Fatalf("Register Read: %v", err)
+	}
+	if err := reg.Register(tools.NewWriteTool(nil)); err != nil {
+		t.Fatalf("Register Write: %v", err)
+	}
+	if err := reg.Register(tools.NewEditTool(nil)); err != nil {
+		t.Fatalf("Register Edit: %v", err)
+	}
+	if err := reg.Register(tools.NewBashTool(nil)); err != nil {
+		t.Fatalf("Register Bash: %v", err)
+	}
+	if err := reg.Register(tools.NewWebSearchTool()); err != nil {
+		t.Fatalf("Register WebSearch: %v", err)
+	}
+
+	adapter := NewToolAdapter(reg, dir)
 	adapter.SetDisallowedTools([]string{"WebSearch", "Edit"})
 
 	return &disallowedToolsE2EFixture{
 		registry: reg,
 		adapter:  adapter,
 		tools:    []string{"Read", "Write", "Bash", "WebSearch", "Edit"},
+		dir:      dir,
 	}
 }
 
@@ -54,7 +78,7 @@ func newDisallowedToolsE2EFixture() *disallowedToolsE2EFixture {
 // 调 adapter.LLMTools(spec.Tools) 后返回的 llm.Tool 列表
 // 应只剩 Read/Write/Bash（3 个），不含 WebSearch 和 Edit。
 func TestDisallowedToolsE2E_LLMToolsFilter(t *testing.T) {
-	f := newDisallowedToolsE2EFixture()
+	f := newDisallowedToolsE2EFixture(t)
 
 	got := f.adapter.LLMTools(f.tools)
 
@@ -94,7 +118,7 @@ func TestDisallowedToolsE2E_LLMToolsFilter(t *testing.T) {
 // 验证：即使绕过 LLMTools 过滤直接调 adapter.Dispatch("WebSearch", ...)，
 // 也会被 disallowed 防御层拒绝。
 func TestDisallowedToolsE2E_DispatchRejects(t *testing.T) {
-	f := newDisallowedToolsE2EFixture()
+	f := newDisallowedToolsE2EFixture(t)
 
 	tests := []struct {
 		name           string
@@ -137,10 +161,8 @@ func TestDisallowedToolsE2E_DispatchRejects(t *testing.T) {
 				if !strings.Contains(res.Content, tt.expectContains) {
 					t.Errorf("Dispatch(%q) 错误信息应含 %q，实际=%q", tt.toolName, tt.expectContains, res.Content)
 				}
-			} else {
-				if res.IsError {
-					t.Errorf("Dispatch(%q) 应成功，实际错误=%q", tt.toolName, res.Content)
-				}
+			} else if res.IsError {
+				t.Errorf("Dispatch(%q) 应成功，实际错误=%q", tt.toolName, res.Content)
 			}
 		})
 	}
@@ -156,6 +178,8 @@ func TestDisallowedToolsE2E_DispatchRejects(t *testing.T) {
 //   - mockLLM.Calls[0].Tools 不含 WebSearch / Edit
 //   - res.ToolCalls 记录了 LLM 的尝试（包含 WebSearch 调用记录）
 //   - 最终 Content 来自 mock 第二轮（"WebSearch was rejected"）
+//
+//nolint:gocyclo // 10 段独立断言（mock LLM setup + 3 层防御 + 6 验证），拆分丢失可读性
 func TestDisallowedToolsE2E_AgentRunDefense(t *testing.T) {
 	// 1. 5 个 tool registry
 	reg := tools.NewRegistry()
@@ -335,24 +359,39 @@ func TestDisallowedToolsE2E_All4ReadOnlyRoles(t *testing.T) {
 			adapter := NewToolAdapter(reg, "/tmp")
 			adapter.SetDisallowedTools(spec.DisallowedTools)
 
-			// 调 Write 应被拒（vendor 4 个只读 role 通常含 Write）
-			res := adapter.Dispatch("Write", json.RawMessage(`{"path": "x.txt", "content": "y"}`))
-			if !res.IsError {
-				// 注：story-explorer / story-researcher 可能没禁止 Write，只 WARN
-				t.Logf("WARN: role %q 没禁止 Write（DisallowedTools=%v）", roleName, spec.DisallowedTools)
-			} else if !strings.Contains(res.Content, "disallowed") {
-				t.Errorf("role %q: Write 拒绝信息应含 'disallowed'，实际=%q", roleName, res.Content)
+			// 调 Write 应被拒（仅当 spec 标记 Write 为 disallowed）
+			if containsStr(spec.DisallowedTools, "Write") {
+				res := adapter.Dispatch("Write", json.RawMessage(`{"path": "x.txt", "content": "y"}`))
+				if !res.IsError {
+					t.Errorf("role %q: Write 应被拒，实际仍可调", roleName)
+				} else if !strings.Contains(res.Content, "disallowed") {
+					t.Errorf("role %q: Write 拒绝信息应含 'disallowed'，实际=%q", roleName, res.Content)
+				}
+			} else {
+				t.Logf("WARN: role %q 没禁止 Write（DisallowedTools=%v），跳过", roleName, spec.DisallowedTools)
 			}
 
-			// 调 Edit 应被拒
-			res = adapter.Dispatch("Edit", json.RawMessage(`{"path": "x.txt", "old_string": "a", "new_string": "b"}`))
-			if res.IsError {
-				if !strings.Contains(res.Content, "disallowed") {
+			// 调 Edit 应被拒（仅当 spec 标记 Edit 为 disallowed）
+			if containsStr(spec.DisallowedTools, "Edit") {
+				res := adapter.Dispatch("Edit", json.RawMessage(`{"path": "x.txt", "old_string": "a", "new_string": "b"}`))
+				if !res.IsError {
+					t.Errorf("role %q: Edit 应被拒，实际仍可调", roleName)
+				} else if !strings.Contains(res.Content, "disallowed") {
 					t.Errorf("role %q: Edit 拒绝信息应含 'disallowed'，实际=%q", roleName, res.Content)
 				}
 			} else {
-				t.Logf("WARN: role %q 没禁止 Edit（DisallowedTools=%v）", roleName, spec.DisallowedTools)
+				t.Logf("WARN: role %q 没禁止 Edit（DisallowedTools=%v），跳过", roleName, spec.DisallowedTools)
 			}
 		})
 	}
+}
+
+// containsStr 检查字符串 slice 是否含某元素
+func containsStr(list []string, target string) bool {
+	for _, s := range list {
+		if s == target {
+			return true
+		}
+	}
+	return false
 }

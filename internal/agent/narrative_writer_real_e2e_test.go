@@ -131,6 +131,7 @@ func TestNarrativeWriterRealE2E_PathTranslator(t *testing.T) {
 //  5. system prompt 改写：让 LLM 通过 Read tool 读 大纲.txt 然后写 100 字章节
 //  6. RunAgent 走完
 //  7. 验证：content 非空 + ≥50 中文字符 + tokens > 0
+//nolint:gocyclo // 12 步真实 LLM 端到端流程（setup + 8 验证），拆分丢失 setup 共享
 func TestNarrativeWriterRealE2E_DeepSeek(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping real LLM E2E in -short mode")
@@ -245,12 +246,14 @@ func TestNarrativeWriterRealE2E_DeepSeek(t *testing.T) {
 		for _, tc := range res.ToolCalls {
 			if tc.Name == "Write" {
 				data, readErr := os.ReadFile(chapterPath)
-				if readErr != nil {
+				cjk := countCJK(string(data))
+				switch {
+				case readErr != nil:
 					t.Errorf("Read 第一章.txt: %v", readErr)
-				} else if countCJK(string(data)) < 50 {
-					t.Errorf("Write tool 写入的 第一章.txt 应≥50 中文字符，实际 cjk=%d", countCJK(string(data)))
-				} else {
-					t.Logf("✅ Write tool 写入 第一章.txt，cjk=%d", countCJK(string(data)))
+				case cjk < 50:
+					t.Errorf("Write tool 写入的 第一章.txt 应≥50 中文字符，实际 cjk=%d", cjk)
+				default:
+					t.Logf("✅ Write tool 写入 第一章.txt，cjk=%d", cjk)
 				}
 			}
 		}

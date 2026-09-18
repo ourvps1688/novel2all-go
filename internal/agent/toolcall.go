@@ -38,13 +38,17 @@ func NewToolAdapter(reg *tools.Registry, sandboxRoot string) *ToolAdapter {
 // LLMTools 把 agent/tools.Registry 转成 []llm.Tool 列表（供 LLM 调）
 //
 // vendor role 的 spec.Tools 字段（来自 RoleSpec）会指定允许的工具列表。
-// 这里只返回 spec.Tools 列出的工具 + 全部都通过 registry 查 schema。
+// 这里返回 spec.Tools 列出的工具，但先过滤掉 a.disallowedTools 里的（A5.14/A6.14 一致性）。
+// 未注册的 tool 跳过（vendor role 可能引用未实现的 tool）。
 func (a *ToolAdapter) LLMTools(toolNames []string) []llm.Tool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
 	out := make([]llm.Tool, 0, len(toolNames))
 	for _, name := range toolNames {
+		if _, blocked := a.disallowedTools[name]; blocked {
+			continue // A5.14/A6.14: LLMTools 也过滤 disallowed（与 Dispatch 一致）
+		}
 		t, err := a.registry.Get(name)
 		if err != nil {
 			continue // 未注册的 tool 跳过（vendor role 可能引用未实现的 tool）
