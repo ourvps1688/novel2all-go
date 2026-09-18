@@ -353,3 +353,191 @@ func TestRequireAuth_LookupErrorIs401(t *testing.T) {
 
 // 编译期断言: fakeUserLookup 实现 UserLookup 接口.
 var _ UserLookup = (*fakeUserLookup)(nil)
+
+// =====================================================================
+// Sprint V1.0.1 P3 RequireAdmin mux-level middleware tests
+// =====================================================================
+
+// requestWithUser 构造带 user context 的 request (用于 RequireAdmin 测试).
+//
+// RequireAdmin 从 context 取 user (假设已被前置 RequireAuth 注入),
+// 不读 cookie, 所以测试需手动构造 user context.
+func requestWithUser(method, url string, user *store.User) *http.Request {
+	req := httptest.NewRequest(method, url, http.NoBody)
+	if user != nil {
+		ctx := context.WithValue(req.Context(), userCtxValue, user)
+		req = req.WithContext(ctx)
+	}
+	return req
+}
+
+// TestRequireAdmin_NoUser_Returns401 验证: user 不在 context → 401 (前置 RequireAuth 没注入).
+func TestRequireAdmin_NoUser_Returns401(t *testing.T) {
+	lookup := newFakeLookup()
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := RequireAdmin(lookup)(next)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/state", http.NoBody)
+	// 不注入 user
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("无 user 应 401, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+	if called {
+		t.Error("next 不应被调用")
+	}
+}
+
+// TestRequireAdmin_AdminUser_OK 验证: admin user → 调 next.
+func TestRequireAdmin_AdminUser_OK(t *testing.T) {
+	lookup := newFakeLookup()
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := RequireAdmin(lookup)(next)
+
+	admin := &store.User{ID: 1, Username: "admin1", Role: "admin"}
+	req := requestWithUser(http.MethodGet, "/api/state", admin)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("admin 应 200, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !called {
+		t.Error("next 应被调用")
+	}
+}
+
+// TestRequireAdmin_RegularUser_Returns403 验证: 普通 user → 403.
+func TestRequireAdmin_RegularUser_Returns403(t *testing.T) {
+	lookup := newFakeLookup()
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := RequireAdmin(lookup)(next)
+
+	regular := &store.User{ID: 2, Username: "alice", Role: "user"}
+	req := requestWithUser(http.MethodGet, "/api/state", regular)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("普通 user 应 403, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+	if called {
+		t.Error("普通 user 不应调 next")
+	}
+}
+
+// TestRequireAdmin_NilSession_Returns503 验证: session=nil → 503 (与 RequireAuth fallback 对齐).
+func TestRequireAdmin_NilSession_Returns503(t *testing.T) {
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := RequireAdmin(nil)(next)
+
+	admin := &store.User{ID: 1, Role: "admin"}
+	req := requestWithUser(http.MethodGet, "/api/state", admin)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("session=nil 应 503, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+	if called {
+		t.Error("session=nil 不应调 next")
+	}
+}
+
+// TestRequireAdmin_DisabledUser_StillRequiresAdmin 验证: disabled user 仍被 RequireAdmin 当作 401 (前置 RequireAuth 已拦截).
+//
+// 注: disabled user 在 RequireAuth 已返回 401, 不应到 RequireAdmin 这一层.
+// 但如果 context 已被手动注入 disabled user (例如测试场景), RequireAdmin 仍正常工作
+// (只检查 role, 不查 disabled).
+func TestRequireAdmin_DisabledUser_StillPassesAdmin(t *testing.T) {
+	// 此测试验证 RequireAdmin 只检查 role, 不检查 disabled.
+	// (disabled 检查是 RequireAuth 的责任)
+	lookup := newFakeLookup()
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := RequireAdmin(lookup)(next)
+
+	disabledAdmin := &store.User{ID: 3, Username: "admin_disabled", Role: "admin", Disabled: true}
+	req := requestWithUser(http.MethodGet, "/api/state", disabledAdmin)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// disabled admin 仍可过 RequireAdmin (它只检查 role)
+	if rec.Code != http.StatusOK {
+		t.Errorf("disabled admin 应过 RequireAdmin (Role 仍为 admin), 实际 %d", rec.Code)
+	}
+	if !called {
+		t.Error("next 应被调用")
+	}
+}
+
+// TestRequireAdmin_ChainWithAuth 验证: RequireAuth + RequireAdmin chain 正常工作.
+//
+// 模拟真实 router 链式 wrap.
+func TestRequireAdmin_ChainWithAuth(t *testing.T) {
+	lookup := newFakeLookup()
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := RequireAuth(lookup)(RequireAdmin(lookup)(next))
+
+	// admin cookie → admin 通过 → 200
+	req := httptest.NewRequest(http.MethodGet, "/api/state", http.NoBody)
+	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "admin-tok"})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("admin chain 应 200, 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !called {
+		t.Error("next 应被调用")
+	}
+
+	// regular user cookie → 403
+	called = false
+	req = httptest.NewRequest(http.MethodGet, "/api/state", http.NoBody)
+	req.AddCookie(&http.Cookie{Name: "novel2all_session", Value: "user-tok"})
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("user chain 应 403 (auth 过, admin 拦), 实际 %d body=%s", rec.Code, rec.Body.String())
+	}
+	if called {
+		t.Error("user chain 不应调 next")
+	}
+
+	// 无 cookie → 401
+	called = false
+	req = httptest.NewRequest(http.MethodGet, "/api/state", http.NoBody)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("无 cookie chain 应 401, 实际 %d", rec.Code)
+	}
+	if called {
+		t.Error("无 cookie chain 不应调 next")
+	}
+}

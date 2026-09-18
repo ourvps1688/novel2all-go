@@ -1,16 +1,20 @@
 // Package api 提供 novel2all-go HTTP handlers.
 //
-// auth_middleware.go 实现 Sprint V1.0.1 P0-A: RequireAuth mux-level middleware.
+// auth_middleware.go 实现 Sprint V1.0.1 P0-A + P3: RequireAuth + RequireAdmin mux-level middleware.
 //
 // 设计目的:
 //   - internal/auth/rbac.go 的 (mw *Middleware) RequireAuth 已经存在,
 //     但只接受 *auth.SessionManager (强类型), 无法直接用于 mux-level wrap.
 //   - api.RequireAuth 接受更宽的 UserLookup interface, 便于测试 mock.
 //   - 用独立 context key (userCtxKey) 避免和 auth.Middleware 内部 key 冲突.
+//   - RequireAdmin 链式依赖 RequireAuth (从 context 取 user), admin 角色判断由本层负责.
 //
 // 使用方式 (router.go Commit 3):
 //
-//	mux.Handle("/api/projects/", RequireAuth(session)(projectsHandler))
+//	authGuard := RequireAuth(session)
+//	adminGuard := RequireAdmin(session)
+//	mux.Handle("/api/projects/", authGuard(projectsHandler))
+//	mux.Handle("/api/state/",     authGuard(adminGuard(stateHandler)))
 //
 // 受保护 handler 可通过 UserFromContext(r.Context()) 取当前用户.
 package api
@@ -19,6 +23,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/ourvps1688/novel2all-go/internal/auth"
 	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
@@ -79,6 +84,47 @@ func RequireAuth(session UserLookup) func(http.Handler) http.Handler {
 			}
 			ctx := context.WithValue(r.Context(), userCtxValue, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// RequireAdmin 返回 mux-level middleware wrapper: 验证 user 必须是 admin 角色.
+//
+// 前置条件: 必须先用 RequireAuth wrap (从 context 取 user).
+// 行为:
+//   - session == nil: 写 503 `{"error":"admin endpoints disabled"}` + 不调 next.
+//   - user 不在 context: 写 401 `{"error":"unauthorized"}` (前置 RequireAuth 没注入 user).
+//   - user 不是 admin: 写 403 `{"error":"admin required"}` + 不调 next.
+//   - user 是 admin: 调 next.ServeHTTP.
+//
+// 用法 (链式 wrap):
+//
+//	mux.Handle("/api/state/",
+//	    RequireAuth(session)(RequireAdmin(session)(NewStateHandler(...))))
+//
+// 或用 helper:
+//
+//	adminGuard := ChainAdmin(session)
+//	mux.Handle("/api/state/", adminGuard(NewStateHandler(...)))
+//
+// session 参数仅用于 nil 检查 (与 RequireAuth 一致). 实际 user 从 context 读.
+func RequireAdmin(session UserLookup) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if session == nil {
+				http.Error(w, `{"error":"admin endpoints disabled"}`, http.StatusServiceUnavailable)
+				return
+			}
+			user, ok := UserFromContext(r.Context())
+			if !ok || user == nil {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			if !auth.IsAdmin(user) {
+				http.Error(w, `{"error":"admin required"}`, http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }

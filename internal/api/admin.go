@@ -8,64 +8,43 @@ package api
 //     (state/metrics_admin/audit/backup), 维护时容易遗漏 admin 鉴权检查
 //   - admin.go 把所有 admin-only 路由聚合到 RegisterAdminRoutes,
 //     router.go 调用一次即可完成所有 admin 路由注册
-//   - RequireAdmin 中间件可单独复用 (例如给非标准 /admin/* 路由加鉴权)
+//   - Sprint V1.0.1 P3: 用 RequireAuth + RequireAdmin mux-level middleware 替代各 handler
+//     内 inline requireAdmin (DRY + 更易测). 详见 auth_middleware.go.
 //
-// 注意: 这是 P1-F 切片 11+12 的封装整理, 行为不变, 仅重组代码.
+// 注意: 这是 P1-F 切片 11+12 的封装整理, Sprint V1.0.1 P3 把 inline check 移到 middleware 层.
 import (
 	"net/http"
-
-	"github.com/ourvps1688/novel2all-go/internal/auth"
 )
 
 // AdminRoutes 聚合所有 admin-only 路由.
 //
 // RegisterAdminRoutes 一次性注册 state/metrics/audit/backup 等 admin 端点.
+// Sprint V1.0.1 P3: 用 RequireAuth + RequireAdmin chain 替代 inline admin check.
 func RegisterAdminRoutes(mux *http.ServeMux, deps Deps) {
+	if deps.Session == nil {
+		return
+	}
+	// 链式 wrap: RequireAuth 注入 user + RequireAdmin 检查 admin role
+	authGuard := RequireAuth(deps.Session)
+	adminGuard := RequireAdmin(deps.Session)
+
 	// /api/state/* (admin only) - state 持久化管理
-	if deps.Session != nil && deps.State != nil {
-		mux.Handle("/api/state/", NewStateHandler(deps.State, deps.Session))
+	if deps.State != nil {
+		mux.Handle("/api/state/", authGuard(adminGuard(NewStateHandler(deps.State, deps.Session))))
 	}
 
 	// /api/metrics/reset (admin only) - 重置 metrics counters
-	if deps.Session != nil && deps.Metrics != nil {
-		mux.Handle("/api/metrics/reset", NewMetricsAdminHandler(deps.Metrics, deps.Session))
+	if deps.Metrics != nil {
+		mux.Handle("/api/metrics/reset", authGuard(adminGuard(NewMetricsAdminHandler(deps.Metrics, deps.Session))))
 	}
 
 	// /api/audit (admin only) - 审计日志查询
-	if deps.Session != nil && deps.Store != nil {
-		mux.Handle("/api/audit", NewAuditHandler(deps.Store, deps.Session))
+	if deps.Store != nil {
+		mux.Handle("/api/audit", authGuard(adminGuard(NewAuditHandler(deps.Store, deps.Session))))
 	}
 
 	// /api/backup (admin only) - 备份管理
-	if deps.Session != nil && deps.Backup != nil {
-		mux.Handle("/api/backup", NewBackupHandler(deps.Backup, deps.Session))
+	if deps.Backup != nil {
+		mux.Handle("/api/backup", authGuard(adminGuard(NewBackupHandler(deps.Backup, deps.Session))))
 	}
-}
-
-// RequireAdmin 中间件: 验证 cookie + 必须是 admin 角色.
-//
-// 通过: 调用 next.ServeHTTP.
-// 失败: 写 401/403 + 返回 false, next 不被调用.
-//
-// 用法:
-//
-//	mux.Handle("/admin/", RequireAdmin(session, http.HandlerFunc(adminHandler)))
-func RequireAdmin(session UserLookup, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if session == nil {
-			http.Error(w, `{"error":"admin endpoints disabled"}`, http.StatusServiceUnavailable)
-			return
-		}
-		token := session.GetTokenFromRequest(r)
-		user, err := session.GetUserByToken(r.Context(), token)
-		if err != nil {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-			return
-		}
-		if !auth.IsAdmin(user) {
-			http.Error(w, `{"error":"admin required"}`, http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
