@@ -41,14 +41,15 @@ func TestDispatcher_DispatchByStage(t *testing.T) {
 // TestDispatcher_DispatchByRole 测试 vendor 原名映射 (A5.5)
 func TestDispatcher_DispatchByRole(t *testing.T) {
 	agents := map[string]*Agent{
-		"story-architect":  {Spec: &AgentSpec{Name: "story-architect"}},
-		"narrative-writer": {Spec: &AgentSpec{Name: "narrative-writer"}},
+		roleArch:    {Spec: &AgentSpec{Name: roleArch}},
+		roleWriter:  {Spec: &AgentSpec{Name: roleWriter}},
+		roleChecker: {Spec: &AgentSpec{Name: roleChecker}},
 	}
 	d := NewDispatcher(agents)
 
-	a, err := d.DispatchByRole("story-architect")
-	if err != nil || a == nil || a.Spec.Name != "story-architect" {
-		t.Errorf("DispatchByRole(story-architect): %v %+v", err, a)
+	a, err := d.DispatchByRole(roleArch)
+	if err != nil || a == nil || a.Spec.Name != roleArch {
+		t.Errorf("DispatchByRole(%s): %v %+v", roleArch, err, a)
 	}
 
 	// not found
@@ -57,6 +58,13 @@ func TestDispatcher_DispatchByRole(t *testing.T) {
 		t.Error("未注册 agent 应报错")
 	}
 }
+
+// 常量提取（goconst 3+ 次复用，避免在多个测试用例里重复 vendor 原名字面量）
+const (
+	roleArch    = "story-architect"
+	roleWriter  = "narrative-writer"
+	roleChecker = "consistency-checker"
+)
 
 // TestDispatcher_AvailableRoles 测试列出所有可用 role
 func TestDispatcher_AvailableRoles(t *testing.T) {
