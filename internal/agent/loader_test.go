@@ -163,7 +163,7 @@ maxTurns: 30
 
 This is the body.
 `
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write test file: %v", err)
 	}
 
@@ -209,7 +209,7 @@ func TestLoadAgentSpec_All7VendorRoles(t *testing.T) {
 			"memory: " + r.memory + "\n" +
 			"---\n\n# " + r.name + " body\n"
 		path := filepath.Join(dir, r.name+".md")
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatalf("write %s: %v", r.name, err)
 		}
 	}
@@ -297,7 +297,7 @@ func TestRegistry_LoadFromDir(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"role-a", "role-b"} {
 		content := "---\nname: " + name + "\nmodel: opus\n---\nbody\n"
-		if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(content), 0o644); err != nil {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}

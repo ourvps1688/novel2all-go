@@ -102,13 +102,13 @@ type antResponse struct {
 
 // antRequestWithTools 含 tools 字段 (Sprint 34)
 type antRequestWithTools struct {
-	Model     string       `json:"model"`
-	MaxTokens int          `json:"max_tokens"`
-	System    string       `json:"system,omitempty"`
-	Messages  []antToolMsg `json:"messages"`
-	Tools     []antTool    `json:"tools,omitempty"`
-	Temperature float64    `json:"temperature,omitempty"`
-	TopP        float64    `json:"top_p,omitempty"`
+	Model       string       `json:"model"`
+	MaxTokens   int          `json:"max_tokens"`
+	System      string       `json:"system,omitempty"`
+	Messages    []antToolMsg `json:"messages"`
+	Tools       []antTool    `json:"tools,omitempty"`
+	Temperature float64      `json:"temperature,omitempty"`
+	TopP        float64      `json:"top_p,omitempty"`
 }
 
 // antTool tool 定义 (Anthropic 用 input_schema 而非 parameters)
@@ -299,49 +299,7 @@ func (p *AnthropicCompat) ChatWithTools(ctx context.Context, req ChatWithToolsRe
 		req.TopP = p.defaultTopP
 	}
 
-	// 1. 拆 Messages: system → ar.System, user/assistant → ar.Messages
-	var systemPrompt string
-	toolMsgs := make([]antToolMsg, 0, len(req.Messages))
-	for _, m := range req.Messages {
-		if m.Role == "system" {
-			systemPrompt += m.Content + "\n"
-			continue
-		}
-		toolMsgs = append(toolMsgs, antToolMsg{
-			Role:    m.Role,
-			Content: []antContentBlk{{Type: "text", Text: m.Content}},
-		})
-	}
-
-	// 2. 转换 Tools
-	tools := make([]antTool, 0, len(req.Tools))
-	for _, t := range req.Tools {
-		var schema json.RawMessage = t.Parameters
-		if len(schema) == 0 {
-			schema = json.RawMessage(`{"type":"object","properties":{}}`)
-		}
-		tools = append(tools, antTool{
-			Name:        t.Name,
-			Description: t.Description,
-			InputSchema: schema,
-		})
-	}
-
-	maxTokens := req.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = 4096
-	}
-
-	body := antRequestWithTools{
-		Model:       model,
-		MaxTokens:   maxTokens,
-		System:      systemPrompt,
-		Messages:    toolMsgs,
-		Tools:       tools,
-		Temperature: req.Temperature,
-		TopP:        req.TopP,
-	}
-
+	body := buildToolsRequest(model, req)
 	resp, err := p.doWithTools(ctx, body)
 	if err != nil {
 		return nil, err
@@ -357,20 +315,84 @@ func (p *AnthropicCompat) ChatWithTools(ctx context.Context, req ChatWithToolsRe
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return nil, fmt.Errorf("%s: decode: %w", p.name, err)
 	}
+	return parseToolsResponse(p.name, model, data), nil
+}
 
+// buildToolsRequest 构造 ChatWithTools 的 Anthropic 请求体（拆分降低 ChatWithTools 圈复杂度）
+func buildToolsRequest(model string, req ChatWithToolsRequest) antRequestWithTools {
+	maxTokens := req.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+	return antRequestWithTools{
+		Model:       model,
+		MaxTokens:   maxTokens,
+		System:      joinSystemMessages(req.Messages),
+		Messages:    convertToToolMessages(req.Messages),
+		Tools:       convertTools(req.Tools),
+		Temperature: req.Temperature,
+		TopP:        req.TopP,
+	}
+}
+
+// joinSystemMessages 把所有 system role 消息合并为单个 system prompt
+func joinSystemMessages(messages []Message) string {
+	var sb strings.Builder
+	for _, m := range messages {
+		if m.Role == "system" {
+			sb.WriteString(m.Content)
+			sb.WriteByte('\n')
+		}
+	}
+	return sb.String()
+}
+
+// convertToToolMessages 把 user/assistant 消息转为 Anthropic tool msg 格式
+func convertToToolMessages(messages []Message) []antToolMsg {
+	out := make([]antToolMsg, 0, len(messages))
+	for _, m := range messages {
+		if m.Role == "system" {
+			continue
+		}
+		out = append(out, antToolMsg{
+			Role:    m.Role,
+			Content: []antContentBlk{{Type: "text", Text: m.Content}},
+		})
+	}
+	return out
+}
+
+// convertTools 把 Tool 定义转为 Anthropic tool 格式
+func convertTools(tools []Tool) []antTool {
+	out := make([]antTool, 0, len(tools))
+	for _, t := range tools {
+		var schema json.RawMessage = t.Parameters
+		if len(schema) == 0 {
+			schema = json.RawMessage(`{"type":"object","properties":{}}`)
+		}
+		out = append(out, antTool{
+			Name:        t.Name,
+			Description: t.Description,
+			InputSchema: schema,
+		})
+	}
+	return out
+}
+
+// parseToolsResponse 把 Anthropic response 转为 ChatWithToolsResponse
+func parseToolsResponse(name ProviderName, model string, data antResponseWithTools) *ChatWithToolsResponse {
 	out := &ChatWithToolsResponse{
-		Provider:  p.name,
+		Provider:  name,
 		Model:     model,
 		TokensIn:  data.Usage.InputTokens,
 		TokensOut: data.Usage.OutputTokens,
 	}
-
-	// 解析 content blocks
 	for _, blk := range data.Content {
-		switch blk.Type {
-		case "text":
+		if blk.Type == "text" {
 			out.Content += blk.Text
-		case "tool_use":
+			continue
+		}
+		if blk.Type == "tool_use" {
 			out.ToolCalls = append(out.ToolCalls, ExecutedToolCall{
 				Call: ToolCall{
 					ID:        blk.ID,
@@ -380,8 +402,7 @@ func (p *AnthropicCompat) ChatWithTools(ctx context.Context, req ChatWithToolsRe
 			})
 		}
 	}
-
-	return out, nil
+	return out
 }
 
 func (p *AnthropicCompat) do(ctx context.Context, body antRequest, stream bool) (*http.Response, error) {

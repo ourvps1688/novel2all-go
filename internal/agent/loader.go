@@ -10,19 +10,20 @@ import (
 // LoadAgentSpec 从单个 role .md 文件加载 AgentSpec (Sprint A1.4)
 //
 // 文件格式：
-//   ---
-//   name: story-architect
-//   description: |
-//     多行描述
-//   tools: [Read, Glob, Grep, Write, Edit]
-//   model: opus
-//   maxTurns: 30
-//   memory: project
-//   skills: [story-deslop, story-setup]
-//   ---
 //
-//   # Role Body
-//   ... 实际 prompt 内容 ...
+//	---
+//	name: story-architect
+//	description: |
+//	  多行描述
+//	tools: [Read, Glob, Grep, Write, Edit]
+//	model: opus
+//	maxTurns: 30
+//	memory: project
+//	skills: [story-deslop, story-setup]
+//	---
+//
+//	# Role Body
+//	... 实际 prompt 内容 ...
 //
 // 返回：解析后的 AgentSpec + error
 func LoadAgentSpec(path string) (*AgentSpec, error) {

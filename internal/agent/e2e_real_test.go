@@ -241,7 +241,7 @@ func TestRealE2E_Factory_AllAvailable(t *testing.T) {
 			defer cancel()
 
 			resp, err := p.Chat(ctx, llm.Request{
-				Messages: []llm.Message{{Role: "user", Content: "ping"}},
+				Messages:  []llm.Message{{Role: "user", Content: "ping"}},
 				MaxTokens: 50,
 			})
 			if err != nil {

@@ -152,7 +152,10 @@ func TestMinimax_HasDefaults(t *testing.T) {
 		t.Fatal("minimax 应该是 Anthropic 协议")
 	}
 	// Sprint A1.20: minimax 应注入 MiniMax-M3 专属 defaults
-	ac := p.(*AnthropicCompat)
+	ac, ok := p.(*AnthropicCompat)
+	if !ok {
+		t.Fatal("minimax 应该是 AnthropicCompat 类型")
+	}
 	if !ac.HasMinimaxDefaults() {
 		t.Error("minimax 应自动注入 MiniMax-M3 defaults (temperature=1.0, top_p=0.95)")
 	}
@@ -160,7 +163,10 @@ func TestMinimax_HasDefaults(t *testing.T) {
 
 func TestDashScope_NoMinimaxDefaults(t *testing.T) {
 	p := NewDashScope("test-key")
-	ac := p.(*AnthropicCompat)
+	ac, ok := p.(*AnthropicCompat)
+	if !ok {
+		t.Fatal("dashscope 应该是 AnthropicCompat 类型")
+	}
 	// Sprint A1.20: dashscope 不注入 MiniMax defaults
 	if ac.HasMinimaxDefaults() {
 		t.Error("dashscope 不应注入 MiniMax defaults（仅 minimax 注入）")

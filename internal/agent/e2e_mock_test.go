@@ -56,9 +56,9 @@ func newMockAnthropicServer(responseContent string, inputTokens, outputTokens in
 	return m
 }
 
-func (m *mockAnthropicServer) Close()                  { m.server.Close() }
-func (m *mockAnthropicServer) URL() string             { return m.server.URL }
-func (m *mockAnthropicServer) RequestCount() int       { return len(m.requests) }
+func (m *mockAnthropicServer) Close()                   { m.server.Close() }
+func (m *mockAnthropicServer) URL() string              { return m.server.URL }
+func (m *mockAnthropicServer) RequestCount() int        { return len(m.requests) }
 func (m *mockAnthropicServer) LastRequest() mockRequest { return m.requests[len(m.requests)-1] }
 
 // TestMockE2E_DeepSeekAutoMapping 验证 DeepSeek 发 claude-opus-* 触发自动映射
@@ -109,6 +109,9 @@ func TestMockE2E_DeepSeekAutoMapping(t *testing.T) {
 	if err := json.Unmarshal(last.Body, &body); err != nil {
 		t.Fatalf("unmarshal body: %v", err)
 	}
+	if body == nil {
+		t.Fatal("body 应非 nil")
+	}
 	if body["model"] != "claude-opus-4-5-20250929" {
 		t.Errorf("model=%v, want claude-opus-4-5-20250929 (DeepSeek 自动映射)", body["model"])
 	}
@@ -142,7 +145,9 @@ func TestMockE2E_DashScopeRealModel(t *testing.T) {
 
 	last := mock.LastRequest()
 	var body map[string]any
-	json.Unmarshal(last.Body, &body)
+	if err := json.Unmarshal(last.Body, &body); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
 
 	// 千问必须用真实 model 名，不能是 claude-*
 	if body["model"] != "qwen3.7-plus" {
@@ -180,7 +185,9 @@ func TestMockE2E_MinimaxDefaults(t *testing.T) {
 
 	last := mock.LastRequest()
 	var body map[string]any
-	json.Unmarshal(last.Body, &body)
+	if err := json.Unmarshal(last.Body, &body); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
 
 	if body["model"] != "MiniMax-M3" {
 		t.Errorf("model=%v, want MiniMax-M3（国内版）", body["model"])
@@ -221,7 +228,9 @@ func TestMockE2E_MinimaxExplicitOverridesDefaults(t *testing.T) {
 
 	last := mock.LastRequest()
 	var body map[string]any
-	json.Unmarshal(last.Body, &body)
+	if err := json.Unmarshal(last.Body, &body); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
 
 	// 显式 temperature 应覆盖 defaults（=0.5，不是 1.0）
 	if temp, _ := body["temperature"].(float64); temp != 0.5 {
@@ -235,9 +244,9 @@ func TestMockE2E_AllThreeProviders(t *testing.T) {
 	defer mock.Close()
 
 	providers := []struct {
-		name     llm.ProviderName
-		model    string
-		apiKey   string
+		name                  llm.ProviderName
+		model                 string
+		apiKey                string
 		injectMinimaxDefaults bool
 	}{
 		{llm.ProviderDeepSeek, llm.DefaultDeepSeekModel, "k1", false},

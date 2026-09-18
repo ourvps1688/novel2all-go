@@ -9,9 +9,9 @@ import (
 
 func TestProviderFactory_NewProviderFactory(t *testing.T) {
 	f := NewProviderFactory(llm.Config{
-		DeepSeekAPIKey: "k1",
+		DeepSeekAPIKey:  "k1",
 		DashScopeAPIKey: "k2",
-		MinimaxAPIKey: "k3",
+		MinimaxAPIKey:   "k3",
 	})
 	if f == nil {
 		t.Fatal("NewProviderFactory 返回 nil")

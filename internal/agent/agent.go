@@ -5,6 +5,11 @@ import (
 	"fmt"
 )
 
+// memory scope 常量 (goconst: "project" 出现 3+ 次 → 提常量)
+const (
+	memoryScopeProject = "project"
+)
+
 // AgentSpec 解析 vendor role .md frontmatter + body 后的规格 (Sprint A1.1)
 //
 // 对应 vendor oh-story-dsh-0.1.9 的 agent spec:
@@ -16,15 +21,17 @@ import (
 //   - memory:      memory scope (project / user / session)
 //   - skills:      引用的 skill 名列表（用于按需加载 reference）
 //   - systemPrompt: role .md 的 body 部分（去掉 frontmatter 后）
+//
+//nolint:revive // stutter: agent.AgentSpec 是清晰命名（spec 字段易混淆），故意保留
 type AgentSpec struct {
 	// 来自 frontmatter
-	Name         string   `yaml:"name"`
-	Description  string   `yaml:"description"`
-	Tools        []string `yaml:"tools"`
-	Model        string   `yaml:"model"` // "opus" / "sonnet" / "haiku"
-	MaxTurns     int      `yaml:"maxTurns"`
-	Memory       string   `yaml:"memory"` // "project" / "user" / "session"
-	Skills       []string `yaml:"skills"`
+	Name        string   `yaml:"name"`
+	Description string   `yaml:"description"`
+	Tools       []string `yaml:"tools"`
+	Model       string   `yaml:"model"` // "opus" / "sonnet" / "haiku"
+	MaxTurns    int      `yaml:"maxTurns"`
+	Memory      string   `yaml:"memory"` // "project" / "user" / "session"
+	Skills      []string `yaml:"skills"`
 
 	// body 部分（去掉 --- frontmatter --- 之后）
 	SystemPrompt string
@@ -51,7 +58,7 @@ func (s *AgentSpec) Validate() error {
 		s.MaxTurns = 30 // 默认 30（与 vendor story-architect 一致）
 	}
 	if s.Memory == "" {
-		s.Memory = "project" // 默认 project scope
+		s.Memory = memoryScopeProject // 默认 project scope
 	}
 	return nil
 }

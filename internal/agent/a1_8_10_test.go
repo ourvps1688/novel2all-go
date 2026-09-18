@@ -9,6 +9,9 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/llm"
 )
 
+// 提取重复字面量为常量（goconst 3+ 出现要求）
+const expectedHaikuModel = "qwen3.7-plus"
+
 func TestDefaultModelMapping(t *testing.T) {
 	m := DefaultModelMapping()
 	if m == nil {
@@ -32,8 +35,8 @@ func TestDefaultModelMapping(t *testing.T) {
 	if p, model, _ := m.Map("sonnet"); p != llm.ProviderDeepSeek || !strings.Contains(model, "claude-opus") {
 		t.Errorf("sonnet 应映射到 deepseek/claude-opus-*，实际=%s/%s", p, model)
 	}
-	if p, model, _ := m.Map("haiku"); p != llm.ProviderDashScope || model != "qwen3.7-plus" {
-		t.Errorf("haiku 应映射到 dashscope/qwen3.7-plus，实际=%s/%s", p, model)
+	if p, model, _ := m.Map("haiku"); p != llm.ProviderDashScope || model != expectedHaikuModel {
+		t.Errorf("haiku 应映射到 dashscope/%s, 实际=%s/%s", expectedHaikuModel, p, model)
 	}
 }
 
@@ -146,7 +149,7 @@ model_mapping:
     provider: test-sonnet
     model: "test-sonnet-model"
 `
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -160,7 +163,7 @@ model_mapping:
 	}
 	// haiku 应保持默认（文件里没写）
 	dp, dm, _ := m.Map("haiku")
-	if dp != llm.ProviderDashScope || dm != "qwen3.7-plus" {
+	if dp != llm.ProviderDashScope || dm != expectedHaikuModel {
 		t.Errorf("haiku 应保持默认，实际=%s/%s", dp, dm)
 	}
 }
@@ -256,9 +259,9 @@ func TestNeedsAdaptation(t *testing.T) {
 		want   bool
 	}{
 		{"Plain Chinese text", false},
-		{"You are a writer", true},         // 英文指令
-		{"Use opus for writing", true},     // vendor 引用
-		{"<thinking>X</thinking>", true},   // XML 标签
+		{"You are a writer", true},       // 英文指令
+		{"Use opus for writing", true},   // vendor 引用
+		{"<thinking>X</thinking>", true}, // XML 标签
 		{"normal prompt", false},
 	}
 	for i, tt := range tests {
