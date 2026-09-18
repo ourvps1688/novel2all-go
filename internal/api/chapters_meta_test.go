@@ -140,8 +140,8 @@ func TestChapterHandler_Save_UpdatesMeta(t *testing.T) {
 	body := strings.NewReader(bodyStr)
 	req := httptest.NewRequest(http.MethodPost, "/api/chapter/1/save", body)
 	// P0-B: save handler 现在需要 user context (checkProjectAccess)
-	ctx := context.WithValue(req.Context(), userCtxValue, &store.User{ID: 1, Username: "u", Role: "admin"})
-	req = req.WithContext(ctx)
+	reqCtx := context.WithValue(req.Context(), userCtxValue, &store.User{ID: 1, Username: "u", Role: "admin"})
+	req = req.WithContext(reqCtx)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 
