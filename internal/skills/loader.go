@@ -294,11 +294,11 @@ func parseFrontmatter(s string) (name, desc string, err error) {
 
 // parseState 多行 frontmatter 解析状态机（拆降低 parseFrontmatter 圈复杂度）
 type parseState struct {
-	name             string
-	desc             string
-	multilineKey     string
-	multilineBuf     *strings.Builder
-	inMultiline      bool
+	name         string
+	desc         string
+	multilineKey string
+	multilineBuf *strings.Builder
+	inMultiline  bool
 }
 
 // descriptionKey 常量提取（goconst 3+ 复用）
