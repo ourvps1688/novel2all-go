@@ -5,9 +5,14 @@ import (
 	"fmt"
 )
 
-// memory scope 常量 (goconst: "project" 出现 3+ 次 → 提常量)
+// memory scope + vendor model tier 常量 (goconst 3+ 次复用)
 const (
 	memoryScopeProject = "project"
+
+	// vendor 模型档位（Anthropic Claude 模型名：opus/sonnet/haiku）
+	vendorModelOpus   = "opus"
+	vendorModelSonnet = "sonnet"
+	vendorModelHaiku  = "haiku"
 )
 
 // AgentSpec 解析 vendor role .md frontmatter + body 后的规格 (Sprint A1.1)
@@ -49,7 +54,7 @@ func (s *AgentSpec) Validate() error {
 		return fmt.Errorf("agent spec %q: model is required", s.Name)
 	}
 	switch s.Model {
-	case "opus", "sonnet", "haiku":
+	case vendorModelOpus, vendorModelSonnet, vendorModelHaiku:
 		// OK
 	default:
 		return fmt.Errorf("agent spec %q: unknown model %q (must be opus/sonnet/haiku)", s.Name, s.Model)

@@ -335,11 +335,14 @@ func buildToolsRequest(model string, req ChatWithToolsRequest) antRequestWithToo
 	}
 }
 
+// systemRole system 角色名（goconst 3+ 复用提取）
+const systemRole = "system"
+
 // joinSystemMessages 把所有 system role 消息合并为单个 system prompt
 func joinSystemMessages(messages []Message) string {
 	var sb strings.Builder
 	for _, m := range messages {
-		if m.Role == "system" {
+		if m.Role == systemRole {
 			sb.WriteString(m.Content)
 			sb.WriteByte('\n')
 		}
