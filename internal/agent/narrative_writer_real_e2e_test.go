@@ -127,7 +127,7 @@ func TestNarrativeWriterRealE2E_PathTranslator(t *testing.T) {
 // 4) 真实 DeepSeek router + PathTranslator，5) 改写 system prompt，
 // 6) RunAgent 走完，7) 验证 content/tokens。
 //
-//nolint:gocyclo
+//nolint:gocyclo // 12 步真实 LLM 端到端流程（setup + 8 验证），拆分丢失 setup 共享
 func TestNarrativeWriterRealE2E_DeepSeek(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping real LLM E2E in -short mode")

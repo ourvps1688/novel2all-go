@@ -175,7 +175,7 @@ func TestDisallowedToolsE2E_DispatchRejects(t *testing.T) {
 // 断言：mockLLM.Calls[0].Tools 不含 WebSearch/Edit；res.ToolCalls 记录 LLM 尝试；
 // 最终 Content 来自 mock 第二轮。
 //
-//nolint:gocyclo
+//nolint:gocyclo // 10 段独立断言（mock LLM setup + 3 层防御 + 6 验证），拆分丢失可读性
 func TestDisallowedToolsE2E_AgentRunDefense(t *testing.T) {
 	// 1. 5 个 tool registry
 	reg := tools.NewRegistry()

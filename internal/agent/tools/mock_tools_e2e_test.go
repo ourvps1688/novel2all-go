@@ -22,7 +22,7 @@ import (
 // 验证：注册 WebSearch + AgentBrowser + CDP 后 reg.Count==3 / reg.Has==true /
 // reg.Schemas 返回 3 个完整 schema（Name/Description/InputSchema 都非空，JSON 合法）。
 //
-//nolint:gocyclo
+//nolint:gocyclo // 3 mock tool 注册 + 6 schema 字段断言，结构清晰不需拆分
 func TestMockToolsE2E_LLMToolsAllExposed(t *testing.T) {
 	reg := NewRegistry()
 	if err := reg.Register(NewWebSearchTool()); err != nil {
