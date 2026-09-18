@@ -13,8 +13,24 @@ import (
 	"time"
 )
 
+// DEPRECATED (Sprint A1.17, 2026-09-18): OpenAI 兼容协议基类。
+//
+// 历史背景：
+//   - Sprint 21 引入，dashscope / deepseek / openai 都走这个协议
+//   - Sprint 34 仍用于 dashscope / deepseek (直到 Sprint A1.13/A1.14)
+//
+// 当前状态（V2.0.0 起）：
+//   - dashscope 改用 Anthropic 兼容（/apps/anthropic）
+//   - deepseek 改用 Anthropic 兼容（/anthropic）+ claude-* 自动映射
+//   - 4 家 provider 全部统一走 AnthropicCompat
+//   - OpenAICompat 仍保留实现（向后兼容），但不再有 default route 使用
+//
+// Sprint 34 的 tool call 实现也保留（如果未来需要 OpenAI 协议兼容 provider）
+// 实际新增 provider 优先用 AnthropicCompat。
+//
 // OpenAICompat 是 OpenAI 兼容协议 provider 的基类。
-// dashscope / deepseek / openai 自身都遵循这个协议。
+// 历史用途：dashscope / deepseek / openai 自身都遵循这个协议。
+// 当前 (Sprint A1) 不再作为默认 provider 使用，仅作向后兼容保留。
 type OpenAICompat struct {
 	name    ProviderName
 	apiKey  string
