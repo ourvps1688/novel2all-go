@@ -13,11 +13,8 @@ import (
 
 // TestAgentE2E_All7VendorRoles - mock LLM end-to-end for 7 vendor roles (Sprint A6.1)
 //
-// verify each role:
-//   1. Load from embed.FS (vendor spec)
-//   2. Adapt LoopConfig (with Mapping/Tools/Translator/DisallowedTools)
-//   3. RunAgent() succeeds (with tool_call + maxTurns)
-//   4. Output contains correct system prompt content
+// verify each role: 1) Load from embed.FS, 2) Adapt LoopConfig, 3) RunAgent succeeds,
+// 4) Output contains correct system prompt content.
 func TestAgentE2E_All7VendorRoles(t *testing.T) {
 	vendorRoles := roles.AllRoleSpecs()
 

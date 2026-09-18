@@ -170,16 +170,12 @@ func TestDisallowedToolsE2E_DispatchRejects(t *testing.T) {
 
 // TestDisallowedToolsE2E_AgentRunDefense - Agent.Run 端到端 (Sprint A6.14)
 //
-// 验证：mock LLM 返回一个 tool_call {"name": "WebSearch", ...}，
-// spec 标记 WebSearch 为 disallowed，调 RunAgent：
-//   - LLMTools 过滤：WebSearch 不在 LLM 看到的 schema 里（理想路径）
-//   - 即使 LLM 硬塞，Dispatch 也会拒绝（defense-in-depth）
-// 断言：
-//   - mockLLM.Calls[0].Tools 不含 WebSearch / Edit
-//   - res.ToolCalls 记录了 LLM 的尝试（包含 WebSearch 调用记录）
-//   - 最终 Content 来自 mock 第二轮（"WebSearch was rejected"）
+// 验证：mock LLM 返回一个 tool_call {"name": "WebSearch", ...}，spec 标记 WebSearch 为 disallowed。
+// 调 RunAgent：(a) LLMTools 过滤（理想路径），(b) Dispatch 拒绝（defense-in-depth）。
+// 断言：mockLLM.Calls[0].Tools 不含 WebSearch/Edit；res.ToolCalls 记录 LLM 尝试；
+// 最终 Content 来自 mock 第二轮。
 //
-//nolint:gocyclo // 10 段独立断言（mock LLM setup + 3 层防御 + 6 验证），拆分丢失可读性
+//nolint:gocyclo
 func TestDisallowedToolsE2E_AgentRunDefense(t *testing.T) {
 	// 1. 5 个 tool registry
 	reg := tools.NewRegistry()

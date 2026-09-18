@@ -19,12 +19,10 @@ import (
 
 // TestMockToolsE2E_LLMToolsAllExposed - 3 个 mock tool 注册 + Schemas 完整
 //
-// 验证：注册 WebSearch + AgentBrowser + CDP 后
-//   - reg.Count() == 3
-//   - reg.Has() 返回 true
-//   - reg.Schemas() 返回 3 个完整 schema（Name/Description/InputSchema 都非空）
-//   - 每个 tool 的 InputSchema 都是合法 JSON
-//nolint:gocyclo // 3 mock tool 注册 + 6 schema 字段断言，结构清晰不需拆分
+// 验证：注册 WebSearch + AgentBrowser + CDP 后 reg.Count==3 / reg.Has==true /
+// reg.Schemas 返回 3 个完整 schema（Name/Description/InputSchema 都非空，JSON 合法）。
+//
+//nolint:gocyclo
 func TestMockToolsE2E_LLMToolsAllExposed(t *testing.T) {
 	reg := NewRegistry()
 	if err := reg.Register(NewWebSearchTool()); err != nil {

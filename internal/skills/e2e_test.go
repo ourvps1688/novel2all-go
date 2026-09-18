@@ -46,7 +46,7 @@ func TestSkillsE2E_ReferencesAccessible(t *testing.T) {
 		skill string
 		min   int // min references
 	}{
-		{"story-long-write", 1},  // 48 references
+		{"story-long-write", 1}, // 48 references
 		{"story-short-write", 1}, // 23 references
 		{"story-review", 1}, // 11 references
 		{"story-setup", 1}, // 1 reference

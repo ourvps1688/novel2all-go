@@ -123,15 +123,11 @@ func TestNarrativeWriterRealE2E_PathTranslator(t *testing.T) {
 //
 // 运行条件：DEEPSEEK_API_KEY 必须设置（configs/.env 或环境变量）
 //
-// 端到端流程：
-//  1. 加载 narrative-writer vendor spec
-//  2. 构造测试项目目录：含 第一章.txt + 大纲.txt
-//  3. 注册 Read + Write tool（sandbox = project dir）
-//  4. 真实 DeepSeek router + PathTranslator
-//  5. system prompt 改写：让 LLM 通过 Read tool 读 大纲.txt 然后写 100 字章节
-//  6. RunAgent 走完
-//  7. 验证：content 非空 + ≥50 中文字符 + tokens > 0
-//nolint:gocyclo // 12 步真实 LLM 端到端流程（setup + 8 验证），拆分丢失 setup 共享
+// 端到端流程：1) 加载 vendor spec, 2) 构造项目目录，3) 注册 Read+Write，
+// 4) 真实 DeepSeek router + PathTranslator，5) 改写 system prompt，
+// 6) RunAgent 走完，7) 验证 content/tokens。
+//
+//nolint:gocyclo
 func TestNarrativeWriterRealE2E_DeepSeek(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping real LLM E2E in -short mode")
