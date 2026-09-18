@@ -26,6 +26,9 @@ import (
 	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
+// 字符串常量（goconst 建议）
+const boolStrTrue = "true"
+
 // AuditAdminEntryResponse admin /api/audit/* 响应（与 /api/auth/audit 共用基础 schema，但加 user_agent + user_id）
 //
 // 命名与 auth.go 的 AuditAdminEntryResponse 区分。
@@ -263,7 +266,7 @@ func parseBoolPtr(s string) *bool {
 		return nil
 	}
 	switch strings.ToLower(s) {
-	case "true", "1", "yes":
+	case boolStrTrue, "1", "yes":
 		v := true
 		return &v
 	case "false", "0", "no":

@@ -96,6 +96,10 @@ func NewCORSMiddleware(next http.Handler, cfg CORSConfig) http.Handler {
 	if cfg.MaxAge == 0 {
 		cfg.MaxAge = 86400
 	}
+	if !cfg.AllowCreds {
+		// 零值默认 AllowCreds=true（DefaultCORSConfig 的语义）
+		cfg.AllowCreds = true
+	}
 
 	allowOriginSet := make(map[string]struct{}, len(cfg.AllowOrigins))
 	hasWildcard := false
@@ -132,7 +136,7 @@ func NewCORSMiddleware(next http.Handler, cfg CORSConfig) http.Handler {
 		h.Set("Access-Control-Allow-Methods", methods)
 		h.Set("Access-Control-Allow-Headers", headers)
 		if cfg.AllowCreds {
-			h.Set("Access-Control-Allow-Credentials", "true")
+			h.Set("Access-Control-Allow-Credentials", boolStrTrue)
 		}
 		// 当回显 origin (而不是通配符 *) 时, 加 Vary: Origin 防止 CDN/缓存错误
 		if allowed != "*" {

@@ -93,7 +93,7 @@ func TestCORS_GET_HeadersInjected(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
 		t.Errorf("Allow-Origin=%q, want https://example.com", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != boolStrTrue {
 		t.Errorf("Allow-Credentials=%q, want true", got)
 	}
 }
@@ -263,7 +263,7 @@ func TestCORS_ZeroConfig_AppliesDefaults(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://any.com" {
 		t.Errorf("零值 config 应回显 origin, got=%q", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != boolStrTrue {
 		t.Errorf("零值 config 应有 AllowCreds=true (默认), got=%q", got)
 	}
 	if got := rec.Header().Get("Access-Control-Max-Age"); got != "86400" {
@@ -317,7 +317,7 @@ func TestCORS_POST_WithCredentials(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.com" {
 		t.Errorf("Allow-Origin=%q, want https://app.com", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != boolStrTrue {
 		t.Errorf("Allow-Credentials=%q, want true", got)
 	}
 }
