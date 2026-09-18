@@ -46,11 +46,11 @@ func TestSkillsE2E_ReferencesAccessible(t *testing.T) {
 		skill string
 		min   int // min references
 	}{
-		{"story-long-write", 1}, // 48 references
-		{"story-short-write", 1}, // 23 references
-		{"story-review", 1}, // 11 references
-		{"story-setup", 1}, // 1 reference
-		{"story-deslop", 1}, // 5 references
+		{"story-long-write", 1},  // 48 refs
+		{"story-short-write", 1}, // 23 refs
+		{"story-review", 1},      // 11 refs
+		{"story-setup", 1},       // 1 ref
+		{"story-deslop", 1},      // 5 refs
 	}
 
 	for _, tt := range tests {
