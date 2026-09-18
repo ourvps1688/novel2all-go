@@ -88,7 +88,7 @@ func parseModelMappingLine(m *ModelMapping, raw, currentKey string, inMapping bo
 	if indent == 2 && strings.HasSuffix(trimmed, ":") {
 		key := strings.TrimSuffix(trimmed, ":")
 		switch key {
-		case "opus", "sonnet", "haiku":
+		case vendorModelOpus, vendorModelSonnet, vendorModelHaiku:
 			return key, inMapping
 		}
 		return currentKey, inMapping
