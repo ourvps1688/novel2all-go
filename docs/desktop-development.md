@@ -695,6 +695,11 @@ jobs:
 | 00:22 | Module B | desktop/frontend/src/App.css (+78 行): 新增 .settings-help / .llm-key-list / .llm-key-row / .llm-key-input 等 styles 复用现有 token. wailsjs/go/main/App.d.ts + App.js 加 5 个新方法导出 | bb14af4 |
 | 00:23 | Module B | 验证: secrets 14/14 PASS + go test ./... PASS + go vet clean + go build OK + tsc --noEmit 0 errors (修前 5 errors). CI #210 test job 失败 = pre-existing LLM E2E flake (`TestNarrativeWriterRealE2E_DeepSeek` 非确定性), 与 Module B 无关 (Module B 只改 desktop/ 路径) | bb14af4 |
 | 00:25 | 文档 | changelog 加 Module B 6 条 + docs/desktop-features-roadmap.md Module B 标 ✅ | (本提交) |
+| 00:30 | Module C.1 | 用户反馈: "章节编辑太简单, 纯 textarea". 升级方案: Markdown + 工具栏 + 实时预览 (用户选项, 不上 WYSIWYG 复杂度) | (用户反馈) |
+| 00:35 | Module C.1 | 新增 marked@18.0.13 (纯 JS 0 依赖 ESM). package.json + package-lock.json + node_modules/marked (手动下载 tarball 因沙箱 npm blocked by wsl.exe 限制). 验证 tsc 0 errors + go vet clean | 20bc8cd |
+| 00:40 | Module C.1 | ChapterModal 改造: textarea + 实时预览左右分栏 (.modal-wide 920px). 工具栏 8 按钮 (B/I/H1/H2/list/quote/code/link), 3 种 kind (wrap/prefix/link) 处理选区 + 光标恢复 (requestAnimationFrame). useMemo 缓存 marked 渲染 + try/catch 防边缘崩溃 | 20bc8cd |
+| 00:42 | Module C.1 | 字数统计 (useMemo): 中文字符 ([\u4e00-\u9fff] 正则) + 总字符 + 行数, 显示在工具栏右. App.css: .md-editor-toolbar / .md-editor-split / .md-editor-textarea / .md-editor-preview (含 heading/code/pre/blockquote/list/link 全套样式) + 响应式 (< 720px 退化为上下分栏) | 20bc8cd |
+| 00:45 | Module C.1 | **存储兼容性**: 零格式转换. 后端仍存 .md (LLM 扩写/重写/insert 都不变). 升级完成 | 20bc8cd |
 
 ### 待办 (下一阶段)
 
@@ -710,6 +715,7 @@ jobs:
 - [x] **Module F**: 项目 CRUD (CreateProject/UpdateProject/DeleteProject + ProjectModal UI) ✅
 - [x] **Module A**: 章节 CRUD (CreateChapter/UpdateChapter/DeleteChapter/GetChapterContent + ChapterModal UI) ✅
 - [x] **Module B**: LLM API key 配置（加密本地存储 + SettingsPage UI）✅ — PBKDF2 + AES-256-GCM, 机器绑定 master key, 14 个单元测试全过
+- [x] **Module C.1**: Markdown 编辑器升级（工具栏 + 实时预览 + 字数统计）✅ — marked@18.0.13, 8 个工具栏按钮, 左右分栏 .modal-wide 920px
 
 ---
 
