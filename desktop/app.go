@@ -155,9 +155,14 @@ type ReviewItem struct {
 func NewApp() *App {
 	return &App{
 		client: &http.Client{
-			// Module C: LLM 调用可能慢 (10-60s), 30s 太短.
-			// 桌面 app 120s 上限足够覆盖所有 LLM action + 网络抖动.
-			Timeout: 120 * time.Second,
+			// Module C.5 (2026-09-20) 修复 LLM 超时:
+			// - 120s 太短: 用户实测 "扩写" 在首字节到达前 abort (后端 handler 在 LLM
+			//   调用前没 write response headers, client 一直等 headers)
+			// - 600s = 10 分钟上限: 覆盖 LLM 冷启动 (60-180s) + 稳态调用 (5-30s) + 网络抖动
+			// - 后端改进中期: expand/rewrite handler 立即 WriteHeader(200) + Flush, 让
+			//   client 拿到 headers 后即使 LLM 阻塞也不 abort
+			// - UI 改进: elapsed timer 显示等待秒数 + 30s 后提示
+			Timeout: 600 * time.Second,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// POST 后端返 301 redirect (→ /api/projects/) 是路由注册 bug.
 				// 不跟随 redirect, 直接读 POST 响应 body.

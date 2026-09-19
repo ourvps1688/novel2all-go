@@ -261,6 +261,15 @@ func (a *ChapterActions) expand(w http.ResponseWriter, r *http.Request, chapter 
 		return
 	}
 
+	// Module C.5 修复 (2026-09-20): 在 LLM 调用前立即 flush response headers,
+	// 避免 client 在 "awaiting headers" 阶段 timeout (desktop 端 elapsed timer 即可看到等待秒数).
+	// chunked transfer encoding 自动启用, 客户端立即收到 200 + headers.
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+
 	appended, err := a.callLLMAppend(r.Context(), req, chapter, skillStoryExpand, string(before))
 	if err != nil {
 		respondActionError(w, err, http.StatusInternalServerError)
@@ -305,6 +314,13 @@ func (a *ChapterActions) rewrite(w http.ResponseWriter, r *http.Request, chapter
 	if err != nil {
 		respondActionError(w, err, http.StatusInternalServerError)
 		return
+	}
+
+	// Module C.5 修复: LLM 调用前 flush headers (与 expand 一致)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
 	}
 
 	rewritten, err := a.callLLMSync(r.Context(), req, chapter, skillStoryLongWrite, string(before))
@@ -389,6 +405,13 @@ func (a *ChapterActions) insert(w http.ResponseWriter, r *http.Request, chapter 
 	if err != nil {
 		respondActionError(w, err, http.StatusInternalServerError)
 		return
+	}
+
+	// Module C.5 修复: LLM 调用前 flush headers (与 expand/rewrite 一致)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
 	}
 
 	prompt := fmt.Sprintf("请根据指令插入新段落（保持 1-3 段，不要超过 200 字）：\n%s", req.Instruction)

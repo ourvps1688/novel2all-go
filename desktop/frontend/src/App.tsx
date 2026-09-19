@@ -864,7 +864,22 @@ function ChapterModal(props: {
     const [aiBusy, setAiBusy] = useState<AIAction | null>(null); // 哪个 action 在跑
     const [aiError, setAiError] = useState(''); // AI 操作错误 (独立于表单 err)
     const [aiSuccess, setAiSuccess] = useState(''); // 操作成功摘要
+    const [aiElapsedSec, setAiElapsedSec] = useState(0); // AI 操作已等待秒数
     const [reviewResult, setReviewResult] = useState<main.ReviewResult | null>(null); // Review modal 数据
+
+    // Module C.5: elapsed timer — aiBusy 时每秒递增, 结束后重置
+    useEffect(() => {
+        if (aiBusy === null) {
+            setAiElapsedSec(0);
+            return;
+        }
+        const startTime = Date.now();
+        setAiElapsedSec(0);
+        const id = setInterval(() => {
+            setAiElapsedSec(Math.floor((Date.now() - startTime) / 1000));
+        }, 1000);
+        return () => clearInterval(id);
+    }, [aiBusy]);
 
     // Module C.1: 编辑器增强
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1181,7 +1196,7 @@ function ChapterModal(props: {
                                     title={b.destructive ? `${b.label} (破坏性, 会弹确认)` : b.label}
                                 >
                                     {aiBusy === b.action ? (
-                                        <>⏳ {b.label}中...</>
+                                        <>⏳ {b.label}中... {aiElapsedSec}s</>
                                     ) : (
                                         <>{b.icon} {b.label}</>
                                     )}
@@ -1191,6 +1206,11 @@ function ChapterModal(props: {
 
                         {aiError && <div className="error" style={{ marginTop: '8px' }}>{aiError}</div>}
                         {aiSuccess && <div className="info ok" style={{ marginTop: '8px' }}>{aiSuccess}</div>}
+                        {aiBusy !== null && aiElapsedSec >= 30 && (
+                            <div className="ai-wait-hint">
+                                ⏳ LLM 首次调用可能 1-2 分钟 (冷启动), 正在等待... ({aiElapsedSec}s)
+                            </div>
+                        )}
                     </div>
 
                     {err && <div className="error">{err}</div>}
