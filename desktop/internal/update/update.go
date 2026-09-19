@@ -64,7 +64,9 @@ type UpdateInfo struct {
 type DownloadProgress func(downloaded, total int64)
 
 // 仓库配置 (Phase 3 硬编码, Phase 4 改成 settings 可配).
-const (
+//
+// var (非 const) 是为了测试可以临时替换 (详见 update_test.go).
+var (
 	GitHubOwner = "ourvps1688"
 	GitHubRepo  = "novel2all-go"
 	GitHubAPI   = "https://api.github.com"
