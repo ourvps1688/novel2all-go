@@ -2,7 +2,7 @@
 
 **目标**: 把 novel2all-go 后端能力逐步搬到 Novel2ALL 桌面 app
 **原则**: 分模块, 每个模块独立 PR + commit + 文档同步 + CI 验证
-**当前状态**: Phase 1-4 完成 + Module F (项目 CRUD) + Module A (章节 CRUD) ✅
+**当前状态**: Phase 1-4 完成 + Module F (项目 CRUD) + Module A (章节 CRUD) + Module B (LLM API key 配置) ✅
 
 ---
 
@@ -26,16 +26,24 @@
 
 ---
 
-### Module B: LLM API key 配置
-**目标**: 用户能在桌面 app 设置 LLM key (OpenAI/Anthropic/DashScope/DeepSeek), key加密存本地
-**后端**: 新建 `POST /api/auth/llm-keys`, 存 encrypted blob (AES-GCM, key 派生用户密码)
-**桌面 app 加**:
-- SettingsPage 加 LLM Keys 区块
-- 各 provider 输入框 + 保存按钮
+### Module B: LLM API key 配置 ✅ (commit bb14af4, 2026-09-20)
+**目标**: 用户能在桌面 app 设置 LLM key (dashscope/deepseek/minimax), key加密存本地
+**实现**:
+- 后端: 无改动 (admin key 仍作 fallback, Module B.2 才消费 user keys)
+- 桌面 app `desktop/internal/secrets/`: AES-256-GCM + PBKDF2-SHA256 (100k iter), master key 从 (hostname + username) 派生 (跨机器/跨用户不可解), JSON 文件 + AAD 防改名
+- SettingsPage "LLM API Keys" section: 3 个 provider 行 (dashscope/deepseek/minimax), 各有 password input + 保存/删除按钮 + "已配置 ✓" 状态 badge + "清除全部" 按钮
+- 5 个 wails-bound 方法: SupportedProviders / GetLLMKeys / SetLLMKey / ClearLLMKeys / HasLLMKey
+- 14 个单元测试全过 (含 race detector + AES-GCM 篡改检测 + AAD 重命名检测 + 跨机器密钥不同)
 
-**工作量**: 1 天
-**风险**: 中 — 加密方案 + 跨设备同步策略
-**验证**: 设置 → 重启 → key 还在 → 调 LLM 调用成功
+**安全限制 (MVP)**:
+- 防 casual 访问: 同机同用户可解, 其他用户/机器不可解
+- **不**防恶意 root / 同用户进程 / 物理访问攻击者
+- Module B.2 计划升级到 OS keystore (DPAPI / Keychain / libsecret)
+
+**下一步 Module B.2** (1d):
+- 桌面请求时加 X-LLM-Key-{provider} header
+- 后端接受 user-provided key 覆盖环境变量 admin key (per-request)
+- 用户 key 优先级 > admin key
 
 ---
 
@@ -204,10 +212,10 @@
 | Module | 状态 |
 |--------|------|
 | A 章节 CRUD | ✅ 已完成 (2026-09-19, commits 3842005/b95b6ec/5d4f3d3) |
-| B LLM key | ⏸️ 排队 |
+| B LLM key | ✅ 已完成 (2026-09-20, commit bb14af4) |
 | ... | ⏸️ 排队 |
 
-**当前 main 分支**: 5d4f3d3 (Module A 完成)
+**当前 main 分支**: 1223053 (Module B 完成 + docs)
 **GitHub v0.1.0 release**: 已发布, Novel2ALL.exe 11.7 MB
 
 ---
