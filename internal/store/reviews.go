@@ -79,7 +79,7 @@ func (s *ReviewsStore) ListByChapter(ctx context.Context, chapterID int64) ([]*C
 	if err != nil {
 		return nil, fmt.Errorf("list reviews: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanReviews(rows)
 }
 
@@ -98,7 +98,7 @@ func (s *ReviewsStore) ListByAgent(ctx context.Context, agent string, limit int)
 	if err != nil {
 		return nil, fmt.Errorf("list reviews by agent: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanReviews(rows)
 }
 

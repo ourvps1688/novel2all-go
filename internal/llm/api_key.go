@@ -25,9 +25,6 @@ import "context"
 // 进程内不持久化, 只在 request lifetime 存在.
 type APIKeyMap map[ProviderName]string
 
-// apiKeyMap 别名 (向后兼容, 旧代码用 lowercase)
-type apiKeyMap = APIKeyMap
-
 // ctxKey 是 internal context key 类型 (避免与其他 package 冲突).
 // 永远不导出 — 调用方只能通过 helper 函数访问.
 type ctxKey int

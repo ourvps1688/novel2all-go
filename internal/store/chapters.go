@@ -45,7 +45,7 @@ func (s *ChaptersStore) List(ctx context.Context, projectID int64) ([]*Chapter, 
 	if err != nil {
 		return nil, fmt.Errorf("query chapters: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanChapters(rows)
 }
 

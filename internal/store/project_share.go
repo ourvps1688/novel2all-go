@@ -109,7 +109,7 @@ func (db *DB) ListProjectMembers(ctx context.Context, projectPath string) ([]*Pr
 	if err != nil {
 		return nil, fmt.Errorf("list project members: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []*ProjectMembership
 	for rows.Next() {
@@ -133,7 +133,7 @@ func (db *DB) ListUserProjects(ctx context.Context, userID int64) ([]*ProjectMem
 	if err != nil {
 		return nil, fmt.Errorf("list user projects: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []*ProjectMembership
 	for rows.Next() {

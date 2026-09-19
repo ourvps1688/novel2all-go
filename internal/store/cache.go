@@ -136,7 +136,7 @@ func (s *CacheStore) ListByModel(ctx context.Context, model string) ([]*CacheEnt
 	if err != nil {
 		return nil, fmt.Errorf("list cache by model: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanCacheEntries(rows)
 }
 
@@ -148,7 +148,7 @@ func (s *CacheStore) ListAllKeys(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list keys: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	keys := make([]string, 0)
 	for rows.Next() {
 		var k string

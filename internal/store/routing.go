@@ -86,7 +86,7 @@ func (s *RoutingStore) ListByTask(ctx context.Context, task string) ([]*RoutingE
 	if err != nil {
 		return nil, fmt.Errorf("list routing by task: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanRoutings(rows)
 }
 

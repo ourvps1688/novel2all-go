@@ -193,7 +193,7 @@ func (p *AnthropicCompat) Chat(ctx context.Context, req Request) (*Response, err
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		b, readErr := io.ReadAll(resp.Body)
@@ -250,7 +250,7 @@ func (p *AnthropicCompat) ChatStream(ctx context.Context, req Request, ch chan<-
 		ch <- Chunk{Err: err}
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		b, readErr := io.ReadAll(resp.Body)
@@ -329,7 +329,7 @@ func (p *AnthropicCompat) ChatWithTools(ctx context.Context, req ChatWithToolsRe
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		b, _ := io.ReadAll(resp.Body)
@@ -492,7 +492,7 @@ func toAntRequest(model string, req Request) (antRequest, error) {
 			}
 			ar.System += m.Content
 		case "user", "assistant":
-			msgs = append(msgs, antMessage{Role: m.Role, Content: m.Content})
+			msgs = append(msgs, antMessage(m))
 		default:
 			return ar, fmt.Errorf("invalid message role: %q", m.Role)
 		}

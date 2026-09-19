@@ -69,7 +69,7 @@ func (db *DB) ListAudit(ctx context.Context, limit, offset int) ([]*AuditEntry, 
 	if err != nil {
 		return nil, fmt.Errorf("query audit: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []*AuditEntry
 	for rows.Next() {

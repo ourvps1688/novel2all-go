@@ -81,9 +81,9 @@ func schemaToPrompt(s JSONSchema) string {
 			typeStr = fmt.Sprintf("array<%s>", f.Items)
 		}
 		if f.Description != "" {
-			sb.WriteString(fmt.Sprintf("  %q: %s%s,  // %s\n", f.Name, typeStr, reqStr, f.Description))
+			fmt.Fprintf(&sb, "  %q: %s%s,  // %s\n", f.Name, typeStr, reqStr, f.Description)
 		} else {
-			sb.WriteString(fmt.Sprintf("  %q: %s%s,\n", f.Name, typeStr, reqStr))
+			fmt.Fprintf(&sb, "  %q: %s%s,\n", f.Name, typeStr, reqStr)
 		}
 	}
 	sb.WriteString("}\n")

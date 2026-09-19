@@ -161,7 +161,7 @@ func (p *OpenAICompat) Chat(ctx context.Context, req Request) (*Response, error)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		b, readErr := io.ReadAll(resp.Body)
@@ -211,7 +211,7 @@ func (p *OpenAICompat) ChatStream(ctx context.Context, req Request, ch chan<- Ch
 		ch <- Chunk{Err: err}
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		b, readErr := io.ReadAll(resp.Body)
@@ -334,7 +334,7 @@ func (p *OpenAICompat) ChatWithTools(ctx context.Context, req ChatWithToolsReque
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
@@ -411,7 +411,7 @@ func (p *OpenAICompat) doWithTools(ctx context.Context, body oaiChatRequestWithT
 func toOaiMessages(msgs []Message) []oaiMessage {
 	out := make([]oaiMessage, len(msgs))
 	for i, m := range msgs {
-		out[i] = oaiMessage{Role: m.Role, Content: m.Content}
+		out[i] = oaiMessage(m)
 	}
 	return out
 }

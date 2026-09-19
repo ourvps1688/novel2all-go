@@ -136,7 +136,7 @@ func (t *GrepTool) searchFile(sb Sandbox, path string, re *regexp.Regexp) []stri
 	if err != nil {
 		return matches
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	rel, _ := filepath.Rel(sb.Root(), path)
 	relSlash := filepath.ToSlash(rel)

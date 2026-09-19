@@ -52,7 +52,7 @@ func NewWithWriter(level, format string, w io.Writer) *Logger {
 
 // WithRequest 返回带 request_id + method + path 的子 logger
 func (l *Logger) WithRequest(ctx context.Context, method, path, requestID string) *Logger {
-	return &Logger{Logger: l.Logger.With(
+	return &Logger{Logger: l.With(
 		"request_id", requestID,
 		"method", method,
 		"path", path,

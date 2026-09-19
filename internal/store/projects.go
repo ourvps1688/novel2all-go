@@ -42,7 +42,7 @@ func (s *ProjectsStore) List(ctx context.Context) ([]*Project, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query projects: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanProjects(rows)
 }
 
@@ -145,7 +145,7 @@ func (s *ProjectsStore) ListByOwner(ctx context.Context, ownerID int64) ([]*Proj
 	if err != nil {
 		return nil, fmt.Errorf("query projects by owner: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanProjects(rows)
 }
 

@@ -424,7 +424,7 @@ func (m *MemoryManager) PreWriteCheck(ctx context.Context, outline string) ([]Co
 	sb.WriteString(outline)
 	sb.WriteString("\n\n相关历史事件:\n")
 	for _, evt := range events {
-		sb.WriteString(fmt.Sprintf("- %s\n", evt.Content))
+		fmt.Fprintf(&sb, "- %s\n", evt.Content)
 	}
 	sb.WriteString("\n请检查本章大纲是否与历史事件冲突, 返回 issues JSON 数组, 每项含 severity (critical/warning/info) + category + description 字段.\n")
 

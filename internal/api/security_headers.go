@@ -69,7 +69,7 @@ type securityHeaderWriter struct {
 // 注: 必须先保留原始 Header (Set 不覆盖已存在的). 默认用 Set 但先 Check 避免覆盖.
 func (w *securityHeaderWriter) WriteHeader(code int) {
 	if !w.injected {
-		h := w.ResponseWriter.Header()
+		h := w.Header()
 		for k, v := range w.headers {
 			if h.Get(k) == "" {
 				h.Set(k, v)
@@ -83,7 +83,7 @@ func (w *securityHeaderWriter) WriteHeader(code int) {
 // Write 触发隐式 WriteHeader, 也会注入 headers.
 func (w *securityHeaderWriter) Write(b []byte) (int, error) {
 	if !w.injected {
-		h := w.ResponseWriter.Header()
+		h := w.Header()
 		for k, v := range w.headers {
 			if h.Get(k) == "" {
 				h.Set(k, v)

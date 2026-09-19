@@ -161,7 +161,7 @@ func TestMetrics_PrometheusText_DeterministicOrder(t *testing.T) {
 	if idxDelete == -1 || idxGet == -1 || idxPost == -1 {
 		t.Fatalf("missing expected HTTP request entries:\n%s", text)
 	}
-	if !(idxDelete < idxGet && idxGet < idxPost) {
+	if idxDelete >= idxGet || idxGet >= idxPost {
 		t.Errorf("expected sorted order DELETE < GET < POST, got indices %d < %d < %d:\n%s",
 			idxDelete, idxGet, idxPost, text)
 	}

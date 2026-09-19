@@ -18,11 +18,13 @@ var chapterFileLocks sync.Map
 // chapterLockOf 获取路径对应的 *sync.RWMutex (惰性创建).
 func chapterLockOf(path string) *sync.RWMutex {
 	if v, ok := chapterFileLocks.Load(path); ok {
-		return v.(*sync.RWMutex)
+		mu, _ := v.(*sync.RWMutex)
+		return mu
 	}
 	mu := &sync.RWMutex{}
 	actual, _ := chapterFileLocks.LoadOrStore(path, mu)
-	return actual.(*sync.RWMutex)
+	out, _ := actual.(*sync.RWMutex)
+	return out
 }
 
 // LockChapterFile 取章节文件排他锁 (write lock).

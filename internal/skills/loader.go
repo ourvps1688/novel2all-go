@@ -168,7 +168,8 @@ func (l *Loader) LoadReference(skillName, refPath string) (string, error) {
 	// L1 cache 检查
 	cacheKey := skillName + ":" + refPath
 	if v, ok := l.refCache.Load(cacheKey); ok {
-		return v.(string), nil
+		s, _ := v.(string)
+		return s, nil
 	}
 
 	// 从 embed.FS 读

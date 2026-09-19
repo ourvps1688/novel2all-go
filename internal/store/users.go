@@ -89,7 +89,7 @@ func (db *DB) ListUsers(ctx context.Context) ([]*User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query users: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []*User
 	for rows.Next() {
