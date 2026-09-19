@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ourvps1688/novel2all-go/internal/store"
@@ -252,11 +253,31 @@ func (m *SessionManager) ClearCookie(w http.ResponseWriter) {
 	})
 }
 
-// GetTokenFromRequest 从 cookie 读 token
+// GetTokenFromRequest 从 Bearer header 或 cookie 读 token.
+//
+// 优先级: Bearer header (Phase 2 桌面 app 用) > Cookie (Phase 1 web 端用).
+//
+// 桌面 app 不接受 cookie (WebView2 里能用但不规范), 改用标准
+// Authorization: Bearer <token> 头调后端 API.
+//
+// Phase 2 修复: 桌面 app 登录拿 access_token 后, 每个请求带 Bearer header.
+// 后端 GetTokenFromRequest 必须支持 Bearer, 否则返 401.
 func (m *SessionManager) GetTokenFromRequest(r *http.Request) string {
-	c, err := r.Cookie(m.config.CookieName)
-	if err != nil {
-		return ""
+	// 优先: Authorization: Bearer <token>
+	if h := r.Header.Get("Authorization"); h != "" {
+		const prefix = "Bearer "
+		if len(h) > len(prefix) && h[:len(prefix)] == prefix {
+			tok := strings.TrimSpace(h[len(prefix):])
+			if tok != "" {
+				return tok
+			}
+		}
 	}
-	return c.Value
+	// 次选: Cookie <name>=<token> (Phase 1 web 端, 向后兼容)
+	if c, err := r.Cookie(m.config.CookieName); err == nil {
+		if v := strings.TrimSpace(c.Value); v != "" {
+			return v
+		}
+	}
+	return ""
 }
