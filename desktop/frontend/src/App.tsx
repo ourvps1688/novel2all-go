@@ -192,7 +192,7 @@ function App() {
         setLoadingChapter(true);
         setError('');
         try {
-            const content = await GetChapterContent(selectedProject.id, c.number);
+            const content = await GetChapterContent(selectedProject.id, c.chapter);
             setChapterContent(content?.content ?? '');
             openChapterModal('edit', c);
         } catch (e: any) {
@@ -204,9 +204,9 @@ function App() {
 
     async function deleteChapter(c: Chapter) {
         if (!selectedProject) return;
-        if (!confirm(`确认删除章节 "${c.title || '第' + c.number + '章'}" (id=${c.id})? 此操作不可恢复!`)) return;
+        if (!confirm(`确认删除章节 "${c.title || '第' + c.chapter + '章'}" (id=${c.id})? 此操作不可恢复!`)) return;
         try {
-            await DeleteChapter(selectedProject.id, c.number);
+            await DeleteChapter(selectedProject.id, c.chapter);
             await refreshChapters(selectedProject.id);
         } catch (e: any) {
             setError(`删除章节失败: ${e?.message ?? e}`);
@@ -365,16 +365,16 @@ function App() {
                                 ) : (
                                     <ul className="chapter-list">
                                         {chapters.map((c) => (
-                                            <li key={c.id} className="chapter-item">
-                                                <div className="chapter-info">
-                                                    <div className="chapter-title">
-                                                        {c.title || `第${c.number}章`}
+<li key={c.id} className="chapter-item">
+                                                    <div className="chapter-info">
+                                                        <div className="chapter-title">
+                                                            {c.title || `第${c.chapter}章`}
+                                                        </div>
+                                                        <div className="chapter-meta">
+                                                            <span className="chapter-num-tag">第{c.chapter}章</span>
+                                                            {' '}{c.char_count ?? 0} 字
+                                                        </div>
                                                     </div>
-                                                    <div className="chapter-meta">
-                                                        <span className="chapter-num-tag">第{c.number}章</span>
-                                                        {' '}{c.char_count ?? 0} 字
-                                                    </div>
-                                                </div>
                                                 <div className="chapter-actions">
                                                     <button
                                                         className="chapter-action-btn"
@@ -663,7 +663,7 @@ function ChapterModal(props: {
     onClose: () => void;
     onSaved: () => void;
 }) {
-    const [number, setNumber] = useState(props.chapter?.number ?? 1);
+    const [number, setNumber] = useState(props.chapter?.chapter ?? 1);
     const [title, setTitle] = useState(props.chapter?.title ?? '');
     const [content, setContent] = useState(props.initialContent ?? '');
     const [saving, setSaving] = useState(false);
@@ -687,7 +687,7 @@ function ChapterModal(props: {
         try {
             const input = {
                 project_id: props.projectID,
-                number,
+                chapter: number,
                 title: title.trim(),
                 content: content,
             };
@@ -708,7 +708,7 @@ function ChapterModal(props: {
         <div className="modal-bg" onClick={props.onClose}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h2>{props.mode === 'create' ? '新建章节' : `编辑第${props.chapter?.number}章`}</h2>
+                    <h2>{props.mode === 'create' ? '新建章节' : `编辑第${props.chapter?.chapter}章`}</h2>
                     <button className="modal-close" onClick={props.onClose} aria-label="关闭">✕</button>
                 </div>
 

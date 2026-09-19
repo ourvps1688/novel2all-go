@@ -67,10 +67,14 @@ type Project struct {
 }
 
 // Chapter 后端 chapters 集合的镜像.
+//
+// Sprint V1.0.1 P2 修复: JSON tag 必须对齐后端 (api.ChapterInfo chapter + char_count),
+// 之前用 json:"number" → 后端返 "chapter" 字段, 反序列化默认 0 → 桌面显示"第0章",
+// 编辑/删除按钮调 GetChapterContent(id, c.number=undefined) → Go int=0 → server 400 invalid.
 type Chapter struct {
 	ID        int64  `json:"id"`
 	ProjectID int64  `json:"project_id"`
-	Number    int    `json:"number"`
+	Chapter   int    `json:"chapter"` // 后端字段名 chapter (api.ChapterInfo.Chapter)
 	Title     string `json:"title,omitempty"`
 	Filename  string `json:"filename"`
 	CharCount int    `json:"char_count,omitempty"`
@@ -498,9 +502,13 @@ func (a *App) ListChapters(projectID int64) ([]Chapter, error) {
 // ---------------------------------------------------------------------------
 
 // ChapterInput 创建/更新章节的请求体 (Phase 1: 简单结构).
+//
+// Sprint V1.0.1 P2 修复: 字段名 Chapter (json:"chapter") 与后端对齐 (api.ChapterInfo.Chapter),
+// 之前用 json:"number" → 不一致 (后端从 URL path 拿 N, body 里 number 字段无意义,
+// 但 Wails 生成的 TS binding 用 Go 字段名 → 前端传 number → Go 收到 0 → URL /api/chapter/0).
 type ChapterInput struct {
 	ProjectID int64  `json:"project_id"`
-	Number    int    `json:"number"`
+	Chapter   int    `json:"chapter"`
 	Title     string `json:"title,omitempty"`
 	Content   string `json:"content,omitempty"`
 }
@@ -516,15 +524,15 @@ type ChapterContent struct {
 
 // CreateChapter 调后端 POST /api/chapter/{N} 创建新章节.
 //
-// number 必须 > 0. 同一 number 已存在返 409 Conflict.
+// chapter 必须 > 0. 同一 chapter 已存在返 409 Conflict.
 func (a *App) CreateChapter(input ChapterInput) (*Chapter, error) {
-	if input.Number <= 0 {
+	if input.Chapter <= 0 {
 		return nil, fmt.Errorf("chapter number 必须 > 0")
 	}
 	if input.ProjectID <= 0 {
 		return nil, fmt.Errorf("project_id 必须 > 0")
 	}
-	resp, err := a.doRequest(http.MethodPost, fmt.Sprintf("/api/chapter/%d", input.Number), input)
+	resp, err := a.doRequest(http.MethodPost, fmt.Sprintf("/api/chapter/%d", input.Chapter), input)
 	if err != nil {
 		return nil, fmt.Errorf("创建章节失败: %w", err)
 	}
@@ -542,22 +550,22 @@ func (a *App) CreateChapter(input ChapterInput) (*Chapter, error) {
 		CharCount int    `json:"char_count"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
-		// 302 + 空 body fallback: 重查 list 匹配 number
+		// 302 + 空 body fallback: 重查 list 匹配 chapter
 		chapters, listErr := a.ListChapters(input.ProjectID)
 		if listErr != nil {
 			return nil, fmt.Errorf("decode: %w (fallback list 失败: %v)", err, listErr)
 		}
 		for _, c := range chapters {
-			if c.Number == input.Number {
+			if c.Chapter == input.Chapter {
 				return &c, nil
 			}
 		}
-		return nil, fmt.Errorf("decode: %w (fallback list 也找不到 number=%d)", err, input.Number)
+		return nil, fmt.Errorf("decode: %w (fallback list 也找不到 chapter=%d)", err, input.Chapter)
 	}
 	// 构造 Chapter 响应
 	return &Chapter{
 		ProjectID: input.ProjectID,
-		Number:    respBody.Chapter,
+		Chapter:   respBody.Chapter,
 		Title:     respBody.Title,
 		CharCount: respBody.CharCount,
 		Filename:  fmt.Sprintf("第%03d章.md", respBody.Chapter),
@@ -584,7 +592,7 @@ func (a *App) GetChapterContent(projectID int64, number int) (*ChapterContent, e
 
 // UpdateChapter 调后端 POST /api/chapter/{N}/save 更新章节内容 + title.
 func (a *App) UpdateChapter(input ChapterInput) (*Chapter, error) {
-	if input.Number <= 0 {
+	if input.Chapter <= 0 {
 		return nil, fmt.Errorf("chapter number 必须 > 0")
 	}
 	if input.ProjectID <= 0 {
@@ -595,7 +603,7 @@ func (a *App) UpdateChapter(input ChapterInput) (*Chapter, error) {
 		"title":      input.Title,
 		"content":    input.Content,
 	}
-	resp, err := a.doRequest(http.MethodPost, fmt.Sprintf("/api/chapter/%d/save", input.Number), body)
+	resp, err := a.doRequest(http.MethodPost, fmt.Sprintf("/api/chapter/%d/save", input.Chapter), body)
 	if err != nil {
 		return nil, fmt.Errorf("更新章节失败: %w", err)
 	}
@@ -614,7 +622,7 @@ func (a *App) UpdateChapter(input ChapterInput) (*Chapter, error) {
 	}
 	return &Chapter{
 		ProjectID: input.ProjectID,
-		Number:    respBody.Chapter,
+		Chapter:   respBody.Chapter,
 		Title:     input.Title,
 		CharCount: respBody.CharCount,
 		Filename:  fmt.Sprintf("第%03d章.md", respBody.Chapter),
