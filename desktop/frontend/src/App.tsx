@@ -17,6 +17,10 @@ import {
     UpdateProject,
     DeleteProject,
     GetProject,
+    CreateChapter,
+    GetChapterContent,
+    UpdateChapter,
+    DeleteChapter,
 } from '../wailsjs/go/main/App';
 import type { main } from '../wailsjs/go/models';
 
@@ -52,6 +56,15 @@ function App() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [chapters, setChapters] = useState<Chapter[]>([]);
+
+    // Module A: Chapter CRUD state
+    const [chapterModal, setChapterModal] = useState<{
+        mode: 'create' | 'edit' | null;
+        chapter?: Chapter;
+        projectID?: number;
+    }>({ mode: null });
+    const [chapterContent, setChapterContent] = useState<string>('');
+    const [loadingChapter, setLoadingChapter] = useState(false);
 
     // 启动时检查后端 + 是否已登录
     useEffect(() => {
@@ -151,11 +164,52 @@ function App() {
     // 选项目 + 加载章节
     async function selectProject(p: Project) {
         setSelectedProject(p);
+        await refreshChapters(p.id);
+    }
+
+    // ============= Chapter CRUD (Module A) =============
+
+    async function refreshChapters(projectID: number) {
         try {
-            const list = await ListChapters(p.id);
+            const list = await ListChapters(projectID);
             setChapters(list ?? []);
         } catch (e: any) {
             setError(`获取章节失败: ${e?.message ?? e}`);
+        }
+    }
+
+    function openChapterModal(mode: 'create' | 'edit', chapter?: Chapter) {
+        setChapterModal({ mode, chapter, projectID: selectedProject?.id });
+        setError('');
+    }
+    function closeChapterModal() {
+        setChapterModal({ mode: null });
+        setChapterContent('');
+    }
+
+    async function openChapterEditor(c: Chapter) {
+        if (!selectedProject) return;
+        setLoadingChapter(true);
+        setError('');
+        try {
+            const content = await GetChapterContent(selectedProject.id, c.number);
+            setChapterContent(content?.content ?? '');
+            openChapterModal('edit', c);
+        } catch (e: any) {
+            setError(`读取章节失败: ${e?.message ?? e}`);
+        } finally {
+            setLoadingChapter(false);
+        }
+    }
+
+    async function deleteChapter(c: Chapter) {
+        if (!selectedProject) return;
+        if (!confirm(`确认删除章节 "${c.title || '第' + c.number + '章'}" (id=${c.id})? 此操作不可恢复!`)) return;
+        try {
+            await DeleteChapter(selectedProject.id, c.number);
+            await refreshChapters(selectedProject.id);
+        } catch (e: any) {
+            setError(`删除章节失败: ${e?.message ?? e}`);
         }
     }
 
@@ -292,31 +346,53 @@ function App() {
                 <div className="content">
                     {selectedProject ? (
                         <>
-                            <h3>📖 {selectedProject.name} — 章节 ({chapters.length})</h3>
-                            {chapters.length === 0 ? (
-                                <p className="empty">该项目暂无章节</p>
-                            ) : (
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>#</th>
-                                            <th>文件名</th>
-                                            <th>字数</th>
-                                            <th>更新时间</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
+                            <h3>📖 {selectedProject.name}</h3>
+                            <div className="chapters-section">
+                                <div className="chapters-header">
+                                    <h3>章节 <span className="count">({chapters.length})</span></h3>
+                                    <button
+                                        className="btn-add"
+                                        onClick={() => openChapterModal('create')}
+                                        title="新建章节"
+                                    >+</button>
+                                </div>
+                                {chapters.length === 0 ? (
+                                    <div className="empty-state">
+                                        <div className="empty-state-icon">📄</div>
+                                        <div className="empty-state-title">暂无章节</div>
+                                        <div className="empty-state-desc">点击右上角 + 创建第一个章节</div>
+                                    </div>
+                                ) : (
+                                    <ul className="chapter-list">
                                         {chapters.map((c) => (
-                                            <tr key={c.id}>
-                                                <td>{c.number}</td>
-                                                <td>{c.filename}</td>
-                                                <td>{c.char_count || '-'}</td>
-                                                <td>{c.updated_at || '-'}</td>
-                                            </tr>
+                                            <li key={c.id} className="chapter-item">
+                                                <div className="chapter-info">
+                                                    <div className="chapter-title">
+                                                        {c.title || `第${c.number}章`}
+                                                    </div>
+                                                    <div className="chapter-meta">
+                                                        <span className="chapter-num-tag">第{c.number}章</span>
+                                                        {' '}{c.char_count ?? 0} 字
+                                                    </div>
+                                                </div>
+                                                <div className="chapter-actions">
+                                                    <button
+                                                        className="chapter-action-btn"
+                                                        onClick={(e) => { e.stopPropagation(); openChapterEditor(c); }}
+                                                        title="编辑章节"
+                                                        disabled={loadingChapter}
+                                                    >✎</button>
+                                                    <button
+                                                        className="chapter-action-btn danger"
+                                                        onClick={(e) => { e.stopPropagation(); deleteChapter(c); }}
+                                                        title="删除章节"
+                                                    >🗑</button>
+                                                </div>
+                                            </li>
                                         ))}
-                                    </tbody>
-                                </table>
-                            )}
+                                    </ul>
+                                )}
+                            </div>
                         </>
                     ) : (
                         <p className="placeholder">← 选择左侧项目查看章节</p>
@@ -332,6 +408,22 @@ function App() {
                     onSaved={async () => {
                         closeProjectModal();
                         await refreshProjects();
+                    }}
+                />
+            )}
+
+            {chapterModal.mode && (
+                <ChapterModal
+                    mode={chapterModal.mode}
+                    chapter={chapterModal.chapter}
+                    projectID={chapterModal.projectID}
+                    initialContent={chapterContent}
+                    onClose={closeChapterModal}
+                    onSaved={async () => {
+                        closeChapterModal();
+                        if (selectedProject) {
+                            await refreshChapters(selectedProject.id);
+                        }
                     }}
                 />
             )}
@@ -542,6 +634,112 @@ function ProjectModal(props: {
                             value={genre}
                             onChange={(e) => setGenre(e.target.value)}
                             placeholder="玄幻 / 都市 / 科幻 / ..."
+                        />
+                    </label>
+
+                    {err && <div className="error">{err}</div>}
+                </div>
+
+                <div className="modal-footer">
+                    <button className="btn" onClick={props.onClose}>取消</button>
+                    <button className="btn primary" onClick={save} disabled={saving}>
+                        {saving ? '保存中...' : '保存'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ChapterModal 章节创建/编辑模态 (Module A: Chapter CRUD).
+//
+// 调用: CreateChapter (mode='create') 或 UpdateChapter (mode='edit').
+// onSaved 回调触发 refreshChapters + 关闭 modal.
+function ChapterModal(props: {
+    mode: 'create' | 'edit';
+    chapter?: Chapter;
+    projectID?: number;
+    initialContent?: string;
+    onClose: () => void;
+    onSaved: () => void;
+}) {
+    const [number, setNumber] = useState(props.chapter?.number ?? 1);
+    const [title, setTitle] = useState(props.chapter?.title ?? '');
+    const [content, setContent] = useState(props.initialContent ?? '');
+    const [saving, setSaving] = useState(false);
+    const [err, setErr] = useState('');
+
+    async function save() {
+        if (!props.projectID) {
+            setErr('未选中项目');
+            return;
+        }
+        if (number <= 0) {
+            setErr('章节号必须 > 0');
+            return;
+        }
+        if (!title.trim() && !content.trim()) {
+            setErr('章节标题或内容至少填一个');
+            return;
+        }
+        setSaving(true);
+        setErr('');
+        try {
+            const input = {
+                project_id: props.projectID,
+                number,
+                title: title.trim(),
+                content: content,
+            };
+            if (props.mode === 'create') {
+                await CreateChapter(input);
+            } else if (props.chapter) {
+                await UpdateChapter(input);
+            }
+            props.onSaved();
+        } catch (e: any) {
+            setErr(`保存失败: ${e?.message ?? e}`);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div className="modal-bg" onClick={props.onClose}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h2>{props.mode === 'create' ? '新建章节' : `编辑第${props.chapter?.number}章`}</h2>
+                    <button className="modal-close" onClick={props.onClose} aria-label="关闭">✕</button>
+                </div>
+
+                <div className="modal-body">
+                    <label className="form-label">
+                        章节号 *
+                        <input
+                            type="number"
+                            min="1"
+                            value={number}
+                            onChange={(e) => setNumber(parseInt(e.target.value) || 1)}
+                            disabled={props.mode === 'edit'}
+                            placeholder="1"
+                        />
+                    </label>
+                    <label className="form-label">
+                        标题
+                        <input
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            placeholder="本章标题（可选）"
+                        />
+                    </label>
+                    <label className="form-label">
+                        内容
+                        <textarea
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            placeholder="章节内容（Markdown）..."
+                            rows={12}
                         />
                     </label>
 
