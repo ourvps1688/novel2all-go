@@ -27,6 +27,12 @@ import {
     SetLLMKey,
     HasLLMKey,
     ClearLLMKeys,
+    // Module C: 章节 action (LLM 调用)
+    ExpandChapter,
+    RewriteChapter,
+    ReviewChapter,
+    InsertChapter,
+    RollbackChapter,
 } from '../wailsjs/go/main/App';
 import type { main } from '../wailsjs/go/models';
 
@@ -827,6 +833,17 @@ const TOOLBAR: ToolbarAction[] = [
     { kind: 'link', label: '🔗', title: '插入链接' },
 ];
 
+// Module C.2: AI 辅助 section 按钮定义
+type AIAction = 'expand' | 'rewrite' | 'review' | 'insert' | 'rollback';
+
+const AI_BUTTONS: Array<{ action: AIAction; icon: string; label: string; destructive: boolean; needsPosition: boolean; needsInstruction: boolean }> = [
+    { action: 'expand', icon: '✨', label: '扩写', destructive: false, needsPosition: false, needsInstruction: true },
+    { action: 'rewrite', icon: '🔄', label: '重写', destructive: true, needsPosition: false, needsInstruction: true },
+    { action: 'review', icon: '📋', label: 'Review', destructive: false, needsPosition: false, needsInstruction: false },
+    { action: 'insert', icon: '➕', label: '插入', destructive: true, needsPosition: true, needsInstruction: true },
+    { action: 'rollback', icon: '⏪', label: '回滚', destructive: true, needsPosition: false, needsInstruction: false },
+];
+
 function ChapterModal(props: {
     mode: 'create' | 'edit';
     chapter?: Chapter;
@@ -840,6 +857,14 @@ function ChapterModal(props: {
     const [content, setContent] = useState(props.initialContent ?? '');
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState('');
+
+    // Module C: AI 辅助状态
+    const [aiInstruction, setAiInstruction] = useState('');
+    const [aiPosition, setAiPosition] = useState(1);
+    const [aiBusy, setAiBusy] = useState<AIAction | null>(null); // 哪个 action 在跑
+    const [aiError, setAiError] = useState(''); // AI 操作错误 (独立于表单 err)
+    const [aiSuccess, setAiSuccess] = useState(''); // 操作成功摘要
+    const [reviewResult, setReviewResult] = useState<main.ReviewResult | null>(null); // Review modal 数据
 
     // Module C.1: 编辑器增强
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -939,6 +964,117 @@ function ChapterModal(props: {
         }
     }
 
+    // Module C.2: AI 辅助 handlers
+    //
+    // 通用 AI 操作执行入口 (5 个 action 走同一逻辑):
+    // 1. validate (project_id / chapter / position for insert)
+    // 2. confirm for destructive actions (rewrite/insert/rollback)
+    // 3. call wails method
+    // 4. 处理响应:
+    //    - expand/rewrite/insert/rollback: 重新拉取章节内容 (服务器改了文件)
+    //    - review: 显示独立 modal
+    // 5. 显示结果摘要 + 触发 onSaved 刷新列表
+    async function refreshChapterContent() {
+        if (!props.projectID || !props.chapter) return;
+        try {
+            const content = await GetChapterContent(props.projectID, props.chapter.chapter);
+            if (content?.content !== undefined) {
+                setContent(content.content);
+            }
+        } catch (e: any) {
+            setAiError(`刷新章节失败: ${e?.message ?? e}`);
+        }
+    }
+
+    async function doAI(action: AIAction) {
+        if (!props.projectID || !props.chapter) {
+            setAiError('请先选中项目并打开已有章节');
+            return;
+        }
+
+        const buttonDef = AI_BUTTONS.find(b => b.action === action)!;
+
+        // validate
+        const instruction = aiInstruction.trim();
+        if (buttonDef.needsInstruction && !instruction) {
+            setAiError(`${buttonDef.label} 需要指令 (instruction)`);
+            return;
+        }
+        if (buttonDef.needsPosition && aiPosition <= 0) {
+            setAiError(`插入位置必须 > 0 (1-based 行号)`);
+            return;
+        }
+
+        // confirm for destructive
+        if (buttonDef.destructive) {
+            const actionLabels: Record<AIAction, string> = {
+                expand: '扩写 (追加内容, 不覆盖)',
+                rewrite: '重写 (覆盖整章)',
+                review: 'Review (评估, 不修改)',
+                insert: '插入 (在指定行插入新段落)',
+                rollback: '回滚 (从最新备份恢复)',
+            };
+            const msg = `${actionLabels[action]}\n\n当前章节 ${number} 字数: ${stats.total} 字\n\n将调用 LLM (可能 10-60 秒).\n确认执行?`;
+            if (!confirm(msg)) return;
+        }
+
+        setAiBusy(action);
+        setAiError('');
+        setAiSuccess('');
+
+        try {
+            let resp: any;
+            let label = buttonDef.label;
+            switch (action) {
+                case 'expand':
+                    resp = await ExpandChapter(props.projectID, number, instruction);
+                    label = '扩写';
+                    break;
+                case 'rewrite':
+                    resp = await RewriteChapter(props.projectID, number, instruction);
+                    label = '重写';
+                    break;
+                case 'review':
+                    resp = await ReviewChapter(props.projectID, number);
+                    label = 'Review';
+                    break;
+                case 'insert':
+                    resp = await InsertChapter(props.projectID, number, aiPosition, instruction);
+                    label = '插入';
+                    break;
+                case 'rollback':
+                    resp = await RollbackChapter(props.projectID, number);
+                    label = '回滚';
+                    break;
+            }
+
+            // 处理响应
+            if (action === 'review') {
+                // review 返 ReviewResult, 显示独立 modal
+                setReviewResult(resp as main.ReviewResult);
+                setAiSuccess(`Review 完成 (${resp.elapsed_ms}ms)`);
+            } else {
+                // 其他 4 个修改文件, 重新拉取内容 + 通知父组件刷新列表
+                const ar = resp as main.ActionResponse;
+                await refreshChapterContent();
+                const summary = `${label} 完成: ${ar.chars_before}→${ar.chars_after} 字 (${ar.elapsed_ms}ms)`;
+                if (ar.issues && ar.issues.length > 0) {
+                    setAiSuccess(`${summary} · ${ar.issues.length} 条 verifier 提醒`);
+                } else {
+                    setAiSuccess(summary);
+                }
+                // 触发章节列表刷新 (Module A refreshChapters)
+                props.onSaved();
+            }
+            // 清空输入 (instruction 用过不保留)
+            if (buttonDef.needsInstruction) setAiInstruction('');
+        } catch (e: any) {
+            setAiError(`${buttonDef.label} 失败: ${e?.message ?? e}`);
+        } finally {
+            setAiBusy(null);
+        }
+    }
+
     return (
         <div className="modal-bg" onClick={props.onClose}>
             <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
@@ -1007,18 +1143,158 @@ function ChapterModal(props: {
                         />
                     </div>
 
+                    {/* Module C.2: AI 辅助 section */}
+                    <div className="ai-section">
+                        <div className="ai-section-header">
+                            <span className="ai-section-title">🤖 AI 辅助</span>
+                            <span className="ai-section-hint">调用 LLM 修改章节 (后端 admin key, Module B.2 后用本地 key)</span>
+                        </div>
+
+                        <div className="ai-instruction-row">
+                            <input
+                                type="text"
+                                className="ai-instruction-input"
+                                placeholder="指令 (扩写/重写/插入用, 如: '增加主角与师父的对决')"
+                                value={aiInstruction}
+                                onChange={(e) => setAiInstruction(e.target.value)}
+                                disabled={aiBusy !== null || props.mode === 'create'}
+                            />
+                            <input
+                                type="number"
+                                className="ai-position-input"
+                                min="1"
+                                placeholder="位置 (insert)"
+                                value={aiPosition}
+                                onChange={(e) => setAiPosition(parseInt(e.target.value) || 1)}
+                                disabled={aiBusy !== null || props.mode === 'create'}
+                                title="插入位置 (1-based 行号, 仅 insert 用)"
+                            />
+                        </div>
+
+                        <div className="ai-actions">
+                            {AI_BUTTONS.map(b => (
+                                <button
+                                    key={b.action}
+                                    className={`btn ${b.destructive ? 'danger' : 'primary'} ai-action-btn`}
+                                    onClick={() => doAI(b.action)}
+                                    disabled={aiBusy !== null || props.mode === 'create'}
+                                    title={b.destructive ? `${b.label} (破坏性, 会弹确认)` : b.label}
+                                >
+                                    {aiBusy === b.action ? (
+                                        <>⏳ {b.label}中...</>
+                                    ) : (
+                                        <>{b.icon} {b.label}</>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+
+                        {aiError && <div className="error" style={{ marginTop: '8px' }}>{aiError}</div>}
+                        {aiSuccess && <div className="info ok" style={{ marginTop: '8px' }}>{aiSuccess}</div>}
+                    </div>
+
                     {err && <div className="error">{err}</div>}
                 </div>
 
                 <div className="modal-footer">
                     <button className="btn" onClick={props.onClose}>取消</button>
-                    <button className="btn primary" onClick={save} disabled={saving}>
+                    <button className="btn primary" onClick={save} disabled={saving || aiBusy !== null}>
                         {saving ? '保存中...' : '保存'}
                     </button>
                 </div>
             </div>
+
+            {/* Module C.2: Review 结果独立 modal (叠在 ChapterModal 上) */}
+            {reviewResult && (
+                <div className="modal-bg" onClick={() => setReviewResult(null)}>
+                    <div className="modal review-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>📋 Review 结果 (第{reviewResult.chapter}章)</h2>
+                            <button className="modal-close" onClick={() => setReviewResult(null)}>✕</button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="review-summary">
+                                <div className={`review-score review-score-${verdictClass(reviewResult.overall_verdict)}`}>
+                                    <div className="review-score-num">{reviewResult.quality_score.toFixed(1)}</div>
+                                    <div className="review-score-verdict">{verdictLabel(reviewResult.overall_verdict)}</div>
+                                </div>
+                                <div className="review-stats">
+                                    <div>{reviewResult.content_chars} 字 · {reviewResult.elapsed_ms}ms</div>
+                                    <div className="review-issues-count">
+                                        🔴 {reviewResult.critical_issues.length} 严重 ·
+                                        🟡 {reviewResult.major_issues.length} 重要 ·
+                                        🟢 {reviewResult.minor_issues.length} 轻微
+                                    </div>
+                                </div>
+                            </div>
+
+                            {reviewResult.critical_issues.length > 0 && (
+                                <div className="review-issues-section">
+                                    <h4>🔴 严重问题</h4>
+                                    {reviewResult.critical_issues.map((it, i) => (
+                                        <div key={i} className="review-issue critical">
+                                            {it.location && <span className="review-issue-loc">[{it.location}]</span>}
+                                            {it.category && <span className="review-issue-cat">{it.category}</span>}
+                                            <span className="review-issue-note">{it.note}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {reviewResult.major_issues.length > 0 && (
+                                <div className="review-issues-section">
+                                    <h4>🟡 重要问题</h4>
+                                    {reviewResult.major_issues.map((it, i) => (
+                                        <div key={i} className="review-issue major">
+                                            {it.location && <span className="review-issue-loc">[{it.location}]</span>}
+                                            {it.category && <span className="review-issue-cat">{it.category}</span>}
+                                            <span className="review-issue-note">{it.note}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {reviewResult.minor_issues.length > 0 && (
+                                <div className="review-issues-section">
+                                    <h4>🟢 轻微问题</h4>
+                                    {reviewResult.minor_issues.map((it, i) => (
+                                        <div key={i} className="review-issue minor">
+                                            {it.location && <span className="review-issue-loc">[{it.location}]</span>}
+                                            {it.category && <span className="review-issue-cat">{it.category}</span>}
+                                            <span className="review-issue-note">{it.note}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {reviewResult.critical_issues.length === 0 && reviewResult.major_issues.length === 0 && reviewResult.minor_issues.length === 0 && (
+                                <div className="info ok">✅ Review 通过, 未发现严重问题</div>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn primary" onClick={() => setReviewResult(null)}>关闭</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
+}
+
+// review verdict 显示辅助函数 (Module C.2)
+function verdictClass(verdict: string): string {
+    if (verdict === 'pass') return 'good';
+    if (verdict === 'fail') return 'bad';
+    return 'warn';
+}
+
+function verdictLabel(verdict: string): string {
+    const map: Record<string, string> = {
+        pass: '通过',
+        fail: '不通过',
+        needs_revision: '需修订',
+    };
+    return map[verdict] || verdict;
 }
 
 export default App;

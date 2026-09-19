@@ -1120,3 +1120,213 @@ html, body, #root, #App {
         max-height: 100vh;
     }
 }
+
+/* ===== Module C.2: AI 辅助 section ===== */
+
+.ai-section {
+    margin-top: 16px;
+    padding: 12px;
+    background: linear-gradient(135deg, var(--color-accent-bg) 0%, var(--color-bg) 100%);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+}
+
+.ai-section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.ai-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ai-section-hint {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+
+.ai-instruction-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.ai-instruction-input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-card);
+    color: var(--color-text);
+    font-size: 13px;
+    transition: border-color 0.15s ease;
+}
+
+.ai-instruction-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+}
+
+.ai-position-input {
+    width: 80px;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-card);
+    color: var(--color-text);
+    font-size: 13px;
+    text-align: center;
+}
+
+.ai-position-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+}
+
+.ai-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.ai-action-btn {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.ai-action-btn:disabled {
+    opacity: 0.5;
+}
+
+/* Module C.2: Review 结果 modal */
+.review-modal {
+    max-width: 640px;
+    width: 92vw;
+}
+
+.review-summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    margin-bottom: 16px;
+}
+
+.review-score {
+    flex: 0 0 auto;
+    text-align: center;
+    padding: 12px 20px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--color-border);
+}
+
+.review-score.good {
+    border-color: #10b981;
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.review-score.warn {
+    border-color: #f59e0b;
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.review-score.bad {
+    border-color: #ef4444;
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.review-score-num {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.review-score-verdict {
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.review-stats {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.review-stats > div:first-child {
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+}
+
+.review-issues-count {
+    font-size: 12px;
+    color: var(--color-text);
+}
+
+.review-issues-section {
+    margin-bottom: 14px;
+}
+
+.review-issues-section h4 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.review-issue {
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    line-height: 1.5;
+    border-left: 3px solid var(--color-border);
+    background: var(--color-bg);
+}
+
+.review-issue.critical {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+}
+
+.review-issue.major {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.review-issue.minor {
+    border-left-color: #6b7280;
+    background: var(--color-bg);
+}
+
+.review-issue-loc,
+.review-issue-cat {
+    display: inline-block;
+    padding: 1px 6px;
+    margin-right: 4px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+
+.review-issue-note {
+    color: var(--color-text);
+}

@@ -93,11 +93,71 @@ type APIError struct {
 	Error string `json:"error"`
 }
 
+// ActionRequest chapter action LLM 调用的请求体 (Module C).
+//
+// 后端 ActionRequest 的子集: 桌面 app 不传 project_root (后端 fallback "."),
+// 只传 project_id (后端用于 owner check) + 业务字段.
+//
+// Instruction: 给 LLM 的自然语言指令 (扩写/重写用).
+// Position:   insert 用, 1-based 行号.
+type ActionRequest struct {
+	ProjectID   int64  `json:"project_id"`
+	Instruction string `json:"instruction,omitempty"`
+	Position    int    `json:"position,omitempty"`
+}
+
+// ActionResponse chapter action LLM 调用的响应 (Module C).
+//
+// 4 个 action (expand/rewrite/insert/rollback) 都返这个.
+// review 单独返 ReviewResult (因字段差异大).
+type ActionResponse struct {
+	Chapter       int               `json:"chapter"`
+	Action        string            `json:"action"`
+	OutputPath    string            `json:"output_path"`
+	BackupPath    string            `json:"backup_path,omitempty"`
+	CharsBefore   int               `json:"chars_before,omitempty"`
+	CharsAfter    int               `json:"chars_after,omitempty"`
+	AppendedChars int               `json:"appended_chars,omitempty"`
+	ElapsedMS     int64             `json:"elapsed_ms"`
+	Message       string            `json:"message,omitempty"`
+	Issues        []PostCheckIssue  `json:"issues,omitempty"`
+}
+
+// ReviewResult review action 专属响应 (Module C).
+//
+// review 不改文件, 只评估, 所以字段集不同.
+type ReviewResult struct {
+	Chapter        int          `json:"chapter"`
+	CriticalIssues []ReviewItem  `json:"critical_issues"`
+	MajorIssues    []ReviewItem  `json:"major_issues"`
+	MinorIssues    []ReviewItem  `json:"minor_issues"`
+	QualityScore   float64      `json:"quality_score"`
+	OverallVerdict string       `json:"overall_verdict"`
+	ContentChars   int          `json:"content_chars"`
+	ElapsedMS      int64        `json:"elapsed_ms"`
+}
+
+// PostCheckIssue verifier post-check 报告的单条问题 (Module C).
+type PostCheckIssue struct {
+	Severity string `json:"severity"`
+	Category string `json:"category"`
+	Message  string `json:"message"`
+}
+
+// ReviewItem review 单条反馈 (Module C).
+type ReviewItem struct {
+	Location string `json:"location,omitempty"`
+	Category string `json:"category,omitempty"`
+	Note     string `json:"note"`
+}
+
 // NewApp creates a new App application struct.
 func NewApp() *App {
 	return &App{
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			// Module C: LLM 调用可能慢 (10-60s), 30s 太短.
+			// 桌面 app 120s 上限足够覆盖所有 LLM action + 网络抖动.
+			Timeout: 120 * time.Second,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// POST 后端返 301 redirect (→ /api/projects/) 是路由注册 bug.
 				// 不跟随 redirect, 直接读 POST 响应 body.
@@ -858,4 +918,133 @@ func (a *App) HasLLMKey(provider string) (bool, error) {
 		return false, nil // 静默 false, UI 当作"未配置"
 	}
 	return a.llmSecrets.Has(provider)
+}
+
+// ---------------------------------------------------------------------------
+// Module C: 章节 action (LLM 调用: expand/rewrite/review/insert/rollback)
+// ---------------------------------------------------------------------------
+
+// ChapterAction 5 个 LLM action 的统一调用逻辑.
+//
+// 后端 dispatch:
+//   POST /api/chapter/{N}/{action}/  body={project_id, instruction, position}
+//
+// 返回: 4 个 action (expand/rewrite/insert/rollback) 返 ActionResponse
+//
+//	review 返 ReviewResult (字段差异大, 由调用方分别解析)
+//
+// 错误处理:
+//   - HTTP 非 200 → 解析 error body 抛 wrapped error
+//   - LLM 调用失败/超时 → 后端已返回 500, 桌面原样返回 error
+func (a *App) callChapterAction(projectID int64, chapter int, action, instruction string, position int, reviewMode bool) (string, error) {
+	if projectID <= 0 {
+		return "", fmt.Errorf("project_id 必须 > 0")
+	}
+	if chapter <= 0 {
+		return "", fmt.Errorf("chapter 必须 > 0")
+	}
+	req := ActionRequest{
+		ProjectID:   projectID,
+		Instruction: instruction,
+		Position:    position,
+	}
+	// URL path: /api/chapter/{N}/{action}/  (后端 router 同时注册有/无 trailing slash)
+	url := fmt.Sprintf("/api/chapter/%d/%s", chapter, action)
+	resp, err := a.doRequest(http.MethodPost, url, req)
+	if err != nil {
+		return "", fmt.Errorf("%s 请求失败: %w", action, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("%s 失败 (HTTP %d): %s", action, resp.StatusCode, string(body))
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("读响应失败: %w", err)
+	}
+	return string(body), nil
+}
+
+// ExpandChapter 调 LLM 扩写章节 (追加内容).
+//
+// 后端: POST /api/chapter/{N}/expand/  +  body={project_id, instruction}
+// 返回: ActionResponse (含 chars_before/chars_after/appended_chars + elapsed_ms)
+func (a *App) ExpandChapter(projectID int64, chapter int, instruction string) (*ActionResponse, error) {
+	body, err := a.callChapterAction(projectID, chapter, "expand", instruction, 0, false)
+	if err != nil {
+		return nil, err
+	}
+	var resp ActionResponse
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		return nil, fmt.Errorf("解析 expand 响应失败: %w", err)
+	}
+	return &resp, nil
+}
+
+// RewriteChapter 调 LLM 重写整章 (覆盖).
+//
+// 后端: POST /api/chapter/{N}/rewrite/  +  body={project_id, instruction}
+func (a *App) RewriteChapter(projectID int64, chapter int, instruction string) (*ActionResponse, error) {
+	body, err := a.callChapterAction(projectID, chapter, "rewrite", instruction, 0, false)
+	if err != nil {
+		return nil, err
+	}
+	var resp ActionResponse
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		return nil, fmt.Errorf("解析 rewrite 响应失败: %w", err)
+	}
+	return &resp, nil
+}
+
+// ReviewChapter 调 LLM review 章节 (不改文件, 只评估).
+//
+// 后端: POST /api/chapter/{N}/review/  +  body={project_id}
+// 返回: ReviewResult (含 quality_score + critical/major/minor issues)
+func (a *App) ReviewChapter(projectID int64, chapter int) (*ReviewResult, error) {
+	body, err := a.callChapterAction(projectID, chapter, "review", "", 0, true)
+	if err != nil {
+		return nil, err
+	}
+	var resp ReviewResult
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		return nil, fmt.Errorf("解析 review 响应失败: %w", err)
+	}
+	return &resp, nil
+}
+
+// InsertChapter 调 LLM 在指定行插入新段落.
+//
+// 后端: POST /api/chapter/{N}/insert/  +  body={project_id, instruction, position}
+// position: 1-based 行号 (1=开头, len(lines)+1=末尾)
+func (a *App) InsertChapter(projectID int64, chapter int, position int, instruction string) (*ActionResponse, error) {
+	if position <= 0 {
+		return nil, fmt.Errorf("position 必须 > 0 (1-based 行号)")
+	}
+	body, err := a.callChapterAction(projectID, chapter, "insert", instruction, position, false)
+	if err != nil {
+		return nil, err
+	}
+	var resp ActionResponse
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		return nil, fmt.Errorf("解析 insert 响应失败: %w", err)
+	}
+	return &resp, nil
+}
+
+// RollbackChapter 从最新 .bak.* 备份恢复章节.
+//
+// 后端: POST /api/chapter/{N}/rollback/  +  body={project_id}
+//
+// 注意: 没有 backup 参数, 后端自动找最新 .bak.{unix_timestamp}.
+func (a *App) RollbackChapter(projectID int64, chapter int) (*ActionResponse, error) {
+	body, err := a.callChapterAction(projectID, chapter, "rollback", "", 0, false)
+	if err != nil {
+		return nil, err
+	}
+	var resp ActionResponse
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		return nil, fmt.Errorf("解析 rollback 响应失败: %w", err)
+	}
+	return &resp, nil
 }
