@@ -27,6 +27,7 @@ import (
 // 端点：
 //
 //	GET    /api/chapters                       → 列出项目下所有章节
+//	POST   /api/chapter/{N}/                   → 创建章节文件 (P0-B owner check)
 //	GET    /api/chapter/{N}/content/           → 读完整内容
 //	POST   /api/chapter/{N}/save/              → 保存（手动编辑, P0-B owner check）
 //	GET    /api/chapter/{N}/export/            → 导出 (md/txt, P0-B owner check)
@@ -133,12 +134,15 @@ func (h *ChapterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(parts) == 1 {
-		// /api/chapter/{N} → DELETE
-		if r.Method != http.MethodDelete {
-			http.Error(w, "method not allowed (use /content, /save, /export)", http.StatusMethodNotAllowed)
-			return
+		// /api/chapter/{N} → POST (create) | DELETE
+		switch r.Method {
+		case http.MethodPost:
+			h.create(w, r, chapter)
+		case http.MethodDelete:
+			h.delete(w, r, chapter)
+		default:
+			http.Error(w, "method not allowed (use POST/DELETE /api/chapter/{N}, or /content /save /export)", http.StatusMethodNotAllowed)
 		}
-		h.delete(w, r, chapter)
 		return
 	}
 
@@ -359,6 +363,74 @@ func (h *ChapterHandler) save(w http.ResponseWriter, r *http.Request, chapter in
 		"output_path": prosePath,
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// create 创建章节（手动新建章节文件 + metadata 同步）
+//
+// POST /api/chapter/{N}  body: {"project_id": int, "title": string, "content": string}
+//
+// Sprint V1.0.1 P0-B: 验证 user 对 project 有访问权 (admin bypass).
+// project_id=0 时跳过 owner check (legacy 模式).
+// 文件已存在 → 409 Conflict (不覆盖).
+func (h *ChapterHandler) create(w http.ResponseWriter, r *http.Request, chapter int) {
+	var req struct {
+		ProjectID int64  `json:"project_id,omitempty"`
+		Title     string `json:"title,omitempty"`
+		Content   string `json:"content,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if !h.checkProjectAccess(w, r, req.ProjectID) {
+		return
+	}
+
+	// content 默认空字符串（桌面 app 创建章节时可选填）
+	if req.Content == "" {
+		req.Content = "# 第" + fmt.Sprintf("%03d", chapter) + "章\n\n"
+	}
+
+	// project_root 暂用 "." （Phase 1 mock — 项目无文件系统路径绑定）
+	// Phase 2 真实部署时改成从 project_id 查 project table 取 project_root
+	projectRoot := "."
+
+	prosePath := chapterProsePath(projectRoot, chapter)
+
+	// Sprint V1.0.1 P2: per-file mutex 防止与并发 save/delete 交错.
+	defer LockChapterFile(prosePath)()
+
+	// 409 if file exists
+	if _, err := os.Stat(prosePath); err == nil {
+		http.Error(w, fmt.Sprintf(`{"error":"chapter %d already exists"}`, chapter), http.StatusConflict)
+		return
+	}
+
+	if err := os.MkdirAll(filepath.Dir(prosePath), 0o755); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	if err := os.WriteFile(prosePath, []byte(req.Content), 0o644); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+
+	// SQLite metadata upsert (Sprint 15 commit F)
+	charCount := len([]rune(req.Content))
+	if h.meta != nil && req.ProjectID > 0 {
+		relPath := relChapterPath(projectRoot, chapter)
+		_, _ = h.meta.Upsert(r.Context(), req.ProjectID, chapter, req.Title, relPath, charCount)
+	}
+
+	resp := map[string]any{
+		"chapter":     chapter,
+		"title":       req.Title,
+		"char_count":  charCount,
+		"output_path": prosePath,
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
