@@ -21,6 +21,12 @@ import {
     GetChapterContent,
     UpdateChapter,
     DeleteChapter,
+    // Module B: LLM API key 配置
+    SupportedProviders,
+    GetLLMKeys,
+    SetLLMKey,
+    HasLLMKey,
+    ClearLLMKeys,
 } from '../wailsjs/go/main/App';
 import type { main } from '../wailsjs/go/models';
 
@@ -448,6 +454,14 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
     const [error, setError] = useState<string>('');
     const [downloadedPath, setDownloadedPath] = useState<string>('');
 
+    // Module B: LLM API key 配置状态
+    const [llmProviders, setLlmProviders] = useState<string[]>([]);
+    const [llmConfigured, setLlmConfigured] = useState<Set<string>>(new Set());
+    const [llmKeys, setLlmKeys] = useState<Record<string, string>>({});
+    const [llmSaving, setLlmSaving] = useState<Record<string, boolean>>({});
+    const [llmError, setLlmError] = useState<string>('');
+    const [llmSuccess, setLlmSuccess] = useState<string>('');
+
     useEffect(() => {
         (async () => {
             try {
@@ -455,6 +469,17 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
                 setCurrentVer(v);
             } catch {
                 setCurrentVer('未知');
+            }
+        })();
+        // Module B: 加载已配置的 LLM providers
+        (async () => {
+            try {
+                const providers = await SupportedProviders();
+                setLlmProviders(providers);
+                const configured = await GetLLMKeys();
+                setLlmConfigured(new Set(configured ?? []));
+            } catch (e: any) {
+                setLlmError(`加载 LLM keys 失败: ${e?.message ?? e}`);
             }
         })();
     }, []);
@@ -500,6 +525,65 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
         }
     }
 
+    // Module B: LLM key handlers
+    async function doSaveLLMKey(provider: string) {
+        const key = llmKeys[provider]?.trim() ?? '';
+        if (!key) {
+            setLlmError(`${provider}: key 不能为空`);
+            return;
+        }
+        setLlmError('');
+        setLlmSuccess('');
+        setLlmSaving(prev => ({ ...prev, [provider]: true }));
+        try {
+            await SetLLMKey(provider, key);
+            // 清空输入框 + 标记为已配置
+            setLlmKeys(prev => {
+                const next = { ...prev };
+                delete next[provider];
+                return next;
+            });
+            setLlmConfigured(prev => new Set(prev).add(provider));
+            setLlmSuccess(`${provider} 已保存`);
+        } catch (e: any) {
+            setLlmError(`${provider} 保存失败: ${e?.message ?? e}`);
+        } finally {
+            setLlmSaving(prev => ({ ...prev, [provider]: false }));
+        }
+    }
+
+    async function doDeleteLLMKey(provider: string) {
+        if (!confirm(`确认删除 ${provider} 的 API key? 此操作不可恢复!`)) return;
+        setLlmError('');
+        setLlmSuccess('');
+        try {
+            // SetLLMKey(provider, "") 在后端 = 删除该 provider
+            await SetLLMKey(provider, '');
+            setLlmConfigured(prev => {
+                const next = new Set(prev);
+                next.delete(provider);
+                return next;
+            });
+            setLlmSuccess(`${provider} 已删除`);
+        } catch (e: any) {
+            setLlmError(`${provider} 删除失败: ${e?.message ?? e}`);
+        }
+    }
+
+    async function doClearLLMKeys() {
+        if (!confirm('确认清除所有 LLM API keys? 后端 admin key 仍可用, 你的自定义 key 将全部删除.')) return;
+        setLlmError('');
+        setLlmSuccess('');
+        try {
+            await ClearLLMKeys();
+            setLlmConfigured(new Set());
+            setLlmKeys({});
+            setLlmSuccess('已清除所有 LLM keys');
+        } catch (e: any) {
+            setLlmError(`清除失败: ${e?.message ?? e}`);
+        }
+    }
+
     return (
         <div className="modal-bg" onClick={props.onClose}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -512,6 +596,69 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
                     <h3>版本</h3>
                     <p>当前: <strong>{currentVer}</strong></p>
                     <p>后端: <code>{props.backendURL}</code></p>
+                </section>
+
+                <section className="settings-section">
+                    <h3>LLM API Keys</h3>
+                    <p className="settings-help">
+                        每个 provider 的 API key 单独加密存储在本机 (AES-256-GCM + PBKDF2, 机器绑定).
+                        留空 = 保留已配置. 后端 admin key 仍作为 fallback.
+                    </p>
+                    {llmProviders.length === 0 ? (
+                        <p className="info">加载中...</p>
+                    ) : (
+                        <>
+                            <div className="llm-key-list">
+                                {llmProviders.map(p => (
+                                    <div className="llm-key-row" key={p}>
+                                        <div className="llm-key-label">
+                                            <span className="llm-key-name">{p}</span>
+                                            {llmConfigured.has(p) && (
+                                                <span className="llm-key-status">已配置 ✓</span>
+                                            )}
+                                        </div>
+                                        <div className="llm-key-input-group">
+                                            <input
+                                                type="password"
+                                                className="llm-key-input"
+                                                placeholder={llmConfigured.has(p) ? '(已配置, 输入新 key 覆盖)' : '粘贴 API key'}
+                                                value={llmKeys[p] ?? ''}
+                                                onChange={(e) => setLlmKeys(prev => ({ ...prev, [p]: e.target.value }))}
+                                                autoComplete="off"
+                                                spellCheck={false}
+                                            />
+                                            <button
+                                                className="btn primary small"
+                                                onClick={() => doSaveLLMKey(p)}
+                                                disabled={!llmKeys[p]?.trim() || llmSaving[p]}
+                                            >
+                                                {llmSaving[p] ? '保存中...' : '保存'}
+                                            </button>
+                                            <button
+                                                className="btn danger small"
+                                                onClick={() => doDeleteLLMKey(p)}
+                                                disabled={!llmConfigured.has(p)}
+                                                title={llmConfigured.has(p) ? '删除此 provider 的 key' : '未配置, 无需删除'}
+                                            >
+                                                删除
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            {llmConfigured.size > 0 && (
+                                <button
+                                    className="btn danger small"
+                                    onClick={doClearLLMKeys}
+                                    style={{ marginTop: '8px' }}
+                                >
+                                    清除全部
+                                </button>
+                            )}
+                        </>
+                    )}
+                    {llmError && <div className="error" style={{ marginTop: '8px' }}>{llmError}</div>}
+                    {llmSuccess && <div className="info ok" style={{ marginTop: '8px' }}>{llmSuccess}</div>}
                 </section>
 
                 <section className="settings-section">

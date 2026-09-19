@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"desktop-novel2all/internal/secrets"
 	"desktop-novel2all/internal/systray"
 	"desktop-novel2all/internal/update"
 )
@@ -23,7 +25,7 @@ import (
 // 桌面 app 通过 Cloudflare Tunnel 调用 novel2all-go 后端:
 //   - 后端地址: https://api.zxc.im (Phase 0 部署, 公网可达)
 //   - JWT 存储: 本地 SQLite (Phase 2 加入, Phase 1 暂用内存)
-//   - LLM keys: Phase 2 加密存储, Phase 1 暂用 placeholder
+//   - LLM keys: Module B (2026-09-20) AES-256-GCM 加密存 %APPDATA%\novel2all-desktop\llm_keys.enc
 //
 // 所有 API 方法都通过 wails bridge 暴露给前端 (frontend/src/).
 type App struct {
@@ -44,6 +46,10 @@ type App struct {
 	// trayMenuRef 系统托盘引用 (Phase 1.4).
 	// nil = systray 未启用 (开发模式).
 	trayMenuRef *systray.Menu
+
+	// llmSecrets 加密 LLM API key 存储 (Module B).
+	// nil = 初始化失败 (设置页面 LLM 区会显示错误).
+	llmSecrets *secrets.Store
 }
 
 // User 登录用户信息 (Phase 1 简化版).
@@ -113,6 +119,19 @@ func (a *App) startup(ctx context.Context) {
 		a.accessToken = tok
 		a.mu.Unlock()
 		runtime.LogInfo(ctx, fmt.Sprintf("loaded cached access token (%.20s...)", tok))
+	}
+
+	// Module B: 初始化加密 LLM key 存储
+	// 失败不阻塞 startup (UI 会显示"LLM keys 不可用")
+	if path, err := a.llmKeysPath(); err == nil {
+		if store, err := secrets.New(path); err == nil {
+			a.llmSecrets = store
+			runtime.LogInfo(ctx, fmt.Sprintf("llm_keys store ready: %s", path))
+		} else {
+			runtime.LogErrorf(ctx, "llm_keys store init failed: %v", err)
+		}
+	} else {
+		runtime.LogErrorf(ctx, "llm_keys path resolution failed: %v", err)
 	}
 
 	// 启动后台 token 自动续期
@@ -745,4 +764,98 @@ func (a *App) ApplyUpdate(installerPath string) error {
 	// 启动 installer 成功, 退出当前 app 让 NSIS 替换 binary
 	runtime.Quit(a.ctx)
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Module B: LLM API key 加密存储 (wails-bound methods)
+// ---------------------------------------------------------------------------
+
+// llmKeysPath 返 LLM key 加密文件的完整路径.
+//
+// Windows: %APPDATA%\novel2all-desktop\llm_keys.enc
+// 其他:    ~/.config/novel2all-desktop/llm_keys.enc
+//
+// 与 tokenPath() 同结构 (Phase 1 一致性).
+func (a *App) llmKeysPath() (string, error) {
+	return secrets.DefaultPath()
+}
+
+// supportedProviders 是 UI 显示的 provider 列表 (硬编码, 跟后端 model_mapping 一致).
+//
+// 暂时不在文件里读取, 因为 model_mapping 是 server 端配置, client 这边 hard-code 更稳.
+// 后续可改成 /api/llm/providers 端点返回.
+var supportedProviders = []string{"dashscope", "deepseek", "minimax"}
+
+// SupportedProviders 返 UI 显示的 provider 列表 (前端 hard-code 不安全, 后端权威).
+func (a *App) SupportedProviders() []string {
+	out := make([]string, len(supportedProviders))
+	copy(out, supportedProviders)
+	return out
+}
+
+// GetLLMKeys 返已配置的 provider 名称列表 (按字母序).
+//
+// 只返名字, 不返 key 内容 (防御性: 即使调用方有 Wails bridge access, 也不暴露明文).
+// 前端用此决定每个 provider 输入框的"已配置 ✓" badge.
+func (a *App) GetLLMKeys() ([]string, error) {
+	if a.llmSecrets == nil {
+		return nil, fmt.Errorf("LLM key 存储未初始化")
+	}
+	names, err := a.llmSecrets.List()
+	if err != nil {
+		return nil, fmt.Errorf("读取 LLM keys 失败: %w", err)
+	}
+	return names, nil
+}
+
+// SetLLMKey 设置单个 provider 的 API key. 空 key 等同于删除.
+//
+// 立即加密落盘. 失败返 error (前端显示).
+func (a *App) SetLLMKey(provider, key string) error {
+	if a.llmSecrets == nil {
+		return fmt.Errorf("LLM key 存储未初始化")
+	}
+	provider = strings.TrimSpace(provider)
+	key = strings.TrimSpace(key)
+	if provider == "" {
+		return fmt.Errorf("provider 不能为空")
+	}
+	// 可选: 限制 provider 在 supportedProviders (防 typo 存到无效 key)
+	valid := false
+	for _, p := range supportedProviders {
+		if p == provider {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fmt.Errorf("不支持的 provider: %s (支持: %v)", provider, supportedProviders)
+	}
+	if err := a.llmSecrets.Set(provider, key); err != nil {
+		return fmt.Errorf("保存失败: %w", err)
+	}
+	runtime.LogInfo(a.ctx, fmt.Sprintf("llm key set: %s (len=%d)", provider, len(key)))
+	return nil
+}
+
+// ClearLLMKeys 删除所有 LLM keys (重置 / 隐私清理).
+//
+// 删除整个加密文件, 不只是清空 map. 下次 Set 重新生成.
+func (a *App) ClearLLMKeys() error {
+	if a.llmSecrets == nil {
+		return fmt.Errorf("LLM key 存储未初始化")
+	}
+	if err := a.llmSecrets.Clear(); err != nil {
+		return fmt.Errorf("清除失败: %w", err)
+	}
+	runtime.LogInfo(a.ctx, "llm keys cleared")
+	return nil
+}
+
+// HasLLMKey 检查指定 provider 是否已配置 key (UI 用).
+func (a *App) HasLLMKey(provider string) (bool, error) {
+	if a.llmSecrets == nil {
+		return false, nil // 静默 false, UI 当作"未配置"
+	}
+	return a.llmSecrets.Has(provider)
 }
