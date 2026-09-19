@@ -1,160 +1,167 @@
-# golangci-lint 配置
-# 与 GitHub Actions CI lint job 保持一致（v1.61.0）
+# golangci-lint 配置 (v2 schema)
+# 与 GitHub Actions CI lint job 保持一致 (golangci-lint v2.13.2)
 #
-# 用法：
-#   golangci-lint run                 # 跑所有启用规则
-#   golangci-lint run --fix           # 自动修复（gofmt/gosimple 等）
-#   golangci-lint run ./internal/...  # 跑子目录
+# 迁移自 v1.61.0 关键变化 (2026-09-20):
+#   - 必须加 version: "2"
+#   - output.formats 改为 map (e.g. 'text:' not '- format: text')
+#   - output.print-issued-lines/print-linter-name → 移到 text 块 settings (或用默认)
+#   - linters.disable-all → linters.default: none
+#   - gofmt/goimports 等 formatter 从 linters.enable 移到 formatters.enable
+#   - issues.exclude-dirs/exclude-files → linters.exclusions.paths
+#   - issues.exclude-rules → linters.exclusions.rules
+#   - issues.exclude → linters.exclusions.rules
+#   - issues.max-issues-per-linter → linters.exclusions.max-issues
+#   - 合并的 linter: stylecheck/gosimple/staticcheck → staticcheck
+#
+# 迁移命令: golangci-lint migrate (注释不会迁移, 需手动)
+# 详细: https://golangci-lint.run/product/migration-guide/
+
+version: "2"
 
 run:
-  # 超时（CI 用 5m）
-  timeout: 5m
-
-  # 允许并行 runner
-  allow-parallel-runners: true
-
-  # 默认要跑 build（先编译）
-  # 注意：v1.61+ 用 issues.exclude-dirs/files 而不是 run.skip-dirs/files
+  # 默认要跑 build (先编译)
   build-tags:
     - ""
   modules-download-mode: readonly
 
-# 输出格式
+  # 允许并行 runner
+  allow-parallel-runners: true
+
+# 输出格式 (v2 schema: map not slice)
+# v1 "colored-line-number" → v2 "text" (colors 默认 true)
+# print-issued-lines / print-linter-name 在 v2 默认 true (不用设)
 output:
   formats:
-    - format: colored-line-number
+    text:
       path: stdout
-  print-issued-lines: true
-  print-linter-name: true
 
-# Linter 配置
-linters-settings:
-  # govet 标准
-  govet:
-    enable-all: true
-    disable:
-      - shadow       # 误报较多，按需开启
-      - fieldalignment # 性能优化，不强制
-
-  # staticcheck
-  staticcheck:
-    checks: ["all"]
-
-  # errcheck：检查未处理的 error
-  # ⚠️ check-blank: false — 允许 `_ = someFunc()` 模式
-  #   理由：HTTP 响应已发送后再 Encode 失败无意义（客户端可能已断开）
-  #   严格项目可改 true，但每个 `_ =` 都要替换为显式处理
-  errcheck:
-    check-blank: false
-    check-type-assertions: true
-
-  # gosimple：代码简化建议（含 S1008 等）
-  gosimple:
-    checks: ["all"]
-
-  # revive：替代 golint，更现代的 style 检查
-  # ⚠️ rule 名字必须用 enum 列出的：var-naming / dot-imports / exported / if-return / 等
-  revive:
-    rules:
-      - name: var-naming
-      - name: package-comments
-      - name: exported
-      - name: dot-imports
-      - name: error-return       # ⚠️ 不是 error-returned
-      - name: error-strings
-      - name: if-return
-      - name: redundant-import-alias  # ⚠️ 不是 redundant-import-aliases
-
-  # gocritic：额外风格检查
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
-    disabled-checks:
-      - hugeParam
-      - rangeValCopy
-
-  # gocyclo：圈复杂度（避免函数过长）
-  gocyclo:
-    min-complexity: 15
-
-  # misspell：拼写检查
-  misspell:
-    locale: US
-    ignore-words:
-      - cancelled
-
-  # goconst：重复字符串 → 常量
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-
-  # errorlint：用 %w 包装 error
-  errorlint:
-    asserts: true
-    comparison: true
-
-# 启用的 linter 列表
+# Linter 配置 (linters.settings 在 v2 仍是同一段)
 linters:
-  disable-all: true
+  settings:
+    # govet 标准
+    govet:
+      enable-all: true
+      disable:
+        - shadow              # 误报较多, 按需开启
+        - fieldalignment      # 性能优化, 不强制
+
+    # staticcheck (v2 已合并原 stylecheck/gosimple/staticcheck)
+    staticcheck:
+      checks: ["all"]
+
+    # errcheck: 检查未处理的 error
+    # ⚠️ check-blank: false — 允许 `_ = someFunc()` 模式
+    #   理由: HTTP 响应已发送后再 Encode 失败无意义 (客户端可能已断开)
+    errcheck:
+      check-blank: false
+      check-type-assertions: true
+
+    # revive: 替代 golint, 更现代的 style 检查
+    # ⚠️ rule 名字必须用 enum 列出的: var-naming / dot-imports / exported / if-return / 等
+    revive:
+      rules:
+        - name: var-naming
+        - name: package-comments
+        - name: exported
+        - name: dot-imports
+        - name: error-return          # ⚠️ 不是 error-returned
+        - name: error-strings
+        - name: if-return
+        - name: redundant-import-alias  # ⚠️ 不是 redundant-import-aliases
+
+    # gocritic: 额外风格检查
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+
+    # gocyclo: 圈复杂度 (避免函数过长)
+    gocyclo:
+      min-complexity: 15
+
+    # misspell: 拼写检查
+    misspell:
+      locale: US
+      ignore-rules:
+        - cancelled
+
+    # goconst: 重复字符串 → 常量
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+
+    # errorlint: 用 %w 包装 error
+    errorlint:
+      asserts: true
+      comparison: true
+
+  # 启用的 linter 列表 (v2: default: none + enable 列表, 取代 v1 的 disable-all: true)
+  default: none
   enable:
-    # 默认（golangci-lint 默认启用的）
+    # 默认 (golangci-lint 默认启用)
     - errcheck
     - gosimple
     - govet
     - ineffassign
-    - staticcheck
+    - staticcheck         # v2 已合并原 stylecheck (其 checks 已配上面)
     - unused
 
     # 额外启用
-    - bodyclose     # HTTP body 必须关闭（不在 linters-settings 下）
-    - errorlint     # %w 包装
-    - gocritic      # 风格/性能
-    - gocyclo       # 圈复杂度
-    - goconst       # 重复字面量
-    - misspell      # 拼写
-    - revive        # 风格
-    - gofmt         # 格式
-    - goimports     # import 排序
+    - bodyclose           # HTTP body 必须关闭
+    - errorlint           # %w 包装
+    - gocritic            # 风格/性能
+    - gocyclo             # 圈复杂度
+    - goconst             # 重复字面量
+    - misspell            # 拼写
+    - revive              # 风格
 
-# 严重级别问题
-issues:
-  # 同文件多处相同问题 → 只报一次
-  max-same-issues: 5
+  # 排除目录/文件 (v2: linters.exclusions.paths 取代 issues.exclude-dirs)
+  exclusions:
+    paths:
+      - vendor/
+      - bin/
+      - data/
 
-  # 0 issue 政策（max-issues-per-linter 已合并所有 per-dir）
-  max-issues-per-linter: 0
+    # 排除规则 (v2: linters.exclusions.rules 取代 issues.exclude-rules)
+    rules:
+      # 测试文件放宽要求
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - goconst
+          - revive
+        text: "should have comment|exported"
 
-  # 排除目录/文件（v1.61+ 用 exclude-* 不是 skip-*）
-  exclude-dirs:
-    - vendor
-    - bin
-    - data
-  exclude-files:
-    - ".*\\.pb\\.go$"
-    - ".*_mock\\.go$"
+      # examples 放宽
+      - path: examples/
+        linters:
+          - gocyclo
+          - revive
 
-  # 排除规则
-  exclude-rules:
-    # 测试文件放宽要求
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - errcheck
-        - goconst
-        - revive
-      text: "should have comment|exported"
+      # 完全排除的检查 (误报或暂时不处理)
+      - path: (.+)\.go$
+        text: "composites"
+      - path: (.+)\.go$
+        text: "lll"
+      - path: (.+)\.go$
+        text: "unnamedResult"
+      - path: (.+)\.go$
+        text: "G104"
 
-    # examples 放宽
-    - path: examples/
-      linters:
-        - gocyclo
-        - revive
+# Formatters 段 (v2 新增, 移出 linters.enable)
+formatters:
+  enable:
+    - gofmt
+    - goimports
 
-  # 完全排除的检查（误报或暂时不处理）
-  exclude:
-    - "composites"  # interface 兼容
-    - "lll"         # 行长度
-    - "unnamedResult" # v1.61.0 误报: 单 struct 返回被识别为 unnamed
-    - "G104"        # gosimple S1008 之类（按需开）
+  settings:
+    gofmt:
+      simplify: false
+
+# v1 旧的 issues.max-same-issues 移除 — v2 默认行为: 同文件多处相同问题只报一次
+# (不需配置)
