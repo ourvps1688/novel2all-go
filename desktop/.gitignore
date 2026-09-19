@@ -1,0 +1,39 @@
+# Wails build artifacts
+build/bin
+build/darwin
+build/linux
+
+# Frontend
+node_modules
+frontend/dist
+frontend/node_modules
+
+# Build cache / generated
+frontend/package.json.md5
+frontend/wailsjs
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test / coverage
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Secrets (Phase 2+)
+.env
+.env.local
+.env.*.local

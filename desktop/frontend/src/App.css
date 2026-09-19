@@ -1,0 +1,288 @@
+/* Novel2ALL Desktop - Phase 1 UI */
+
+* {
+    box-sizing: border-box;
+}
+
+html, body, #root, #App {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
+
+#App {
+    display: flex;
+    flex-direction: column;
+    background: #fafafa;
+    color: #2c3e50;
+    padding: 20px 32px;
+}
+
+/* ---------- 顶部 ---------- */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #1a1a1a;
+}
+
+.header h1 span {
+    color: #6366f1; /* 紫色 accent on 数字 2 */
+}
+
+.subtitle {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.user-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+}
+
+/* ---------- 状态栏 ---------- */
+.status-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    margin: 14px 0;
+    background: #f3f4f6;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.status-bar code {
+    background: #e5e7eb;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.health {
+    margin-left: auto;
+    font-weight: 500;
+}
+
+/* ---------- 主区域 (左 sidebar + 右 content) ---------- */
+.main {
+    display: flex;
+    flex: 1;
+    gap: 16px;
+    overflow: hidden;
+}
+
+.sidebar {
+    width: 280px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.sidebar h3 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    color: #374151;
+}
+
+.sidebar ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar li {
+    padding: 10px 12px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.sidebar li:hover {
+    background: #f3f4f6;
+}
+
+.sidebar li.selected {
+    background: #6366f1;
+    color: #fff;
+}
+
+.sidebar li.selected small {
+    color: #e0e7ff;
+}
+
+.sidebar li strong {
+    display: block;
+    font-size: 14px;
+}
+
+.sidebar li small {
+    display: block;
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.content {
+    flex: 1;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 24px;
+    overflow-y: auto;
+}
+
+.content h3 {
+    margin: 0 0 16px;
+    font-size: 16px;
+    color: #1f2937;
+}
+
+.content table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.content th {
+    text-align: left;
+    padding: 8px 12px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.content td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.content tr:hover {
+    background: #f9fafb;
+}
+
+/* ---------- 通用 ---------- */
+.empty, .placeholder {
+    color: #9ca3af;
+    font-size: 13px;
+    text-align: center;
+    padding: 40px 20px;
+}
+
+/* ---------- 登录框 ---------- */
+.login-box {
+    width: 360px;
+    margin: 32px auto;
+    padding: 32px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+.login-box h2 {
+    margin: 0 0 8px;
+    font-size: 20px;
+    color: #1a1a1a;
+}
+
+.login-box .hint {
+    margin: 0 0 16px;
+    font-size: 12px;
+    color: #6b7280;
+    background: #fef3c7;
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+.login-box input {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.login-box input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* ---------- 按钮 ---------- */
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    background: #e5e7eb;
+    color: #374151;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+}
+
+.btn:hover:not(:disabled) {
+    background: #d1d5db;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn.primary {
+    background: #6366f1;
+    color: #fff;
+    width: 100%;
+    padding: 12px;
+    font-weight: 500;
+}
+
+.btn.primary:hover:not(:disabled) {
+    background: #4f46e5;
+}
+
+.btn.small {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+/* ---------- 错误 ---------- */
+.error {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: #fee2e2;
+    color: #b91c1c;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+/* ---------- Footer ---------- */
+.footer {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+    font-size: 11px;
+    color: #9ca3af;
+    text-align: center;
+}

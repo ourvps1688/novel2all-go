@@ -1,0 +1,112 @@
+# GitHub Actions - 自动 build Novel2ALL Windows .exe + 发布 Release
+#
+# 触发: push tag v* (如 v1.0.0, v1.0.1)
+# 产出: build/bin/Novel2ALL.exe (~17 MB)
+# 自动: 创建 GitHub Release + 上传 .exe + 自动生成 release notes
+#
+# 用法: git tag v1.0.0 && git push origin v1.0.0
+#       GitHub Actions 自动跑这个 workflow, 完成后桌面 app 用户收到更新提示
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:  # 允许手动触发 (Settings → Actions → Run workflow)
+
+permissions:
+  contents: write  # 创建 release + 上传 assets
+
+jobs:
+  build-windows:
+    name: Build Novel2ALL Windows .exe
+    runs-on: windows-latest  # 必须 Windows 才能 build Windows 二进制
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 装 Go 1.27
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      # 3. 装 Node.js 20 LTS
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      # 4. npm 镜像加速 (中国用户友好)
+      - name: Set npm mirror
+        shell: bash
+        run: npm config set registry https://registry.npmmirror.com
+        working-directory: desktop/frontend
+
+      # 5. 装 Wails CLI
+      - name: Install Wails
+        shell: bash
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+
+      # 6. 拉 Go 依赖
+      - name: Go mod tidy
+        shell: bash
+        run: go mod tidy
+        working-directory: desktop
+
+      # 7. Build Novel2ALL Windows binary + NSIS installer
+      - name: Build Novel2ALL Windows .exe
+        shell: bash
+        run: wails build -platform windows/amd64 -clean -nsis -trimpath -ldflags="-s -w"
+        working-directory: desktop
+
+      # 8. 验证产物
+      - name: Verify output
+        shell: bash
+        run: |
+          echo "=== Build output ==="
+          ls -lh desktop/build/bin/ 2>&1 || dir desktop\build\bin\ 2>&1
+          echo "=== SHA256 ==="
+          sha256sum desktop/build/bin/Novel2ALL.exe 2>&1 || certUtil -hashfile desktop\build\bin\Novel2ALL.exe SHA256
+
+      # 9. 上传为 GitHub Release asset
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Novel2ALL ${{ github.ref_name }}"
+          body: |
+            ## Novel2ALL Desktop ${{ github.ref_name }}
+
+            ### 变更
+
+            - 见 [commit log](https://github.com/${{ github.repository }}/compare/${{ github.event.before_compare }}...${{ github.ref_name }})
+            - 见 `docs/desktop-development.md` 了解项目架构
+
+            ### 安装
+
+            1. 下载 `Novel2ALL.exe` (NSIS installer)
+            2. 双击安装
+            3. 应用自动从 GitHub 检查更新
+          draft: false
+          prerelease: false
+          files: |
+            desktop/build/bin/Novel2ALL.exe
+            desktop/build/bin/Novel2ALL-Setup.exe
+
+      # 10. 上传 binary 作为 workflow artifact (供 workflow_dispatch 测试)
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Novel2ALL-windows-amd64
+          path: |
+            desktop/build/bin/Novel2ALL.exe
+            desktop/build/bin/Novel2ALL-Setup.exe
+          retention-days: 30
+          if-no-files-found: warn
