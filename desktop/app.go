@@ -470,9 +470,9 @@ func (a *App) DeleteProject(id int64) error {
 	return nil
 }
 
-// ListChapters 调后端 GET /api/projects/{id}/chapters.
+// ListChapters 调后端 GET /api/chapters?project_id=N.
 func (a *App) ListChapters(projectID int64) ([]Chapter, error) {
-	resp, err := a.doRequest(http.MethodGet, fmt.Sprintf("/api/projects/%d/chapters", projectID), nil)
+	resp, err := a.doRequest(http.MethodGet, fmt.Sprintf("/api/chapters?project_id=%d", projectID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -491,6 +491,150 @@ func (a *App) ListChapters(projectID int64) ([]Chapter, error) {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 	return out.Chapters, nil
+}
+
+// ---------------------------------------------------------------------------
+// Module A: Chapter CRUD (后端 chapter endpoint 代理)
+// ---------------------------------------------------------------------------
+
+// ChapterInput 创建/更新章节的请求体 (Phase 1: 简单结构).
+type ChapterInput struct {
+	ProjectID int64  `json:"project_id"`
+	Number    int    `json:"number"`
+	Title     string `json:"title,omitempty"`
+	Content   string `json:"content,omitempty"`
+}
+
+// ChapterContent 后端 chapter content endpoint 响应.
+type ChapterContent struct {
+	Chapter   int    `json:"chapter"`
+	Filename  string `json:"filename"`
+	Content   string `json:"content"`
+	CharCount int    `json:"char_count"`
+	FirstLine string `json:"first_line"`
+}
+
+// CreateChapter 调后端 POST /api/chapter/{N} 创建新章节.
+//
+// number 必须 > 0. 同一 number 已存在返 409 Conflict.
+func (a *App) CreateChapter(input ChapterInput) (*Chapter, error) {
+	if input.Number <= 0 {
+		return nil, fmt.Errorf("chapter number 必须 > 0")
+	}
+	if input.ProjectID <= 0 {
+		return nil, fmt.Errorf("project_id 必须 > 0")
+	}
+	resp, err := a.doRequest(http.MethodPost, fmt.Sprintf("/api/chapter/%d", input.Number), input)
+	if err != nil {
+		return nil, fmt.Errorf("创建章节失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusCreated, http.StatusOK, http.StatusFound:
+	default:
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("创建失败 (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+	var respBody struct {
+		Chapter   int    `json:"chapter"`
+		Title     string `json:"title"`
+		CharCount int    `json:"char_count"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
+		// 302 + 空 body fallback: 重查 list 匹配 number
+		chapters, listErr := a.ListChapters(input.ProjectID)
+		if listErr != nil {
+			return nil, fmt.Errorf("decode: %w (fallback list 失败: %v)", err, listErr)
+		}
+		for _, c := range chapters {
+			if c.Number == input.Number {
+				return &c, nil
+			}
+		}
+		return nil, fmt.Errorf("decode: %w (fallback list 也找不到 number=%d)", err, input.Number)
+	}
+	// 构造 Chapter 响应
+	return &Chapter{
+		ProjectID: input.ProjectID,
+		Number:    respBody.Chapter,
+		Title:     respBody.Title,
+		CharCount: respBody.CharCount,
+		Filename:  fmt.Sprintf("第%03d章.md", respBody.Chapter),
+	}, nil
+}
+
+// GetChapterContent 调后端 GET /api/chapter/{N}/content?project_id=M 取完整 markdown.
+func (a *App) GetChapterContent(projectID int64, number int) (*ChapterContent, error) {
+	resp, err := a.doRequest(http.MethodGet, fmt.Sprintf("/api/chapter/%d/content?project_id=%d", number, projectID), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+	}
+	var content ChapterContent
+	if err := json.NewDecoder(resp.Body).Decode(&content); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return &content, nil
+}
+
+// UpdateChapter 调后端 POST /api/chapter/{N}/save 更新章节内容 + title.
+func (a *App) UpdateChapter(input ChapterInput) (*Chapter, error) {
+	if input.Number <= 0 {
+		return nil, fmt.Errorf("chapter number 必须 > 0")
+	}
+	if input.ProjectID <= 0 {
+		return nil, fmt.Errorf("project_id 必须 > 0")
+	}
+	body := map[string]any{
+		"project_id": input.ProjectID,
+		"title":      input.Title,
+		"content":    input.Content,
+	}
+	resp, err := a.doRequest(http.MethodPost, fmt.Sprintf("/api/chapter/%d/save", input.Number), body)
+	if err != nil {
+		return nil, fmt.Errorf("更新章节失败: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("更新失败 (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+	// save 返回 {"chapter":N, "char_count":N, "output_path":"..."}
+	var respBody struct {
+		Chapter   int `json:"chapter"`
+		CharCount int `json:"char_count"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return &Chapter{
+		ProjectID: input.ProjectID,
+		Number:    respBody.Chapter,
+		Title:     input.Title,
+		CharCount: respBody.CharCount,
+		Filename:  fmt.Sprintf("第%03d章.md", respBody.Chapter),
+	}, nil
+}
+
+// DeleteChapter 调后端 DELETE /api/chapter/{N}?project_id=M 删除章节文件 + metadata.
+func (a *App) DeleteChapter(projectID int64, number int) error {
+	resp, err := a.doRequest(http.MethodDelete, fmt.Sprintf("/api/chapter/%d?project_id=%d", number, projectID), nil)
+	if err != nil {
+		return fmt.Errorf("删除章节失败: %w", err)
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusNoContent, http.StatusFound, http.StatusSeeOther:
+	default:
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("删除失败 (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
