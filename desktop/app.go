@@ -372,6 +372,73 @@ func (a *App) GetProject(id int64) (*Project, error) {
 	return &p, nil
 }
 
+// ---------------------------------------------------------------------------
+// Module F: Project CRUD
+// ---------------------------------------------------------------------------
+
+// ProjectInput 创建/更新 project 的请求体 (Phase 1: 简单结构, Phase 2 扩展 genre/slug 等).
+type ProjectInput struct {
+	Name        string `json:"name"`
+	Slug        string `json:"slug,omitempty"`
+	Description string `json:"description,omitempty"`
+	Genre       string `json:"genre,omitempty"`
+}
+
+// CreateProject 调后端 POST /api/projects.
+func (a *App) CreateProject(input ProjectInput) (*Project, error) {
+	resp, err := a.doRequest(http.MethodPost, "/api/projects", input)
+	if err != nil {
+		return nil, fmt.Errorf("创建项目失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("创建失败 (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+	var p Project
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return &p, nil
+}
+
+// UpdateProject 调后端 PUT /api/projects/{id}.
+func (a *App) UpdateProject(id int64, input ProjectInput) (*Project, error) {
+	resp, err := a.doRequest(http.MethodPut, fmt.Sprintf("/api/projects/%d", id), input)
+	if err != nil {
+		return nil, fmt.Errorf("更新项目失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("更新失败 (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+	var p Project
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return &p, nil
+}
+
+// DeleteProject 调后端 DELETE /api/projects/{id}.
+//
+// 删除后项目消失 (Phase 1: 后端 soft delete 未实现 → 硬删除).
+func (a *App) DeleteProject(id int64) error {
+	resp, err := a.doRequest(http.MethodDelete, fmt.Sprintf("/api/projects/%d", id), nil)
+	if err != nil {
+		return fmt.Errorf("删除项目失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("删除失败 (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
 // ListChapters 调后端 GET /api/projects/{id}/chapters.
 func (a *App) ListChapters(projectID int64) ([]Chapter, error) {
 	resp, err := a.doRequest(http.MethodGet, fmt.Sprintf("/api/projects/%d/chapters", projectID), nil)

@@ -381,3 +381,90 @@ html, body, #root, #App {
     white-space: pre-wrap;
     font-family: 'Consolas', 'Monaco', monospace;
 }
+
+/* ---------- Phase F: Project CRUD ---------- */
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.sidebar-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-tiny {
+    padding: 2px 6px;
+    font-size: 11px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-tiny:hover {
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+}
+
+.btn-tiny.danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+}
+
+.project-actions {
+    margin-top: 4px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.sidebar li:hover .project-actions {
+    opacity: 1;
+}
+
+/* ---------- Phase F: Project Modal ---------- */
+.form-label {
+    display: block;
+    margin-bottom: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.form-label input,
+.form-label textarea {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.form-label input:focus,
+.form-label textarea:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+.form-label textarea {
+    resize: vertical;
+    font-family: inherit;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}

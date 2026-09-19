@@ -13,6 +13,10 @@ import {
     CurrentVersion,
     DownloadUpdate,
     ApplyUpdate,
+    CreateProject,
+    UpdateProject,
+    DeleteProject,
+    GetProject,
 } from '../wailsjs/go/main/App';
 import type { main } from '../wailsjs/go/models';
 
@@ -33,6 +37,12 @@ function App() {
 
     // 设置页可见性
     const [showSettings, setShowSettings] = useState(false);
+
+    // 项目 Modal (Phase F: CRUD)
+    const [projectModal, setProjectModal] = useState<{
+        mode: 'create' | 'edit' | null;
+        project?: Project;
+    }>({ mode: null });
 
     // 后端连接状态
     const [backendURL, setBackendURL] = useState<string>('');
@@ -108,6 +118,33 @@ function App() {
             setProjects(list ?? []);
         } catch (e: any) {
             setError(`获取项目失败: ${e?.message ?? e}`);
+        }
+    }
+
+    // Phase F: 项目 CRUD
+    function openProjectModal(mode: 'create' | 'edit', project?: Project) {
+        setProjectModal({ mode, project });
+        setError('');
+    }
+
+    function closeProjectModal() {
+        setProjectModal({ mode: null });
+    }
+
+    async function deleteProject(p: Project) {
+        if (!confirm(`确认删除项目 "${p.name}" (id=${p.id})? 此操作不可恢复!`)) {
+            return;
+        }
+        try {
+            await DeleteProject(p.id);
+            // 删除后如果当前选中此项目, 清除选择
+            if (selectedProject?.id === p.id) {
+                setSelectedProject(null);
+                setChapters([]);
+            }
+            await refreshProjects();
+        } catch (e: any) {
+            setError(`删除项目失败: ${e?.message ?? e}`);
         }
     }
 
@@ -198,7 +235,25 @@ function App() {
             <div className="main">
                 {/* 左: 项目列表 */}
                 <div className="sidebar">
-                    <h3>📚 项目 ({projects.length})</h3>
+                    <div className="sidebar-header">
+                        <h3>📚 项目 ({projects.length})</h3>
+                        <div className="sidebar-actions">
+                            <button
+                                className="btn small"
+                                onClick={() => openProjectModal('create')}
+                                title="新建项目"
+                            >
+                                ➕
+                            </button>
+                            <button
+                                className="btn small"
+                                onClick={refreshProjects}
+                                title="刷新"
+                            >
+                                🔄
+                            </button>
+                        </div>
+                    </div>
                     {projects.length === 0 ? (
                         <p className="empty">暂无项目</p>
                     ) : (
@@ -211,6 +266,18 @@ function App() {
                                 >
                                     <strong>{p.name}</strong>
                                     <small>{p.genre || '未分类'} · #{p.id}</small>
+                                    <div className="project-actions">
+                                        <button
+                                            className="btn-tiny"
+                                            onClick={(e) => { e.stopPropagation(); openProjectModal('edit', p); }}
+                                            title="编辑"
+                                        >✎</button>
+                                        <button
+                                            className="btn-tiny danger"
+                                            onClick={(e) => { e.stopPropagation(); deleteProject(p); }}
+                                            title="删除"
+                                        >🗑</button>
+                                    </div>
                                 </li>
                             ))}
                         </ul>
@@ -252,6 +319,18 @@ function App() {
                     )}
                 </div>
             </div>
+
+            {projectModal.mode && (
+                <ProjectModal
+                    mode={projectModal.mode}
+                    project={projectModal.project}
+                    onClose={closeProjectModal}
+                    onSaved={async () => {
+                        closeProjectModal();
+                        await refreshProjects();
+                    }}
+                />
+            )}
 
             <div className="footer">
                 <span>Novel2ALL Desktop · Phase 1 · Backend: {backendURL}</span>
@@ -376,6 +455,100 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
                 </section>
 
                 {error && <div className="error">{error}</div>}
+            </div>
+        </div>
+    );
+}
+
+// ProjectModal 项目创建/编辑模态 (Phase F: Project CRUD).
+//
+// 调用: CreateProject (mode='create') 或 UpdateProject (mode='edit').
+// onSaved 回调触发 refreshProjects + 关闭 modal.
+function ProjectModal(props: {
+    mode: 'create' | 'edit';
+    project?: Project;
+    onClose: () => void;
+    onSaved: () => void;
+}) {
+    const [name, setName] = useState(props.project?.name ?? '');
+    const [description, setDescription] = useState(props.project?.description ?? '');
+    const [genre, setGenre] = useState(props.project?.genre ?? '');
+    const [saving, setSaving] = useState(false);
+    const [err, setErr] = useState('');
+
+    async function save() {
+        if (!name.trim()) {
+            setErr('项目名称不能为空');
+            return;
+        }
+        setSaving(true);
+        setErr('');
+        try {
+            const input = {
+                name: name.trim(),
+                description: description.trim(),
+                genre: genre.trim(),
+            };
+            if (props.mode === 'create') {
+                await CreateProject(input);
+            } else if (props.project) {
+                await UpdateProject(props.project.id, input);
+            }
+            props.onSaved();
+        } catch (e: any) {
+            setErr(`保存失败: ${e?.message ?? e}`);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div className="modal-bg" onClick={props.onClose}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h2>{props.mode === 'create' ? '➕ 新建项目' : '✎ 编辑项目'}</h2>
+                    <button className="btn" onClick={props.onClose}>✕</button>
+                </div>
+
+                <div className="settings-section">
+                    <label className="form-label">
+                        项目名称 *
+                        <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="我的小说"
+                            autoFocus
+                        />
+                    </label>
+                    <label className="form-label">
+                        简介
+                        <textarea
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="一句话描述你的小说..."
+                            rows={3}
+                        />
+                    </label>
+                    <label className="form-label">
+                        类型
+                        <input
+                            type="text"
+                            value={genre}
+                            onChange={(e) => setGenre(e.target.value)}
+                            placeholder="玄幻 / 都市 / 科幻 / ..."
+                        />
+                    </label>
+                </div>
+
+                {err && <div className="error">{err}</div>}
+
+                <div className="modal-footer">
+                    <button className="btn" onClick={props.onClose}>取消</button>
+                    <button className="btn primary" onClick={save} disabled={saving}>
+                        {saving ? '保存中...' : '保存'}
+                    </button>
+                </div>
             </div>
         </div>
     );
