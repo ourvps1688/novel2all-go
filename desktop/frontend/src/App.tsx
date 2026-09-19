@@ -164,40 +164,37 @@ function App() {
         return (
             <div id="App">
                 <div className="header">
-                    <h1>Novel2ALL</h1>
+                    <h1><span className="logo-accent">Novel</span>2ALL</h1>
                     <p className="subtitle">本地优先 + 云端同步的小说创作工具</p>
                 </div>
 
-                <div className="status-bar">
-                    <span>后端:</span>
-                    <code>{backendURL || '...'}</code>
-                    <span className="health">{healthMsg}</span>
-                </div>
-
-                <div className="login-box">
-                    <h2>登录</h2>
-                    <p className="hint">Phase 1 简化版: 任何用户名密码都接受 (mock)</p>
-                    <input
-                        type="text"
-                        placeholder="用户名"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        autoComplete="username"
-                        disabled={loading}
-                    />
-                    <input
-                        type="password"
-                        placeholder="密码"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        autoComplete="current-password"
-                        disabled={loading}
-                        onKeyDown={(e) => e.key === 'Enter' && doLogin()}
-                    />
-                    <button className="btn primary" onClick={doLogin} disabled={loading}>
-                        {loading ? '登录中...' : '登录'}
-                    </button>
-                    {error && <div className="error">{error}</div>}
+                <div className="login-container">
+                    <div className="login-box">
+                        <h2><span className="logo-accent">Novel</span>2ALL</h2>
+                        <p className="subtitle">登录以继续</p>
+                        <p className="hint">Phase 1 mock: 任何用户名密码都接受</p>
+                        <input
+                            type="text"
+                            placeholder="用户名"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            autoComplete="username"
+                            disabled={loading}
+                        />
+                        <input
+                            type="password"
+                            placeholder="密码"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            autoComplete="current-password"
+                            disabled={loading}
+                            onKeyDown={(e) => e.key === 'Enter' && doLogin()}
+                        />
+                        <button className="btn primary" onClick={doLogin} disabled={loading}>
+                            {loading ? '登录中...' : '登录'}
+                        </button>
+                        {error && <div className="error">{error}</div>}
+                    </div>
                 </div>
 
                 <div className="footer">
@@ -210,10 +207,15 @@ function App() {
     return (
         <div id="App">
             <div className="header">
-                <h1>Novel2ALL</h1>
+                <h1><span className="logo-accent">Novel</span>2ALL</h1>
                 <div className="user-bar">
-                    <span>👤 {user?.username ?? '?'} ({user?.role ?? '?'})</span>
-                    <button className="btn" onClick={() => setShowSettings(true)}>⚙️ 设置</button>
+                    {user && (
+                        <>
+                            <span>👤 {user.username}</span>
+                            <span className="role">{user.role}</span>
+                        </>
+                    )}
+                    <button className="btn" onClick={() => setShowSettings(true)}>⚙ 设置</button>
                     <button className="btn" onClick={doLogout}>登出</button>
                 </div>
             </div>
@@ -228,54 +230,56 @@ function App() {
             <div className="status-bar">
                 <span>后端:</span>
                 <code>{backendURL}</code>
-                <span className="health">{healthMsg}</span>
-                <button className="btn small" onClick={refreshProjects}>🔄 刷新项目</button>
+                <span className={`health ${healthMsg.includes('OK') ? 'ok' : ''}`}>{healthMsg}</span>
+                <button className="btn small" onClick={refreshProjects} title="刷新项目列表">🔄 刷新</button>
             </div>
 
             <div className="main">
-                {/* 左: 项目列表 */}
+                {/* 左: 项目列表 (Stripe-style compact rows) */}
                 <div className="sidebar">
                     <div className="sidebar-header">
-                        <h3>📚 项目 ({projects.length})</h3>
+                        <h3>项目 <span className="count">({projects.length})</span></h3>
                         <div className="sidebar-actions">
                             <button
-                                className="btn small"
+                                className="btn-add"
                                 onClick={() => openProjectModal('create')}
                                 title="新建项目"
                             >
-                                ➕
-                            </button>
-                            <button
-                                className="btn small"
-                                onClick={refreshProjects}
-                                title="刷新"
-                            >
-                                🔄
+                                +
                             </button>
                         </div>
                     </div>
                     {projects.length === 0 ? (
-                        <p className="empty">暂无项目</p>
+                        <div className="empty-state">
+                            <div className="empty-state-icon">📚</div>
+                            <div className="empty-state-title">暂无项目</div>
+                            <div className="empty-state-desc">点击右上角 + 创建第一个项目</div>
+                        </div>
                     ) : (
-                        <ul>
+                        <ul className="project-list">
                             {projects.map((p) => (
                                 <li
                                     key={p.id}
-                                    className={selectedProject?.id === p.id ? 'selected' : ''}
+                                    className={`project-item ${selectedProject?.id === p.id ? 'selected' : ''}`}
                                     onClick={() => selectProject(p)}
                                 >
-                                    <strong>{p.name}</strong>
-                                    <small>{p.genre || '未分类'} · #{p.id}</small>
+                                    <div className="project-info">
+                                        <div className="project-name">{p.name}</div>
+                                        <div className="project-meta">
+                                            <span className="project-genre-tag">{p.genre || '未分类'}</span>
+                                            {' '}#{p.id}
+                                        </div>
+                                    </div>
                                     <div className="project-actions">
                                         <button
-                                            className="btn-tiny"
+                                            className="project-action-btn"
                                             onClick={(e) => { e.stopPropagation(); openProjectModal('edit', p); }}
-                                            title="编辑"
+                                            title="编辑项目"
                                         >✎</button>
                                         <button
-                                            className="btn-tiny danger"
+                                            className="project-action-btn danger"
                                             onClick={(e) => { e.stopPropagation(); deleteProject(p); }}
-                                            title="删除"
+                                            title="删除项目"
                                         >🗑</button>
                                     </div>
                                 </li>
@@ -507,11 +511,11 @@ function ProjectModal(props: {
         <div className="modal-bg" onClick={props.onClose}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h2>{props.mode === 'create' ? '➕ 新建项目' : '✎ 编辑项目'}</h2>
-                    <button className="btn" onClick={props.onClose}>✕</button>
+                    <h2>{props.mode === 'create' ? '新建项目' : '编辑项目'}</h2>
+                    <button className="modal-close" onClick={props.onClose} aria-label="关闭">✕</button>
                 </div>
 
-                <div className="settings-section">
+                <div className="modal-body">
                     <label className="form-label">
                         项目名称 *
                         <input
@@ -540,9 +544,9 @@ function ProjectModal(props: {
                             placeholder="玄幻 / 都市 / 科幻 / ..."
                         />
                     </label>
-                </div>
 
-                {err && <div className="error">{err}</div>}
+                    {err && <div className="error">{err}</div>}
+                </div>
 
                 <div className="modal-footer">
                     <button className="btn" onClick={props.onClose}>取消</button>
