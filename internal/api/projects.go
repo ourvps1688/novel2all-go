@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ourvps1688/novel2all-go/internal/auth"
+	"github.com/ourvps1688/novel2all-go/internal/store"
 )
 
 // Project 一个小说项目
@@ -183,8 +184,14 @@ func (s *ProjectStore) RestoreAll(projects []*Project) error {
 	return nil
 }
 
-// ErrNotFound 通用 not-found 错误
-var ErrNotFound = errors.New("not found")
+// ErrNotFound 通用 not-found 错误 (Sprint V1.0.1 P2 统一: api + store 共享同一个 sentinel error)
+//
+// 历史: api 包和 store 包各自定义了 ErrNotFound (都是 errors.New("not found")) → cross-package
+// 的 errors.Is 永远 false → checkProjectAccess 等 handler 返回 500 + "not found" 而不是 404.
+//
+// 修复: api.ErrNotFound 改用 store.ErrNotFound 同一变量, 确保 memory store (api.ProjectStore)
+// 和 SQLite store (store.ProjectsStore) 返回的错误可被 errors.Is 统一比较.
+var ErrNotFound = store.ErrNotFound
 
 // ProjectsHandler 提供 /api/projects CRUD
 type ProjectsHandler struct {

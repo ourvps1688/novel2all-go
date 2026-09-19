@@ -520,7 +520,10 @@ func (h *ChapterHandler) checkProjectAccess(w http.ResponseWriter, r *http.Reque
 	}
 	project, err := h.projects.Get(projectID)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
+		// Sprint V1.0.1 P2 修复: store 包和 api 包各自定义了 ErrNotFound (不同 var).
+		// 必须用 store.ErrNotFound (实际从 store 层返回的错误), errors.Is 才能匹配.
+		// 之前的 api.ErrNotFound 在 cross-package 比较时永远 false → 返回 500 + "not found".
+		if errors.Is(err, store.ErrNotFound) {
 			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
 			return false
 		}
