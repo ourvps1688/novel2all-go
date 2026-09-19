@@ -486,6 +486,7 @@ function ProjectModal(props: {
         try {
             const input = {
                 name: name.trim(),
+                slug: name.trim().toLowerCase().replace(/\s+/g, '-'),
                 description: description.trim(),
                 genre: genre.trim(),
             };
