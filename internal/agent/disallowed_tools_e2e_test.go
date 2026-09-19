@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -117,25 +118,43 @@ func TestDisallowedToolsE2E_LLMToolsFilter(t *testing.T) {
 //
 // 验证：即使绕过 LLMTools 过滤直接调 adapter.Dispatch("WebSearch", ...)，
 // 也会被 disallowed 防御层拒绝。
+//
+// Phase 4 fix: Bash_allowed sub-test skip if `echo` binary not available
+// (CI runner image may not include coreutils).
 func TestDisallowedToolsE2E_DispatchRejects(t *testing.T) {
 	f := newDisallowedToolsE2EFixture(t)
+
+	// 检测 echo 是否可用. 不可用 → 跳过 Bash sub-test
+	_, echoErr := exec.LookPath("echo")
+	echoAvailable := echoErr == nil
+	if !echoAvailable {
+		t.Logf("echo not in PATH, skipping Bash sub-test (CI runner coreutils not available)")
+	}
 
 	tests := []struct {
 		name           string
 		toolName       string
 		expectError    bool
 		expectContains string
+		// skipWhenNoEcho 仅在 echo 不可用时跳过
+		skipWhenNoEcho bool
 	}{
-		{"WebSearch_rejected", "WebSearch", true, "disallowed"},
-		{"Edit_rejected", "Edit", true, "disallowed"},
-		{"Read_allowed", "Read", false, ""},
-		{"Write_allowed", "Write", false, ""},
-		{"Bash_allowed", "Bash", false, ""},
+		{"WebSearch_rejected", "WebSearch", true, "disallowed", false},
+		{"Edit_rejected", "Edit", true, "disallowed", false},
+		{"Read_allowed", "Read", false, "", false},
+		{"Write_allowed", "Write", false, "", false},
+		{"Bash_allowed", "Bash", false, "", true}, // 需要 echo
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			// 跳过依赖 echo binary 的 sub-test (CI runner 可能没装 coreutils)
+			if tt.skipWhenNoEcho && !echoAvailable {
+				t.Skipf("echo not in PATH, skipping %s", tt.name)
+				return
+			}
+
 			var args json.RawMessage
 			switch tt.toolName {
 			case "WebSearch":
