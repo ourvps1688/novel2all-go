@@ -2,7 +2,7 @@
 
 **项目**: `D:\OHMYSTORY\novel2all-go\desktop\`
 **作者**: novel2all-bot
-**最后更新**: 2026-09-19 (每次任务完成更新)
+**最后更新**: 2026-09-19 16:30 (每次任务完成更新)
 
 > ⚠️ **自动化规则**: 任何 Phase 任务完成后**必须**立即更新本文档的"变更日志"章节 + 更新顶部"最后更新时间"。  
 > 不允许"先 commit 等下再补"。Commit 完成 / CI 通过 / Phase 完成 = 立即更新文档。
@@ -661,6 +661,8 @@ jobs:
 | 15:20 | Phase 4 | Release v0.1.0 创建: Novel2ALL.exe (11.7 MB) 已发布. URL: https://github.com/ourvps1688/novel2all-go/releases/tag/v0.1.0 | v0.1.0 |
 | 15:22 | Phase 4 | 发现 version 比对 bug: CurrentVersion=1.0.0 > v0.1.0, semver 不触发更新. 需 v1.0.0+ tag. 已加 release.yml 注释 | (本文档) |
 | 15:25 | Phase 4 | 写 update_test.go (~180 行, 7 个 Test*) + const→var 让测试 mock GitHubAPI. CI #188 失败 + CI #189 成功 | 0a35767 |
+| 16:25 | 文档 | 加 docs/desktop-features-roadmap.md (10 modules, 5 batches roadmap) + desktop-development.md 加 0.1 节引用 | 452a251 |
+| 16:30 | fix | disallowed_tools_e2e_test.go: skip Bash_allowed sub-test if echo binary not in PATH (CI runner image 偶尔缺 coreutils). CI #191 失败 + CI #192 成功 | 60689db |
 
 ### 待办 (下一阶段)
 
