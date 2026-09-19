@@ -2,10 +2,38 @@
 
 **项目**: `D:\OHMYSTORY\novel2all-go\desktop\`
 **作者**: novel2all-bot
-**最后更新**: 2026-09-19 15:25 (每次任务完成更新)
+**最后更新**: 2026-09-19 (每次任务完成更新)
 
 > ⚠️ **自动化规则**: 任何 Phase 任务完成后**必须**立即更新本文档的"变更日志"章节 + 更新顶部"最后更新时间"。  
 > 不允许"先 commit 等下再补"。Commit 完成 / CI 通过 / Phase 完成 = 立即更新文档。
+
+## 0.1 后端能力 Roadmap
+
+桌面 app 完成后 (Phase 1-4 ✅), 现在分模块逐步把后端能力搬到桌面端.
+
+完整 roadmap + 模块依赖关系: **`docs/desktop-features-roadmap.md`**
+
+**第一批 (核心写作能力, 1 周)**:
+1. **Module A** 章节 CRUD (1.5d) ← 当前
+2. **Module F** 项目 CRUD (1d)
+3. **Module B** LLM key 配置 (1d)
+
+**第二批 (LLM 集成, 3 天)**:
+4. Module C 章节 action (2d)
+5. Module H Skills 调用 (1.5d)
+
+**第三批 (知识管理, 3.5 天)**:
+6. Module D 人物/关系/伏笔
+7. Module E 章节大纲
+
+**第四批 (体验优化, 2.5 天)**:
+8. Module I 设置页扩展
+9. Module J 自动启动
+
+**第五批 (云同步, 3 天)**:
+10. Module G Memory 流式
+
+**强制规则**: 一个 module 一个 commit, 不混改. 每个 module 完成后跟用户确认再继续下一个.
 
 ---
 
