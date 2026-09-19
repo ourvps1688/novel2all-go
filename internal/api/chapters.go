@@ -84,6 +84,7 @@ func NewChapterHandlerWithActions(actions *ChapterActions) *ChapterHandler {
 type ChapterInfo struct {
 	Chapter   int    `json:"chapter"`
 	Filename  string `json:"filename"`
+	Title     string `json:"title,omitempty"` // Sprint V1.0.1 P2 修复: list 响应包含 title, 否则桌面 fallback "第N章"
 	CharCount int    `json:"char_count"`
 	FirstLine string `json:"first_line,omitempty"`
 }
@@ -234,6 +235,7 @@ func (h *ChapterHandler) listFromMeta(ctx context.Context, projectID int64) ([]C
 		out = append(out, ChapterInfo{
 			Chapter:   r.N,
 			Filename:  fmt.Sprintf("第%03d章.md", r.N),
+			Title:     r.Title, // Sprint V1.0.1 P2: 暴露 title 给桌面列表
 			CharCount: r.CharCount,
 		})
 	}
