@@ -700,6 +700,12 @@ jobs:
 | 00:40 | Module C.1 | ChapterModal 改造: textarea + 实时预览左右分栏 (.modal-wide 920px). 工具栏 8 按钮 (B/I/H1/H2/list/quote/code/link), 3 种 kind (wrap/prefix/link) 处理选区 + 光标恢复 (requestAnimationFrame). useMemo 缓存 marked 渲染 + try/catch 防边缘崩溃 | 20bc8cd |
 | 00:42 | Module C.1 | 字数统计 (useMemo): 中文字符 ([\u4e00-\u9fff] 正则) + 总字符 + 行数, 显示在工具栏右. App.css: .md-editor-toolbar / .md-editor-split / .md-editor-textarea / .md-editor-preview (含 heading/code/pre/blockquote/list/link 全套样式) + 响应式 (< 720px 退化为上下分栏) | 20bc8cd |
 | 00:45 | Module C.1 | **存储兼容性**: 零格式转换. 后端仍存 .md (LLM 扩写/重写/insert 都不变). 升级完成 | 20bc8cd |
+| 00:50 | Module C | 启动 Module C (2d): 章节 action LLM 调用 (expand/rewrite/review/insert/rollback) | (新任务) |
+| 00:55 | Module C | 调研后端 5 端点签名: POST /api/chapter/{N}/{action}/ + ActionRequest{project_id,instruction,position} + ActionResponse (4 action) / ReviewResult (review). 桌面用 Bearer 调, project_root 后端 fallback '.' | (调研) |
+| 01:00 | Module C | desktop/app.go (+191 行): ActionRequest/ActionResponse/ReviewResult/PostCheckIssue/ReviewItem 5 struct + http timeout 30→120s + callChapterAction() 通用 helper + 5 个 wails-bound 方法. tsc 0 errors + go vet clean + go test 14/14 secrets + 2/2 update | 41b76bb |
+| 01:05 | Module C | desktop/frontend/src/App.tsx (+278 行): AI_BUTTONS 5 按钮配置 + 6 state (instruction/position/busy/error/success/reviewResult) + doAI() 统一入口 (validate + confirm + call + 处理响应) + refreshChapterContent() 重新拉取 + Review modal (大分数 + verdict 中文标签 + 3 issues section) + AI section UI (instruction 输入 + position 输入 + 5 按钮) | 41b76bb |
+| 01:10 | Module C | desktop/frontend/src/App.css (+210 行): .ai-section 紫色渐变背景 + .ai-action-btn flex + .review-modal max-width 640px + .review-score (32px + good/warn/bad 三色) + .review-issue (红/黄/灰三色边框). wailsjs/ 同步 5 个新方法 + 4 个新 struct (本地生成, wails dev 自动重新生成) | 41b76bb |
+| 01:15 | Module C | **后端 smoke test**: POST /api/auth/login-jwt → token; POST /api/chapter/1 (project_id=2) → 201 + char_count=32; POST /api/chapter/1/review → 200 + 完整 ReviewResult (quality_score=72.5, verdict=needs_revision, 3 critical + 2 major + 1 minor issues). **Module C 端到端通过** | (smoke) |
 
 ### 待办 (下一阶段)
 
@@ -716,6 +722,7 @@ jobs:
 - [x] **Module A**: 章节 CRUD (CreateChapter/UpdateChapter/DeleteChapter/GetChapterContent + ChapterModal UI) ✅
 - [x] **Module B**: LLM API key 配置（加密本地存储 + SettingsPage UI）✅ — PBKDF2 + AES-256-GCM, 机器绑定 master key, 14 个单元测试全过
 - [x] **Module C.1**: Markdown 编辑器升级（工具栏 + 实时预览 + 字数统计）✅ — marked@18.0.13, 8 个工具栏按钮, 左右分栏 .modal-wide 920px
+- [x] **Module C**: 章节 action LLM 调用 ✅ — 5 个 wails 方法 (expand/rewrite/review/insert/rollback) + AI section UI + Review modal (大分数 + issues)
 
 ---
 

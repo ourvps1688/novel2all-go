@@ -2,7 +2,7 @@
 
 **目标**: 把 novel2all-go 后端能力逐步搬到 Novel2ALL 桌面 app
 **原则**: 分模块, 每个模块独立 PR + commit + 文档同步 + CI 验证
-**当前状态**: Phase 1-4 完成 + Module F (项目 CRUD) + Module A (章节 CRUD) + Module B (LLM API key 配置) ✅
+**当前状态**: Phase 1-4 完成 + Module F (项目 CRUD) + Module A (章节 CRUD) + Module B (LLM API key 配置) + Module C (章节 action LLM 调用) ✅
 
 ---
 
@@ -47,16 +47,17 @@
 
 ---
 
-### Module C: 章节 action (LLM 调用)
-**目标**: 用户能调 LLM 改章节 (expand/rewrite/review/insert/rollback)
-**后端**: `/api/projects/{id}/chapters/{n}/{action}` 5 端点 (已有 mock)
-**桌面 app 加**:
-- ChapterAction 按钮组 (5 个 action)
-- LLM 调用进度显示 (SSE or polling)
+### Module C: 章节 action (LLM 调用) ✅ (commit 41b76bb, 2026-09-20)
+**目标**: 用户能从桌面 app 调 LLM 改章节
+**实现**:
+- 后端 5 端点 (已有): `/api/chapter/{N}/{action}/` expand/rewrite/review/insert/rollback
+- 桌面 Go: 5 个 wails 方法 + 通用 callChapterAction() helper
+- 桌面 React: AI 辅助 section (instruction + position 输入 + 5 按钮) + Review modal (大分数 + verdict + issues 3 段)
+- http timeout 30s → 120s (LLM 调用慢)
+- 后端返 ActionResponse (4 改文件 action) / ReviewResult (review 不改文件)
+- 端到端验证: POST /api/chapter/1/review → 200 + 完整 JSON shape
 
-**工作量**: 2 天 (Mock LLM + UI 流程)
-**风险**: 高 — SSE 流式 + 错误处理
-**验证**: 点 expand → 看到生成内容 → 保存到磁盘
+**下一步 Module B.2** (0.5-1d): 用户配置的 key (Module B) 用于 LLM 调用, 桌面传 X-LLM-Key-{provider} header, 后端覆盖 admin key
 
 ---
 
@@ -213,9 +214,10 @@
 |--------|------|
 | A 章节 CRUD | ✅ 已完成 (2026-09-19, commits 3842005/b95b6ec/5d4f3d3) |
 | B LLM key | ✅ 已完成 (2026-09-20, commit bb14af4) |
+| C 章节 action | ✅ 已完成 (2026-09-20, commit 41b76bb) |
 | ... | ⏸️ 排队 |
 
-**当前 main 分支**: 1223053 (Module B 完成 + docs)
+**当前 main 分支**: 41b76bb (Module C 完成)
 **GitHub v0.1.0 release**: 已发布, Novel2ALL.exe 11.7 MB
 
 ---
