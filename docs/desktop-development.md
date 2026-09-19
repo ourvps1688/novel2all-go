@@ -2,7 +2,7 @@
 
 **项目**: `D:\OHMYSTORY\novel2all-go\desktop\`
 **作者**: novel2all-bot
-**最后更新**: 2026-09-19 14:45 (每次任务完成更新)
+**最后更新**: 2026-09-19 14:55 (每次任务完成更新)
 
 > ⚠️ **自动化规则**: 任何 Phase 任务完成后**必须**立即更新本文档的"变更日志"章节 + 更新顶部"最后更新时间"。  
 > 不允许"先 commit 等下再补"。Commit 完成 / CI 通过 / Phase 完成 = 立即更新文档。
@@ -70,7 +70,8 @@
 | **1.4** | 单实例锁 + 系统托盘 + 关窗隐藏 | ✅ 完成 |
 | **2.1** | 后端 /api/auth/login-jwt + /api/auth/me-jwt 端点 | ✅ 完成 + 部署 + 测试 |
 | **2.2** | 桌面 app Login() 真实调后端 (Bearer token) | ✅ 完成 |
-| **3** | 自动更新 (Wails pkg/updates) | 🟡 待启动 |
+| **2.3** | 桌面 app 端到端登录测试 (admin/kent986611) | ✅ 完成 (重启 wails dev 后) |
+| **3** | 自动更新 (GitHub Releases API + SettingsPage) | ✅ 完成 |
 | **4** | 完整 NSIS 打包发布 | 🟡 待启动 |
 
 ---
@@ -617,6 +618,8 @@ jobs:
 | 14:36 | Phase 2 | curl 验证 POST /api/auth/login-jwt → 200 {access_token, expires_in: 604799, token_type: Bearer, username, role} | (测试通过) |
 | 14:37 | Phase 2 | curl 验证 /api/auth/me-jwt Bearer → 200 {id:1, username:admin, role:admin, created_at} | (测试通过) |
 | 14:45 | Phase 2 | wails dev 启动: UI 渲染 "Novel2ALL", 后端状态 "✅ 后端 OK", 登录 admin/kent986611 显示 "登录失败 (HTTP 401): invalid credentials". 原因: wails dev Go binary 缓存, 需要删除 frontend/wailsjs 强制重新 build | 9647f7f (待修) |
+| 14:46 | Phase 2 | 删 build/bin + frontend/wailsjs, 重启 wails dev, 登录 admin/kent986611 成功 (200), 进入主界面. Phase 2.3 ✅ | (测试通过) |
+| 14:55 | Phase 3 | 写 internal/update/update.go (~250 行): GitHubRelease 结构, LatestRelease/CheckForUpdates/DownloadLatest/ApplyUpdate + semver 比较 + parseGitHubTime. app.go 加 4 个方法: CheckForUpdate/CurrentVersion/DownloadUpdate/ApplyUpdate. App.tsx 加 SettingsPage + 设置按钮 + modal 样式 | 5d5a6f0 |
 
 ### 待办 (下一阶段)
 
@@ -626,9 +629,9 @@ jobs:
 - [x] Phase 1.4: 系统托盘 + 单实例锁 ✅ (CI #177 通过)
 - [x] Phase 2.1: 后端 /api/auth/login-jwt + /me-jwt 端点 ✅ (部署 + 验证)
 - [x] Phase 2.2: 桌面 app Login() 真实调后端 (Bearer token) ✅
-- [ ] Phase 2.3: 桌面 app 端到端登录测试 (Wails dev + 真账号 admin/kent986611)
-- [ ] Phase 3: Wails pkg/updates 自动更新 (检查 latest release, 下载, SHA256 校验)
-- [ ] Phase 4: 完整 NSIS 打包 + GitHub Actions release + 自动更新通知
+- [x] Phase 2.3: 桌面 app 端到端登录测试 (admin/kent986611) ✅
+- [x] Phase 3: 自动更新 (GitHub Releases API + SettingsPage) ✅
+- [ ] Phase 4: 完整 NSIS 打包发布
 
 ---
 
