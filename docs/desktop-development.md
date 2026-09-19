@@ -599,6 +599,8 @@ jobs:
 | 13:20 | 文档 | 补充 鉴权架构 (auth.zxc.im vs api.zxc.im, 管理员创建账号机制) | (未 commit) |
 | 13:25 | Phase 1.3 | NSIS project.nsi (安装到 %LOCALAPPDATA%, 卸载, 快捷方式, 注册表清理) | (未 commit) |
 | 13:25 | Phase 1.3 | GitHub Actions release.yml (push tag v* 自动 build + 上传 release) | (未 commit) |
+| 13:30 | Phase 1.3 | git commit 4a0b8ec + push origin/main (23 files, +3996 lines) | 4a0b8ec |
+| 13:31 | Phase 1.3 | CI #175 自动跑 (ci.yml, push:branches:main 触发) — 9/9 jobs 全绿 | (CI 通过) |
 
 ### 待办 (下一阶段)
 
