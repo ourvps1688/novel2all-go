@@ -190,38 +190,57 @@ func (a *App) IsLoggedIn() bool {
 	return a.accessToken != "" && time.Now().Before(a.expiresAt)
 }
 
-// Login 调后端 /api/auth/login. Phase 1 仅 mock (真实端点 Phase 2).
+// Login 调后端 /api/auth/login-jwt (Phase 2 桌面 app 真实登录).
 //
-// 当前 Phase 1: 任何 username/password 都返 mock user. Phase 2 替换为真实调用.
+// 流程:
+//  1. POST {username, password}
+//  2. 后端 bcrypt 验证 + 创建 session + 写审计
+//  3. 返 {access_token, expires_in, token_type, username, role}
+//  4. 桌面 app 存 token 到 %APPDATA%\novel2all-desktop\token (doRequest 自动加 Bearer header)
 func (a *App) Login(username, password string) (*User, error) {
 	if username == "" || password == "" {
 		return nil, fmt.Errorf("username/password 不能为空")
 	}
 
-	// Phase 1: 直接调后端 /version 验证网络 (mock 成功登录).
-	// Phase 2: 替换为 POST /api/auth/login + JWT.
-	resp, err := a.client.Get(a.backendURL + "/version")
+	// Phase 2: POST /api/auth/login-jwt (Bearer token JSON 版, 不写 cookie)
+	body := map[string]string{"username": username, "password": password}
+	resp, err := a.doRequest(http.MethodPost, "/api/auth/login-jwt", body)
 	if err != nil {
-		return nil, fmt.Errorf("后端不可达: %w", err)
+		return nil, fmt.Errorf("登录请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("后端返回 HTTP %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("登录失败 (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
-	// 模拟登录成功 (Phase 2 替换)
+	// 解析响应
+	var loginResp struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
+		TokenType   string `json:"token_type"`
+		Username    string `json:"username"`
+		Role        string `json:"role"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
+		return nil, fmt.Errorf("解析登录响应失败: %w", err)
+	}
+	if loginResp.AccessToken == "" {
+		return nil, fmt.Errorf("后端未返回 access_token")
+	}
+
 	user := &User{
-		ID:       1,
-		Username: username,
-		Role:     "admin",
-		Email:    username + "@novel2all.local",
+		ID:       0, // Phase 2.1 不查 /me, ID 留 0; Phase 2.2 加 /me 查询
+		Username: loginResp.Username,
+		Role:     loginResp.Role,
+		Email:    "", // Phase 2 暂不查 email
 	}
 
 	a.mu.Lock()
-	a.accessToken = "phase1-mock-token-" + username
+	a.accessToken = loginResp.AccessToken
 	a.refreshTok = ""
-	a.expiresAt = time.Now().Add(24 * time.Hour)
+	a.expiresAt = time.Now().Add(time.Duration(loginResp.ExpiresIn) * time.Second)
 	a.userInfo = user
 	a.mu.Unlock()
 

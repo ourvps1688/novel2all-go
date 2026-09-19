@@ -202,6 +202,11 @@ func (m *SessionManager) Logout(ctx context.Context, token, ip, userAgent string
 	return m.store.DeleteSession(ctx, token)
 }
 
+// GetSession 拿原始 session (Phase 2 桌面 app Bearer token 用, 取 ExpiresAt).
+func (m *SessionManager) GetSession(ctx context.Context, token string) (*store.Session, error) {
+	return m.store.GetSession(ctx, token)
+}
+
 // GetUserByToken 验证 token + 返回用户（中间件用）
 func (m *SessionManager) GetUserByToken(ctx context.Context, token string) (*store.User, error) {
 	if token == "" {
