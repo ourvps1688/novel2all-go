@@ -2,7 +2,7 @@
 
 **目标**: 把 novel2all-go 后端能力逐步搬到 Novel2ALL 桌面 app
 **原则**: 分模块, 每个模块独立 PR + commit + 文档同步 + CI 验证
-**当前状态**: Phase 1-4 完成 (login + project/chapter 列表 + 自动更新 + NSIS 打包)
+**当前状态**: Phase 1-4 完成 + Module F (项目 CRUD) + Module A (章节 CRUD) ✅
 
 ---
 
@@ -203,11 +203,11 @@
 
 | Module | 状态 |
 |--------|------|
-| A 章节 CRUD | 🟡 待启动 (用户刚批准) |
+| A 章节 CRUD | ✅ 已完成 (2026-09-19, commits 3842005/b95b6ec/5d4f3d3) |
 | B LLM key | ⏸️ 排队 |
 | ... | ⏸️ 排队 |
 
-**当前 main 分支**: 488f5f9 (Phase 4 完成)
+**当前 main 分支**: 5d4f3d3 (Module A 完成)
 **GitHub v0.1.0 release**: 已发布, Novel2ALL.exe 11.7 MB
 
 ---

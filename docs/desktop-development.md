@@ -668,6 +668,14 @@ jobs:
 | 22:10 | fix | router.go 同时注册 /api/projects 和 /api/projects/ — 避免 301 redirect 丢失 Authorization header | db69f95 |
 | 22:30 | fix | CreateProject input 自动从 name 生成 slug (前端防御: .trim().toLowerCase().replace(/\s+/g, '-')) — 后端必填字段 | 3308dbe |
 | 23:50 | Module F | Phase F UI 重设计 (Stripe/Gemini 风格) — 紧凑单行项目列表 + 始终可见的编辑/删除按钮 (opacity 0.6→1) + accent 色显眼 + 新建按钮 + modal 三段式 (modal-header/modal-body/modal-footer). App.css 714 行重写, App.tsx 用新 class. TS typecheck 通过 | 0cdcbe9 |
+### 2026-09-19 (续)
+
+| 时间 | Phase | 描述 | Commit |
+|------|-------|------|--------|
+| 23:13 | Module A | 后端 POST /api/chapter/{N} create endpoint (body={project_id,title,content}, 409 if exists, owner check + LockChapterFile + SQLite metadata upsert) | 3842005 |
+| 23:14 | Module A | 桌面 app.go: 4 个 chapter CRUD 方法 (CreateChapter/GetChapterContent/UpdateChapter/DeleteChapter) + 修 ListChapters (用 ?project_id=N 替代 404 路径) + ChapterInput/ChapterContent 类型 | b95b6ec |
+| 23:18 | Module A | 桌面 React: 章节列表 + ChapterModal (create/edit: number/title/content) + 每行 ✎🗑 按钮 + Empty state + CSS .chapter-list/.chapter-item 复用 Stripe 风格 | 5d4f3d3 |
+| 23:25 | Module A | 验证: 后端 go vet ./... + gofmt -s -l . + chapter tests (0.481s, all pass) + 桌面 tsc --noEmit (exit 0). 推 origin/main b2ae3a9..5d4f3d3. 注意: 桌面 go build 需要 Go 1.25 (本机 1.22 + proxy 502 不能 auto-download, CI runner windows-latest 自带新版 OK) | (本文档) |
 
 ### 待办 (下一阶段)
 
