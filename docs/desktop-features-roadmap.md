@@ -214,33 +214,54 @@
 
 ## 开发依赖关系
 
+### 代码依赖 (API 调用)
+
 ```
-A 章节 CRUD (无依赖)
-  ↓
-F 项目 CRUD (无依赖, 可与 A 并行)
-  ↓
-B LLM key (无依赖, 单独)
-  ↓
-C 章节 action (依赖 B LLM key)
-  ↓
-H Skills 调用 (依赖 B, 可与 C 并行)
-  ↓
-D 人物/关系/伏笔 (依赖 F 项目 CRUD)
-  ↓
-E 章节大纲 (依赖 A)
-  ↓
-I 设置页扩展 (无依赖, 单独)
-  ↓
-J 自动启动 (无依赖, 单独)
-  ↓
-G Memory 流式 (依赖 A + F)
+A 章节 CRUD — 无依赖
+F 项目 CRUD — 无依赖
+B LLM key — 无依赖
+C 章节 action — 依赖 B (需 LLM key 才能调 LLM API)
+H Skills 调用 — 依赖 B
+D 人物/关系/伏笔 — 无依赖 (与 A/F/B 同级别, CRUD 同模式)
+E 章节大纲 — 无依赖 (独立 collection)
+I 设置页扩展 — 无依赖
+J 自动启动 — 无依赖
+G Memory 流式 — 依赖 A + F (snapshot 包含章节 + 项目数据)
 ```
 
-**第一批** (A + F + B) 无依赖, 可并行
-**第二批** (C + H) 依赖 B
-**第三批** (D + E) 依赖 A/F
-**第四批** (I + J) 无依赖
-**第五批** (G) 依赖多
+### 业务依赖 (用户操作)
+
+```
+用户操作流程:
+  登录 → 项目列表 (需 Module F) → 章节列表 (需 Module A) → 编辑 (Module A)
+```
+
+**Module A 业务上需要 Module F** (用户先创建项目, 后创建章节).
+**Module F 业务上不需要 Module A** (创建项目不依赖章节).
+
+### 实现顺序
+
+**第一批** (1 周, 全部无代码依赖):
+- Module A 章节 CRUD (1.5d) — 业务上需 F 先完成
+- Module F 项目 CRUD (1d) — **可与 A 并行, 但建议先 F** (UI 流程先有项目列表)
+- Module B LLM key (1d)
+
+**推荐顺序**: F → A → B (F 先, A 复用 F 的 UI 框架, B 独立)
+
+**第二批** (3 天, 依赖 B):
+- Module C 章节 action (2d)
+- Module H Skills 调用 (1.5d)
+
+**第三批** (3.5 天, 无依赖):
+- Module D 人物/关系/伏笔 (2d)
+- Module E 章节大纲 (1.5d)
+
+**第四批** (2.5 天, 无依赖):
+- Module I 设置页扩展 (2d)
+- Module J 自动启动 (0.5d)
+
+**第五批** (3 天, 依赖 A + F):
+- Module G Memory 流式 (3d)
 
 ---
 
