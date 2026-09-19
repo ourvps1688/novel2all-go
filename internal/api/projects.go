@@ -213,8 +213,10 @@ func NewProjectsHandlerWithRepo(repo ProjectsRepo) *ProjectsHandler {
 // NewProjectsHandlerWithStore 向后兼容 wrapper（DEPRECATED: 用 NewProjectsHandlerWithRepo）
 //
 // P1-F 切片 10-12 调用此方法，签名不变。
-func NewProjectsHandlerWithStore(store *ProjectStore) *ProjectsHandler {
-	return &ProjectsHandler{repo: store}
+//
+// 参数名 s (不是 store) 避免 shadow imported package "store" (gocritic importShadow).
+func NewProjectsHandlerWithStore(s *ProjectStore) *ProjectsHandler {
+	return &ProjectsHandler{repo: s}
 }
 
 // ServeHTTP 路由分发
