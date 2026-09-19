@@ -2,7 +2,7 @@
 
 **项目**: `D:\OHMYSTORY\novel2all-go\desktop\`
 **作者**: novel2all-bot
-**最后更新**: 2026-09-19 13:36 (每次任务完成更新)
+**最后更新**: 2026-09-19 13:50 (每次任务完成更新)
 
 > ⚠️ **自动化规则**: 任何 Phase 任务完成后**必须**立即更新本文档的"变更日志"章节 + 更新顶部"最后更新时间"。  
 > 不允许"先 commit 等下再补"。Commit 完成 / CI 通过 / Phase 完成 = 立即更新文档。
@@ -607,6 +607,8 @@ jobs:
 | 13:32 | 文档 | 同步登记 4a0b8ec commit + CI #175 全绿 (本节追加) | (本文档) |
 | 13:36 | Phase 1.4 | 系统托盘 + 单实例锁 + HideWindowOnClose: internal/systray/tray.go + tray_net{,_unix}.go + main.go + app.go trayMenuRef 字段. 库: getlantern/systray v1.2.2 | (未 commit) |
 | 13:36 | 文档 | Phase 1.4 状态表标 ✅ 完成 + changelog 登记 | (未 commit) |
+| 13:48 | Phase 1.4 | git commit db1dd88 + push origin/main (8 files, +477 -10) | db1dd88 |
+| 13:50 | Phase 1.4 | CI #176 (docs commit 6f1699d) 全绿 + CI #177 (Phase 1.4 code commit db1dd88) 全绿 | (CI 通过) |
 
 ### 待办 (下一阶段)
 
