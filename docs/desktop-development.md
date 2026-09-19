@@ -676,6 +676,12 @@ jobs:
 | 23:14 | Module A | 桌面 app.go: 4 个 chapter CRUD 方法 (CreateChapter/GetChapterContent/UpdateChapter/DeleteChapter) + 修 ListChapters (用 ?project_id=N 替代 404 路径) + ChapterInput/ChapterContent 类型 | b95b6ec |
 | 23:18 | Module A | 桌面 React: 章节列表 + ChapterModal (create/edit: number/title/content) + 每行 ✎🗑 按钮 + Empty state + CSS .chapter-list/.chapter-item 复用 Stripe 风格 | 5d4f3d3 |
 | 23:25 | Module A | 验证: 后端 go vet ./... + gofmt -s -l . + chapter tests (0.481s, all pass) + 桌面 tsc --noEmit (exit 0). 推 origin/main b2ae3a9..5d4f3d3. 注意: 桌面 go build 需要 Go 1.25 (本机 1.22 + proxy 502 不能 auto-download, CI runner windows-latest 自带新版 OK) | (本文档) |
+| 23:22 | Module A | **生产部署发现 bug**: 桌面 CreateChapter → HTTP 500 body=`{"error":"not found"}` (期望 404). 截图: `(HTTP 405) method not allowed` 是老二进制未部署 Module A; 部署后变成 500 | (用户截图) |
+| 23:28 | Module A | SSH 到 192.168.3.106 (soap + novel2all_deploy): `git pull` (9cb1dd1→6cb8473) → `go build -o /tmp/novel2all.new` → 旧二进 md5=2fd27eb0, 新=6c50f7eb → atomic swap + systemctl restart. 验证 health OK 但 POST 仍 500 | (部署) |
+| 23:35 | Module A fix | **根因**: `internal/api/projects.go:187 var ErrNotFound = errors.New("not found")` 和 `internal/store/projects.go:197 var ErrNotFound = errors.New("not found")` 是**两个不同变量**. chapters.go `checkProjectAccess` 用 `errors.Is(err, ErrNotFound)` (api 包), 但生产 SQLite store 返回 store.ErrNotFound → cross-package 比较永远 false → 走 `fmt.Errorf` 分支返 500. 测试通过是因为用 `NewProjectStore()` (api 内存版) 返 api.ErrNotFound | bb528d9 |
+| 23:38 | Module A fix | api/projects.go import store + `var ErrNotFound = store.ErrNotFound` (统一 sentinel). chapters.go 加注释说明. go vet + TestChapter + 全套 test 18/19 通过 (唯一 fail 是 LLM E2E 非确定性) | bb528d9 |
+| 23:40 | Module A | 推 bb528d9 + 服务器 pull + atomic swap (新 md5=021f0fe2) + systemctl restart. curl 验证全链路: POST /api/chapter/1 (project_id=2) → HTTP 201; GET /api/chapters → 1 chapter; GET /api/chapter/1/content → markdown 完整; POST /api/chapter/1/save → HTTP 200. **Module A 端到端闭环** | bb528d9 |
+| 23:42 | 文档 | changelog 加 Module A 部署 bug 发现 + 修复条目 (本节) | (本文档) |
 
 ### 待办 (下一阶段)
 
