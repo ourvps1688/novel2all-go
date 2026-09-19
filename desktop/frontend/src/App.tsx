@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import './App.css';
 import {
     BackendURL,
@@ -802,6 +802,31 @@ function ProjectModal(props: {
 //
 // 调用: CreateChapter (mode='create') 或 UpdateChapter (mode='edit').
 // onSaved 回调触发 refreshChapters + 关闭 modal.
+//
+// Module C.1 (2026-09-20): Markdown 编辑器升级
+// - 工具栏: B/I/H1/H2/列表/引用/代码/链接 (插入 Markdown 语法)
+// - 实时预览: 右侧 marked 渲染 (左右分栏)
+// - 字数统计: 中文字符 + 总字符数 + 行数
+// - 存储仍是 .md, 零格式转换, LLM 调用照常
+import { marked } from 'marked';
+
+// 单条 toolbar 按钮定义: type 决定 wrap vs prefix 行为
+type ToolbarAction =
+    | { kind: 'wrap'; prefix: string; suffix: string; placeholder: string; label: string; title: string }
+    | { kind: 'prefix'; prefix: string; placeholder: string; label: string; title: string }
+    | { kind: 'link'; label: string; title: string };
+
+const TOOLBAR: ToolbarAction[] = [
+    { kind: 'wrap', prefix: '**', suffix: '**', placeholder: '粗体', label: 'B', title: '粗体 (Ctrl+B)' },
+    { kind: 'wrap', prefix: '*', suffix: '*', placeholder: '斜体', label: 'I', title: '斜体 (Ctrl+I)' },
+    { kind: 'prefix', prefix: '# ', placeholder: '标题', label: 'H1', title: '一级标题' },
+    { kind: 'prefix', prefix: '## ', placeholder: '子标题', label: 'H2', title: '二级标题' },
+    { kind: 'prefix', prefix: '- ', placeholder: '列表项', label: '·列表', title: '无序列表' },
+    { kind: 'prefix', prefix: '> ', placeholder: '引用', label: '"', title: '引用' },
+    { kind: 'wrap', prefix: '`', suffix: '`', placeholder: 'code', label: '</>', title: '行内代码' },
+    { kind: 'link', label: '🔗', title: '插入链接' },
+];
+
 function ChapterModal(props: {
     mode: 'create' | 'edit';
     chapter?: Chapter;
@@ -815,6 +840,69 @@ function ChapterModal(props: {
     const [content, setContent] = useState(props.initialContent ?? '');
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState('');
+
+    // Module C.1: 编辑器增强
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const previewHtml = useMemo(() => {
+        // marked.parse 在 marked v18 返 string (默认 sync)
+        // 用 try/catch 防止用户输入一半时的边缘 case
+        try {
+            return marked.parse(content || '', { async: false, breaks: true, gfm: true });
+        } catch {
+            return '<p style="color:#999">预览渲染失败</p>';
+        }
+    }, [content]);
+
+    // 字数统计: 总字符 + 中文字符 + 行数
+    const stats = useMemo(() => {
+        const total = content.length;
+        const chinese = (content.match(/[\u4e00-\u9fff]/g) || []).length;
+        const lines = content.split('\n').length;
+        return { total, chinese, lines };
+    }, [content]);
+
+    // 工具栏点击: 插入 Markdown 语法
+    function applyToolbar(action: ToolbarAction) {
+        const ta = textareaRef.current;
+        if (!ta) return;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const selected = content.substring(start, end);
+
+        let newText: string;
+        let cursorStart: number;
+        let cursorEnd: number;
+
+        if (action.kind === 'wrap') {
+            const inner = selected || action.placeholder;
+            newText = action.prefix + inner + action.suffix;
+            // 光标: 选中时放在选区末尾 (wrapped text 后), 没选中时在 placeholder 中间
+            cursorStart = start + action.prefix.length;
+            cursorEnd = cursorStart + inner.length;
+        } else if (action.kind === 'prefix') {
+            // 行首插入 prefix; 找到当前行起始位置
+            const lineStart = content.lastIndexOf('\n', start - 1) + 1;
+            newText = action.prefix + content.substring(lineStart);
+            cursorStart = start + action.prefix.length;
+            cursorEnd = cursorStart + (selected ? selected.length : 0);
+        } else { // link
+            const linkText = selected || 'link text';
+            const insertion = `[${linkText}](url)`;
+            newText = content.substring(0, start) + insertion + content.substring(end);
+            // 光标定位到 url 处
+            cursorStart = start + 1 + linkText.length + 2; // "[" + text + "]("
+            cursorEnd = cursorStart + 3; // "url"
+        }
+
+        const nextContent = content.substring(0, start) + newText + content.substring(end);
+        setContent(nextContent);
+
+        // 恢复光标 + focus (下一帧 React 渲染完)
+        requestAnimationFrame(() => {
+            ta.focus();
+            ta.setSelectionRange(cursorStart, cursorEnd);
+        });
+    }
 
     async function save() {
         if (!props.projectID) {
@@ -853,42 +941,71 @@ function ChapterModal(props: {
 
     return (
         <div className="modal-bg" onClick={props.onClose}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2>{props.mode === 'create' ? '新建章节' : `编辑第${props.chapter?.chapter}章`}</h2>
                     <button className="modal-close" onClick={props.onClose} aria-label="关闭">✕</button>
                 </div>
 
                 <div className="modal-body">
-                    <label className="form-label">
-                        章节号 *
-                        <input
-                            type="number"
-                            min="1"
-                            value={number}
-                            onChange={(e) => setNumber(parseInt(e.target.value) || 1)}
-                            disabled={props.mode === 'edit'}
-                            placeholder="1"
-                        />
-                    </label>
-                    <label className="form-label">
-                        标题
-                        <input
-                            type="text"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            placeholder="本章标题（可选）"
-                        />
-                    </label>
+                    <div className="form-row">
+                        <label className="form-label form-label-narrow">
+                            章节号 *
+                            <input
+                                type="number"
+                                min="1"
+                                value={number}
+                                onChange={(e) => setNumber(parseInt(e.target.value) || 1)}
+                                disabled={props.mode === 'edit'}
+                                placeholder="1"
+                            />
+                        </label>
+                        <label className="form-label form-label-grow">
+                            标题
+                            <input
+                                type="text"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                placeholder="本章标题（可选）"
+                            />
+                        </label>
+                    </div>
+
                     <label className="form-label">
                         内容
+                        <div className="md-editor-toolbar" aria-label="Markdown 工具栏">
+                            {TOOLBAR.map((a, i) => (
+                                <button
+                                    key={i}
+                                    type="button"
+                                    className="md-toolbar-btn"
+                                    onClick={() => applyToolbar(a)}
+                                    title={a.title}
+                                >
+                                    {a.label}
+                                </button>
+                            ))}
+                            <span className="md-toolbar-spacer" />
+                            <span className="md-stats">
+                                {stats.chinese} 中文字 · {stats.total} 字符 · {stats.lines} 行
+                            </span>
+                        </div>
+                    </label>
+
+                    <div className="md-editor-split">
                         <textarea
+                            ref={textareaRef}
+                            className="md-editor-textarea"
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
-                            placeholder="章节内容（Markdown）..."
-                            rows={12}
+                            placeholder="章节内容（Markdown）...&#10;&#10;支持语法: **粗体** *斜体* # 标题 - 列表 > 引用 `代码` [链接](url)&#10;右侧实时预览"
+                            spellCheck={false}
                         />
-                    </label>
+                        <div
+                            className="md-editor-preview"
+                            dangerouslySetInnerHTML={{ __html: previewHtml }}
+                        />
+                    </div>
 
                     {err && <div className="error">{err}</div>}
                 </div>
