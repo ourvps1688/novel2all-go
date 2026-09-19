@@ -713,6 +713,12 @@ jobs:
 | 01:33 | Module C.5 fix | internal/api/chapter_actions.go: expand/rewrite/insert handler 在 LLM 调用前 WriteHeader(200) + Flush(). Go 自动用 chunked transfer encoding, client 立即收到 200 + headers, 即使 LLM 阻塞 5 分钟也不会 abort | c780806 |
 | 01:35 | Module C.5 | 验证: tsc 0 errors + go vet clean + go test api ok 4.4s. CI #217 ✅ success | c780806 |
 | 01:36 | Module C.5 | 后端 atomic swap deploy: md5 32f8ace0. health OK | (部署) |
+| 01:42 | Module B.2 | 启动 Module B.2: per-request LLM API key 消费 (user key 真正用于 LLM, 0.5-1d) | (新任务) |
+| 01:45 | Module B.2 | **设计**: context.Context 传递 per-request key (HTTP middleware 读 X-LLM-Key-{provider} header → 注入 ctx → AnthropicCompat.effectiveAPIKey(ctx) 覆盖 constructor key). 不污染 Request struct (避免动所有 provider). 3 个 provider (dashscope/deepseek/minimax) 都包装 AnthropicCompat, 只改一处 | (设计) |
+| 01:50 | Module B.2 | **新文件**: internal/llm/api_key.go (71 行) + api_key_test.go (6 tests) + internal/api/middleware_llmkey.go (50 行) + middleware_llmkey_test.go (5 tests) = 4 个新文件 11 个新 test. 改 3 个: anthropic_compat.go (加 effectiveAPIKey) + router.go (auth → LLMKey → chapter) + desktop/app.go (doRequest 注入 3 header) | cbb77f9 |
+| 01:55 | Module B.2 | **验证**: go vet ./... clean + go test ./... 18/19 PASS (唯一 fail = pre-existing TestNarrativeWriterRealE2E_DeepSeek flake, 无关) + new 11 tests 全过. 后端 smoke: review endpoint + user key header → 200 + 完整 mock ReviewResult (验证 middleware 透传链) | (smoke) |
+| 01:56 | Module B.2 | 后端 atomic swap deploy: md5 127481d2 → f12aabc9 (gofmt fix amended). health OK | (部署) |
+| 01:57 | Module B.2 | CI #220 lint fail = pre-existing golangci-lint v1.61 vs Go 1.25 target 不兼容 (cache.go 等已存在文件也报同样错误). test/build/smoke 全过. 不影响 Module B.2 代码, **需后续升级 ci.yml lint 步骤到 v2.x** | (CI issue) |
 
 ### 待办 (下一阶段)
 
