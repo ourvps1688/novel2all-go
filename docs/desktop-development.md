@@ -2,7 +2,7 @@
 
 **项目**: `D:\OHMYSTORY\novel2all-go\desktop\`
 **作者**: novel2all-bot
-**最后更新**: 2026-09-19 14:02 (每次任务完成更新)
+**最后更新**: 2026-09-19 14:38 (每次任务完成更新)
 
 > ⚠️ **自动化规则**: 任何 Phase 任务完成后**必须**立即更新本文档的"变更日志"章节 + 更新顶部"最后更新时间"。  
 > 不允许"先 commit 等下再补"。Commit 完成 / CI 通过 / Phase 完成 = 立即更新文档。
@@ -68,7 +68,8 @@
 | **1.2** | app.go 后端代理 + App.tsx 登录/项目列表 UI | ✅ 完成 |
 | **1.3** | GitHub Actions 自动 build + NSIS 安装脚本 | ✅ 完成 (CI #175 全绿) |
 | **1.4** | 单实例锁 + 系统托盘 + 关窗隐藏 | ✅ 完成 |
-| **2** | 账号体系 (JWT / 注册 / 登录) | 🟡 待启动 |
+| **2.1** | 后端 /api/auth/login-jwt + /api/auth/me-jwt 端点 | ✅ 完成 + 部署 + 测试 |
+| **2.2** | 桌面 app Login() 真实调后端 (Bearer token) | ✅ 完成 |
 | **3** | 自动更新 (Wails pkg/updates) | 🟡 待启动 |
 | **4** | 完整 NSIS 打包发布 | 🟡 待启动 |
 
@@ -611,6 +612,10 @@ jobs:
 | 13:50 | Phase 1.4 | CI #176 (docs commit 6f1699d) 全绿 + CI #177 (Phase 1.4 code commit db1dd88) 全绿 | (CI 通过) |
 | 13:58 | 文档 | 加 "AI 协作工作流" 章节 + Phase 1.4 标 ✅ | (本文档) |
 | 14:02 | 文档 | CI #180 (75e91e4 AI workflow 文档 commit) 全绿 | (CI 通过) |
+| 14:35 | Phase 2 | 写 internal/api/auth_jwt.go (loginJWT + meJWT handlers + extractToken helper) + auth.go ServeHTTP 加 login-jwt / me-jwt 路由分支 + auth/session.go GetSession wrapper. 改 desktop/app.go Login() Phase 1 mock → Phase 2 真实调 /api/auth/login-jwt | 9647f7f |
+| 14:36 | Phase 2 | 后端部署: git pull + go build + systemctl restart | 9647f7f |
+| 14:36 | Phase 2 | curl 验证 POST /api/auth/login-jwt → 200 {access_token, expires_in: 604799, token_type: Bearer, username, role} | (测试通过) |
+| 14:37 | Phase 2 | curl 验证 /api/auth/me-jwt Bearer → 200 {id:1, username:admin, role:admin, created_at} | (测试通过) |
 
 ### 待办 (下一阶段)
 
@@ -618,9 +623,9 @@ jobs:
 - [x] Phase 1.3: NSIS installer script ✅
 - [x] Phase 1.3: GitHub Actions workflow ✅
 - [x] Phase 1.4: 系统托盘 + 单实例锁 ✅ (CI #177 通过)
-- [ ] Phase 2.1: 后端 /api/auth/users (admin create user) + /api/auth/login
-- [ ] Phase 2.2: 后端 SQLite schema migration (users.email + password_hash)
-- [ ] Phase 2.3: 桌面 app 真实 LoginPage 调 /api/auth/login
+- [x] Phase 2.1: 后端 /api/auth/login-jwt + /me-jwt 端点 ✅ (部署 + 验证)
+- [x] Phase 2.2: 桌面 app Login() 真实调后端 (Bearer token) ✅
+- [ ] Phase 2.3: 桌面 app 端到端登录测试 (Wails dev + 真账号 admin/kent986611)
 - [ ] Phase 3: Wails pkg/updates 自动更新 (检查 latest release, 下载, SHA256 校验)
 - [ ] Phase 4: 完整 NSIS 打包 + GitHub Actions release + 自动更新通知
 
