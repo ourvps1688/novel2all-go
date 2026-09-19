@@ -2,7 +2,7 @@
 
 **项目**: `D:\OHMYSTORY\novel2all-go\desktop\`
 **作者**: novel2all-bot
-**最后更新**: 2026-09-19 13:33 (每次任务完成更新)
+**最后更新**: 2026-09-19 13:36 (每次任务完成更新)
 
 > ⚠️ **自动化规则**: 任何 Phase 任务完成后**必须**立即更新本文档的"变更日志"章节 + 更新顶部"最后更新时间"。  
 > 不允许"先 commit 等下再补"。Commit 完成 / CI 通过 / Phase 完成 = 立即更新文档。
@@ -67,7 +67,7 @@
 | **1.1** | Wails 项目初始化 (React + TypeScript template) | ✅ 完成 |
 | **1.2** | app.go 后端代理 + App.tsx 登录/项目列表 UI | ✅ 完成 |
 | **1.3** | GitHub Actions 自动 build + NSIS 安装脚本 | ✅ 完成 (CI #175 全绿) |
-| **1.4** | 单实例锁 + 系统托盘 | 🟡 待启动 |
+| **1.4** | 单实例锁 + 系统托盘 + 关窗隐藏 | ✅ 完成 |
 | **2** | 账号体系 (JWT / 注册 / 登录) | 🟡 待启动 |
 | **3** | 自动更新 (Wails pkg/updates) | 🟡 待启动 |
 | **4** | 完整 NSIS 打包发布 | 🟡 待启动 |
@@ -605,6 +605,8 @@ jobs:
 | 13:30 | Phase 1.3 | git commit 4a0b8ec + push origin/main (23 files, +3996 lines) | 4a0b8ec |
 | 13:31 | Phase 1.3 | CI #175 自动跑 (ci.yml, push:branches:main 触发) — 9/9 jobs 全绿 | (CI 通过) |
 | 13:32 | 文档 | 同步登记 4a0b8ec commit + CI #175 全绿 (本节追加) | (本文档) |
+| 13:36 | Phase 1.4 | 系统托盘 + 单实例锁 + HideWindowOnClose: internal/systray/tray.go + tray_net{,_unix}.go + main.go + app.go trayMenuRef 字段. 库: getlantern/systray v1.2.2 | (未 commit) |
+| 13:36 | 文档 | Phase 1.4 状态表标 ✅ 完成 + changelog 登记 | (未 commit) |
 
 ### 待办 (下一阶段)
 

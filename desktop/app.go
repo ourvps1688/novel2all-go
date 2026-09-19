@@ -13,12 +13,14 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"desktop-novel2all/internal/systray"
 )
 
 // App struct — Wails 桌面 app 后端.
 //
 // 桌面 app 通过 Cloudflare Tunnel 调用 novel2all-go 后端:
-//   - 后端地址: https://auth.zxc.im (Phase 0 部署, 公网可达)
+//   - 后端地址: https://api.zxc.im (Phase 0 部署, 公网可达)
 //   - JWT 存储: 本地 SQLite (Phase 2 加入, Phase 1 暂用内存)
 //   - LLM keys: Phase 2 加密存储, Phase 1 暂用 placeholder
 //
@@ -37,6 +39,10 @@ type App struct {
 	refreshTok  string
 	expiresAt   time.Time
 	userInfo    *User
+
+	// trayMenuRef 系统托盘引用 (Phase 1.4).
+	// nil = systray 未启用 (开发模式).
+	trayMenuRef *systray.Menu
 }
 
 // User 登录用户信息 (Phase 1 简化版).
@@ -88,6 +94,7 @@ func NewApp() *App {
 
 // startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
+	AppCtx = ctx
 	a.ctx = ctx
 
 	// 加载持久化 token (从用户配置目录)
@@ -102,6 +109,20 @@ func (a *App) startup(ctx context.Context) {
 	go a.tokenAutoRefresh(ctx)
 
 	runtime.LogInfo(ctx, fmt.Sprintf("novel2all-desktop started; backend=%s", a.backendURL))
+
+	// Phase 1.4: 后台异步检测后端健康 + 更新托盘状态.
+	// 不阻塞 startup, 失败也无所谓 (前端还有 HealthCheck 兜底).
+	if a.trayMenuRef != nil {
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			ok, _ := a.HealthCheck()
+			if ok {
+				a.trayMenuRef.SetStatusText("状态: 已连接")
+			} else {
+				a.trayMenuRef.SetStatusText("状态: 后端离线")
+			}
+		}()
+	}
 }
 
 // onShutdown 是 wails OnShutdown hook. 保存 token 到磁盘.
