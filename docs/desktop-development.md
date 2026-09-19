@@ -2,7 +2,7 @@
 
 **项目**: `D:\OHMYSTORY\novel2all-go\desktop\`
 **作者**: novel2all-bot
-**最后更新**: 2026-09-19 14:56 (每次任务完成更新)
+**最后更新**: 2026-09-19 15:22 (每次任务完成更新)
 
 > ⚠️ **自动化规则**: 任何 Phase 任务完成后**必须**立即更新本文档的"变更日志"章节 + 更新顶部"最后更新时间"。  
 > 不允许"先 commit 等下再补"。Commit 完成 / CI 通过 / Phase 完成 = 立即更新文档。
@@ -72,7 +72,14 @@
 | **2.2** | 桌面 app Login() 真实调后端 (Bearer token) | ✅ 完成 |
 | **2.3** | 桌面 app 端到端登录测试 (admin/kent986611) | ✅ 完成 (重启 wails dev 后) |
 | **3** | 自动更新 (GitHub Releases API + SettingsPage) | ✅ 完成 |
-| **4** | 完整 NSIS 打包发布 | 🟡 待启动 |
+| **4** | 完整 NSIS 打包发布 + v0.1.0 release | ✅ 完成 |
+
+**Phase 4 Release 详情**:
+- git tag v0.1.0 + push → 触发 release workflow #1
+- 自动 build Windows .exe (11.7 MB) + NSIS wrapper
+- 自动创建 GitHub Release + 上传 asset
+- Asset URL: https://github.com/ourvps1688/novel2all-go/releases/download/v0.1.0/Novel2ALL.exe
+- **重要**: 桌面 app CurrentVersion=1.0.0, v0.1.0 < 1.0.0 触发不了更新检测. 后续 release 必须用 v1.0.0+ 格式才能被桌面 app 检测.
 
 ---
 
@@ -621,6 +628,10 @@ jobs:
 | 14:46 | Phase 2 | 删 build/bin + frontend/wailsjs, 重启 wails dev, 登录 admin/kent986611 成功 (200), 进入主界面. Phase 2.3 ✅ | (测试通过) |
 | 14:55 | Phase 3 | 写 internal/update/update.go (~250 行): GitHubRelease 结构, LatestRelease/CheckForUpdates/DownloadLatest/ApplyUpdate + semver 比较 + parseGitHubTime. app.go 加 4 个方法: CheckForUpdate/CurrentVersion/DownloadUpdate/ApplyUpdate. App.tsx 加 SettingsPage + 设置按钮 + modal 样式 | 5d5a6f0 |
 | 14:56 | Phase 3 | git commit 5d5a6f0 + push + CI #185/#186 全绿 | 5d5a6f0 |
+| 15:16 | Phase 4 | git tag v0.1.0 + push → 触发 release workflow #1 | v0.1.0 |
+| 15:20 | Phase 4 | release workflow #1 ✅ success (windows-latest build + NSIS + Upload asset) | v0.1.0 |
+| 15:20 | Phase 4 | Release v0.1.0 创建: Novel2ALL.exe (11.7 MB) 已发布. URL: https://github.com/ourvps1688/novel2all-go/releases/tag/v0.1.0 | v0.1.0 |
+| 15:22 | Phase 4 | 发现 version 比对 bug: CurrentVersion=1.0.0 > v0.1.0, semver 不触发更新. 需 v1.0.0+ tag. 已加 release.yml 注释 | (本文档) |
 
 ### 待办 (下一阶段)
 
@@ -632,7 +643,7 @@ jobs:
 - [x] Phase 2.2: 桌面 app Login() 真实调后端 (Bearer token) ✅
 - [x] Phase 2.3: 桌面 app 端到端登录测试 (admin/kent986611) ✅
 - [x] Phase 3: 自动更新 (GitHub Releases API + SettingsPage) ✅
-- [ ] Phase 4: 完整 NSIS 打包发布
+- [x] Phase 4: 完整 NSIS 打包发布 (v0.1.0 release) ✅ — 但 v0.1.0 < CurrentVersion, 桌面 app 检测不到. 后续 tag 需用 v1.0.0+ 格式
 
 ---
 

@@ -6,6 +6,10 @@
 #
 # 用法: git tag v1.0.0 && git push origin v1.0.0
 #       GitHub Actions 自动跑这个 workflow, 完成后桌面 app 用户收到更新提示
+#
+# 重要: Tag 必须用 vMAJOR.MINOR.PATCH 格式, 且 MAJOR >= 1.
+# 当前 desktop app CurrentVersion="1.0.0", semver 比较 v0.x.y 不会触发更新.
+# 推荐首个产品 release 用 v1.0.0.
 
 name: Release
 

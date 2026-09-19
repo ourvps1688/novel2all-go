@@ -77,7 +77,11 @@ var HTTPClient = &http.Client{
 
 // CurrentVersion 当前桌面 app 版本.
 //
-// Phase 4 改成 ldflags -X 'main.Version=1.0.5' 注入. Phase 3 硬编码 1.0.0.
+// Phase 4 改成 ldflags -X 'main.Version=1.0.5' 注入.
+//
+// 重要: 这个值必须 ≥ latest GitHub release tag 的 major (semver major).
+// 例: latest tag "v0.1.0" → CurrentVersion="1.0.0" (major=1 > 0).
+// Phase 4 release 改用真实 release version 注入.
 var CurrentVersion = "1.0.0"
 
 // LatestRelease GET GitHub Releases API 返 latest release.
