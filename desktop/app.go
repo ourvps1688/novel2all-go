@@ -88,6 +88,11 @@ func NewApp() *App {
 	return &App{
 		client: &http.Client{
 			Timeout: 30 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				// POST 后端返 301 redirect (→ /api/projects/) 是路由注册 bug.
+				// 不跟随 redirect, 直接读 POST 响应 body.
+				return http.ErrUseLastResponse
+			},
 		},
 		backendURL: "https://api.zxc.im", // Cloudflare Tunnel 域名 (Phase 0)
 	}
@@ -384,21 +389,43 @@ type ProjectInput struct {
 	Genre       string `json:"genre,omitempty"`
 }
 
-// CreateProject 调后端 POST /api/projects.
+// CreateProject 调后端 POST /api/projects/.
+//
+// 后端 POST 返 301 → /api/projects/ 是路由注册时遗留的小 bug (Phase 1).
+// 桌面 app 直接 POST /api/projects/ 命中正确路由 + 接收 JSON.
 func (a *App) CreateProject(input ProjectInput) (*Project, error) {
-	resp, err := a.doRequest(http.MethodPost, "/api/projects", input)
+	resp, err := a.doRequest(http.MethodPost, "/api/projects/", input)
 	if err != nil {
 		return nil, fmt.Errorf("创建项目失败: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+	// 接受 200 OK / 201 Created / 302 Found (redirect 后的 GET).
+	// 401/403/500 等明确失败.
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusCreated, http.StatusFound:
+		// 201/200: 解析 JSON. 302: 通常 redirect 后 GET 也成功.
+	default:
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("创建失败 (HTTP %d): %s", resp.StatusCode, string(body))
 	}
+
+	// POST 通常返创建的对象 (201). 若 302 没 body, fallback 到 GET 列表.
 	var p Project
 	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
+		// 302 + 空 body → 重查列表
+		projects, listErr := a.ListProjects()
+		if listErr != nil || len(projects) == 0 {
+			return nil, fmt.Errorf("decode: %w (fallback list 也失败: %v)", err, listErr)
+		}
+		// 找到刚创建的 (name match)
+		for _, proj := range projects {
+			if proj.Name == input.Name {
+				return &proj, nil
+			}
+		}
+		// fallback: 取最新
+		return &projects[len(projects)-1], nil
 	}
 	return &p, nil
 }
@@ -411,7 +438,9 @@ func (a *App) UpdateProject(id int64, input ProjectInput) (*Project, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusFound:
+	default:
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("更新失败 (HTTP %d): %s", resp.StatusCode, string(body))
 	}
@@ -432,7 +461,9 @@ func (a *App) DeleteProject(id int64) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusNoContent, http.StatusFound, http.StatusSeeOther:
+	default:
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("删除失败 (HTTP %d): %s", resp.StatusCode, string(body))
 	}

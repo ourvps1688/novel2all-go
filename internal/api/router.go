@@ -238,7 +238,11 @@ func registerProjectRoutes(mux *http.ServeMux, deps Deps) {
 
 	// Projects API (受保护 P0-A)
 	// 共享 ProjectStore: 切片 10 让 StatePersistor 可以持久化 projects
-	mux.Handle("/api/projects/", authGuard(NewProjectsHandlerWithRepo(deps.projectStore)))
+	// Projects API (Phase 0 注册 /api/projects/, Phase F 桌面 app 同时请求带/不带 trailing slash,
+	// 为避免 ServeMux 默认 redirect (丢失 Authorization header) → 401, 同时注册两个路径).
+	projectsHandler := NewProjectsHandlerWithRepo(deps.projectStore)
+	mux.Handle("/api/projects", authGuard(projectsHandler))
+	mux.Handle("/api/projects/", authGuard(projectsHandler))
 
 	// Write + Tracking API (受保护 P0-A, 流式写作)
 	if deps.Loader != nil && deps.Router != nil {
