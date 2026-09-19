@@ -664,6 +664,10 @@ jobs:
 | 16:25 | 文档 | 加 docs/desktop-features-roadmap.md (10 modules, 5 batches roadmap) + desktop-development.md 加 0.1 节引用 | 452a251 |
 | 16:30 | fix | disallowed_tools_e2e_test.go: skip Bash_allowed sub-test if echo binary not in PATH (CI runner image 偶尔缺 coreutils). CI #191 失败 + CI #192 成功 | 60689db |
 | 20:58 | Module F | 桌面 app 项目 CRUD (CreateProject/UpdateProject/DeleteProject + ProjectModal UI). 后端 4 个端点已存在 (POST/GET/PUT/DELETE /api/projects), desktop 集成 + UI. Wails Go + React TypeScript 都过 | 38f29f1 |
+| 22:00 | fix | **CRITICAL**: GetTokenFromRequest 支持 Authorization Bearer header (原仅 cookie). 桌面 app POST /api/projects 401 → 200. 用户截图 Cloudflare Tunnel UI 暴露问题根因 | 9cb1dd1 |
+| 22:10 | fix | router.go 同时注册 /api/projects 和 /api/projects/ — 避免 301 redirect 丢失 Authorization header | db69f95 |
+| 22:30 | fix | CreateProject input 自动从 name 生成 slug (前端防御: .trim().toLowerCase().replace(/\s+/g, '-')) — 后端必填字段 | 3308dbe |
+| 23:50 | Module F | Phase F UI 重设计 (Stripe/Gemini 风格) — 紧凑单行项目列表 + 始终可见的编辑/删除按钮 (opacity 0.6→1) + accent 色显眼 + 新建按钮 + modal 三段式 (modal-header/modal-body/modal-footer). App.css 714 行重写, App.tsx 用新 class. TS typecheck 通过 | 0cdcbe9 |
 
 ### 待办 (下一阶段)
 
