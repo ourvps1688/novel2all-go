@@ -682,6 +682,11 @@ jobs:
 | 23:38 | Module A fix | api/projects.go import store + `var ErrNotFound = store.ErrNotFound` (统一 sentinel). chapters.go 加注释说明. go vet + TestChapter + 全套 test 18/19 通过 (唯一 fail 是 LLM E2E 非确定性) | bb528d9 |
 | 23:40 | Module A | 推 bb528d9 + 服务器 pull + atomic swap (新 md5=021f0fe2) + systemctl restart. curl 验证全链路: POST /api/chapter/1 (project_id=2) → HTTP 201; GET /api/chapters → 1 chapter; GET /api/chapter/1/content → markdown 完整; POST /api/chapter/1/save → HTTP 200. **Module A 端到端闭环** | bb528d9 |
 | 23:42 | 文档 | changelog 加 Module A 部署 bug 发现 + 修复条目 (本节) | (本文档) |
+| 23:50 | Module A | **用户反馈新 bug**: 添加第一章显示"第0章" + 编辑按钮直接不作用 + 删除按钮有提示但无法删除 | (用户截图) |
+| 23:55 | Module A fix | **根因**: JSON 字段名不匹配. 后端返 `chapter` 字段, 桌面 Go `Chapter.Number int json:"number"` 反序列化为 0. 触发链: ListChapters 返 `Number: 0` → React `第${c.number}章` 渲染"第0章"; `GetChapterContent(2, undefined)` → Go int 默认 0 → server GET /api/chapter/0/content → 400 'invalid chapter number' → modal 不开; `DeleteChapter(2, undefined)` 同路径, confirm 弹出但删除静默失败 | (诊断) |
+| 23:58 | Module A fix | desktop/app.go: `Chapter.Number int json:"number"` → `Chapter int json:"chapter"`; `ChapterInput.Number` → `ChapterInput.Chapter`; 方法体 `input.Number` → `input.Chapter` (URL 路径); Chapter 构造 `Number:` → `Chapter:`. App.tsx: 5 处 `c.number` → `c.chapter` (列表渲染 / 标题 / num-tag / openChapterEditor / deleteChapter); 1 处 `input.number` → `input.chapter` (ChapterModal save); 1 处 `props.chapter?.number` → `props.chapter?.chapter` (useState 初始化 + 编辑 modal 标题). wailsjs/go/models.ts: 同步更新 (gitignored 但本地存在, wails dev 也会重新生成) | c41294a |
+| 23:59 | Module A fix | `npx tsc --noEmit -p frontend`: 0 errors (修前 7 errors). 推 origin/main + CI #207 ✅ success (后端无改动, 仅 desktop) | c41294a |
+| 00:00 (次日) | Module A | 桌面 Go build 需 Go 1.25 (用户本机 wails dev 可正常工作, 触发 wails 自动重新生成 bindings). 用户 reload 后验收: 章节号显示正确 / 编辑 modal 打开 / 删除生效 | (用户验收) |
 
 ### 待办 (下一阶段)
 
