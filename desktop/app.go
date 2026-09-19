@@ -15,6 +15,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"desktop-novel2all/internal/systray"
+	"desktop-novel2all/internal/update"
 )
 
 // App struct — Wails 桌面 app 后端.
@@ -432,4 +433,66 @@ func (a *App) saveTokenToDisk(tok string) error {
 		return err
 	}
 	return os.WriteFile(path, []byte(tok), 0o600)
+}
+
+// ---------------------------------------------------------------------------
+// Auto-update (Phase 3)
+// ---------------------------------------------------------------------------
+
+// CheckForUpdate 调 GitHub Releases API 检查更新.
+//
+// 返 update.Info (前端设置页显示).
+func (a *App) CheckForUpdate() (*update.UpdateInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return update.CheckForUpdates(ctx)
+}
+
+// CurrentVersion 返 desktop 当前版本 (前端显示).
+func (a *App) CurrentVersion() string {
+	return update.CurrentVersion
+}
+
+// DownloadUpdate 下载最新版 .exe 到 %TEMP%.
+//
+// 返 (path, info, error). 路径给前端传给 ApplyUpdate.
+// DownloadProgress callback 通过 runtime.EventsEmit 推到前端 (SSE).
+func (a *App) DownloadUpdate() (string, *update.UpdateInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	info, err := a.CheckForUpdate()
+	if err != nil {
+		return "", nil, err
+	}
+	if info == nil || !info.Available {
+		return "", info, fmt.Errorf("no update available")
+	}
+
+	progress := func(downloaded, total int64) {
+		runtime.EventsEmit(a.ctx, "update:progress", map[string]any{
+			"downloaded": downloaded,
+			"total":      total,
+			"percent":    int(downloaded * 100 / total),
+		})
+	}
+
+	path, err := update.DownloadLatest(ctx, info, progress)
+	if err != nil {
+		return "", info, err
+	}
+	return path, info, nil
+}
+
+// ApplyUpdate 启动 NSIS installer 应用更新.
+//
+// installerPath 是 DownloadUpdate 返的路径. 调用后当前进程需退出
+// (NSIS 升级机制接管), Phase 4 改用更可靠的退出逻辑.
+func (a *App) ApplyUpdate(installerPath string) error {
+	if err := update.ApplyUpdate(installerPath); err != nil {
+		return err
+	}
+	// 启动 installer 成功, 退出当前 app 让 NSIS 替换 binary
+	runtime.Quit(a.ctx)
+	return nil
 }
