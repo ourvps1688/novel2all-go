@@ -2,7 +2,7 @@
 
 **项目**: `D:\OHMYSTORY\novel2all-go\desktop\`
 **作者**: novel2all-bot
-**最后更新**: 2026-09-19 14:55 (每次任务完成更新)
+**最后更新**: 2026-09-19 14:56 (每次任务完成更新)
 
 > ⚠️ **自动化规则**: 任何 Phase 任务完成后**必须**立即更新本文档的"变更日志"章节 + 更新顶部"最后更新时间"。  
 > 不允许"先 commit 等下再补"。Commit 完成 / CI 通过 / Phase 完成 = 立即更新文档。
@@ -620,6 +620,7 @@ jobs:
 | 14:45 | Phase 2 | wails dev 启动: UI 渲染 "Novel2ALL", 后端状态 "✅ 后端 OK", 登录 admin/kent986611 显示 "登录失败 (HTTP 401): invalid credentials". 原因: wails dev Go binary 缓存, 需要删除 frontend/wailsjs 强制重新 build | 9647f7f (待修) |
 | 14:46 | Phase 2 | 删 build/bin + frontend/wailsjs, 重启 wails dev, 登录 admin/kent986611 成功 (200), 进入主界面. Phase 2.3 ✅ | (测试通过) |
 | 14:55 | Phase 3 | 写 internal/update/update.go (~250 行): GitHubRelease 结构, LatestRelease/CheckForUpdates/DownloadLatest/ApplyUpdate + semver 比较 + parseGitHubTime. app.go 加 4 个方法: CheckForUpdate/CurrentVersion/DownloadUpdate/ApplyUpdate. App.tsx 加 SettingsPage + 设置按钮 + modal 样式 | 5d5a6f0 |
+| 14:56 | Phase 3 | git commit 5d5a6f0 + push + CI #185/#186 全绿 | 5d5a6f0 |
 
 ### 待办 (下一阶段)
 
