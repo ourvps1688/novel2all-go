@@ -687,6 +687,14 @@ jobs:
 | 23:58 | Module A fix | desktop/app.go: `Chapter.Number int json:"number"` → `Chapter int json:"chapter"`; `ChapterInput.Number` → `ChapterInput.Chapter`; 方法体 `input.Number` → `input.Chapter` (URL 路径); Chapter 构造 `Number:` → `Chapter:`. App.tsx: 5 处 `c.number` → `c.chapter` (列表渲染 / 标题 / num-tag / openChapterEditor / deleteChapter); 1 处 `input.number` → `input.chapter` (ChapterModal save); 1 处 `props.chapter?.number` → `props.chapter?.chapter` (useState 初始化 + 编辑 modal 标题). wailsjs/go/models.ts: 同步更新 (gitignored 但本地存在, wails dev 也会重新生成) | c41294a |
 | 23:59 | Module A fix | `npx tsc --noEmit -p frontend`: 0 errors (修前 7 errors). 推 origin/main + CI #207 ✅ success (后端无改动, 仅 desktop) | c41294a |
 | 00:00 (次日) | Module A | 桌面 Go build 需 Go 1.25 (用户本机 wails dev 可正常工作, 触发 wails 自动重新生成 bindings). 用户 reload 后验收: 章节号显示正确 / 编辑 modal 打开 / 删除生效 | (用户验收) |
+| 00:08 | Module B | 启动 Module B (1d): LLM API key 加密本地存储 + SettingsPage UI | (新任务) |
+| 00:10 | Module B | **设计**: PBKDF2-SHA256(100k iter) + AES-256-GCM, master key 从 (hostname + username) 派生 (跨机器/跨用户不可解), JSON 文件 `{v, kdf, iter, salt, providers: {name: {nonce, ct}}}`, AAD = provider name 防改名, 0600 权限, 原子写 (tmp + rename) | (设计) |
+| 00:15 | Module B | 新增 `desktop/internal/secrets/` 包 (10.8KB) + 14 个单元测试 (9.2KB). 覆盖: Set/Get round-trip, Has/List, SetEmptyDeletes, Clear, TamperedCiphertextFails (AES-GCM auth tag), RenamedProviderFails (AAD), UnsupportedVersion, DifferentMachineDifferentKey (机器绑定), Concurrent (race detector), DefaultPath, NewEmptyPath, EmptyProviderName, GarbageFileFails. **全部 PASS** | bb14af4 |
+| 00:18 | Module B | desktop/app.go 集成 (+114 行): `llmSecrets *secrets.Store` 字段 + startup 初始化 (失败 logError 不阻塞) + 5 个 wails-bound 方法 (SupportedProviders/GetLLMKeys/SetLLMKey/ClearLLMKeys/HasLLMKey) | bb14af4 |
+| 00:20 | Module B | desktop/frontend/src/App.tsx (+147 行): SettingsPage 加 "LLM API Keys" section, 3 个 provider 行 (dashscope/deepseek/minimax) 各有 password input + 保存/删除按钮 + "已配置 ✓" badge, "清除全部" 按钮 | bb14af4 |
+| 00:22 | Module B | desktop/frontend/src/App.css (+78 行): 新增 .settings-help / .llm-key-list / .llm-key-row / .llm-key-input 等 styles 复用现有 token. wailsjs/go/main/App.d.ts + App.js 加 5 个新方法导出 | bb14af4 |
+| 00:23 | Module B | 验证: secrets 14/14 PASS + go test ./... PASS + go vet clean + go build OK + tsc --noEmit 0 errors (修前 5 errors). CI #210 test job 失败 = pre-existing LLM E2E flake (`TestNarrativeWriterRealE2E_DeepSeek` 非确定性), 与 Module B 无关 (Module B 只改 desktop/ 路径) | bb14af4 |
+| 00:25 | 文档 | changelog 加 Module B 6 条 + docs/desktop-features-roadmap.md Module B 标 ✅ | (本提交) |
 
 ### 待办 (下一阶段)
 
@@ -700,6 +708,8 @@ jobs:
 - [x] Phase 3: 自动更新 (GitHub Releases API + SettingsPage) ✅
 - [x] Phase 4: 完整 NSIS 打包发布 (v0.1.0 release) ✅ — 但 v0.1.0 < CurrentVersion, 桌面 app 检测不到. 后续 tag 需用 v1.0.0+ 格式
 - [x] **Module F**: 项目 CRUD (CreateProject/UpdateProject/DeleteProject + ProjectModal UI) ✅
+- [x] **Module A**: 章节 CRUD (CreateChapter/UpdateChapter/DeleteChapter/GetChapterContent + ChapterModal UI) ✅
+- [x] **Module B**: LLM API key 配置（加密本地存储 + SettingsPage UI）✅ — PBKDF2 + AES-256-GCM, 机器绑定 master key, 14 个单元测试全过
 
 ---
 
