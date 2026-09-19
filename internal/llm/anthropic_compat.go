@@ -65,7 +65,32 @@ func (p *AnthropicCompat) HasMinimaxDefaults() bool {
 }
 
 func (p *AnthropicCompat) Name() ProviderName { return p.name }
-func (p *AnthropicCompat) Available() bool    { return p.apiKey != "" }
+
+// Available 返回 provider 是否可用.
+//
+// Sprint V1.0.1 Module B.2: 优先看 context 里的 user key (per-request override),
+// fallback 到 constructor key. 任一存在即视为可用.
+//
+// Available 不带 context 参数 — 没法检查 context. 如需精确判断, 调用方应:
+//  1. Available() 检查 constructor key
+//  2. middleware 已检查 header 才会进 context, Available=true 即可调用
+//
+// 实际生产: Available 返回 true 永远安全 (LLM 调用时会用 effective API key, 空字符串
+// 会立即报错).
+func (p *AnthropicCompat) Available() bool { return p.apiKey != "" }
+
+// effectiveAPIKey 返回本次请求应使用的 API key.
+//
+// 优先级: context user key > constructor key (p.apiKey).
+// 调用方: ChatStream / ChatWithTools 等所有需要 API key 的方法.
+//
+// 返回 "" 表示都没设置 — 调用 LLM provider 会立即 401/403.
+func (p *AnthropicCompat) effectiveAPIKey(ctx context.Context) string {
+	if userKey := APIKeyFromContext(ctx, p.name); userKey != "" {
+		return userKey
+	}
+	return p.apiKey
+}
 
 // DefaultModel 返回 Anthropic 兼容 provider 的默认模型名
 func (p *AnthropicCompat) DefaultModel() string { return p.model }
@@ -419,7 +444,7 @@ func (p *AnthropicCompat) do(ctx context.Context, body antRequest, stream bool) 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", p.apiKey)
+	req.Header.Set("x-api-key", p.effectiveAPIKey(ctx))
 	req.Header.Set("anthropic-version", "2023-06-01")
 	if stream {
 		req.Header.Set("Accept", "text/event-stream")
@@ -439,7 +464,7 @@ func (p *AnthropicCompat) doWithTools(ctx context.Context, body antRequestWithTo
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", p.apiKey)
+	req.Header.Set("x-api-key", p.effectiveAPIKey(ctx))
 	req.Header.Set("anthropic-version", "2023-06-01")
 	return p.client.Do(req)
 }

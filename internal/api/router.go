@@ -202,7 +202,9 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 		}
 		mux.Handle("/api/chapters", authGuard(chaptersHandler))
 		mux.Handle("/api/chapters/", authGuard(chaptersHandler))
-		mux.Handle("/api/chapter/", authGuard(chaptersHandler))
+		// Module B.2 (2026-09-20): /api/chapter/{N}/{action} 需要 user LLM key,
+		// 在 authGuard 后挂 LLMAPIKeyMiddleware (auth 失败时不应暴露 user key 透传)
+		mux.Handle("/api/chapter/", authGuard(LLMAPIKeyMiddleware(chaptersHandler)))
 	} else {
 		chaptersHandler := NewChapterHandler()
 		chaptersHandler.SetProjects(deps.projectStore)
@@ -211,7 +213,7 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 		}
 		mux.Handle("/api/chapters", authGuard(chaptersHandler))
 		mux.Handle("/api/chapters/", authGuard(chaptersHandler))
-		mux.Handle("/api/chapter/", authGuard(chaptersHandler))
+		mux.Handle("/api/chapter/", authGuard(LLMAPIKeyMiddleware(chaptersHandler)))
 	}
 
 	// Characters + Relationships + Foreshadows API (受保护 P0-A, JSON 持久化)

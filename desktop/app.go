@@ -414,11 +414,34 @@ func (a *App) doRequest(method, path string, body any) (*http.Response, error) {
 		req.Header.Set("Authorization", "Bearer "+tok)
 	}
 
+	// Module B.2 (2026-09-20): 自动注入 user LLM key header.
+	// 后端 middleware (LLMAPIKeyMiddleware) 读这些 header 透传给 LLM provider,
+	// 覆盖 systemd 环境变量里的 admin key. 没配置 user key 的 provider 不加 header.
+	if a.llmSecrets != nil {
+		for provider, headerName := range userKeyHeaderMap {
+			if key, err := a.llmSecrets.Get(provider); err == nil && key != "" {
+				req.Header.Set(headerName, key)
+			}
+		}
+	}
+
 	resp, err := a.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP %s %s: %w", method, path, err)
 	}
 	return resp, nil
+}
+
+// userKeyHeaderMap: desktop provider 名 → 后端 X-LLM-Key-* header 名.
+//
+// 后端常量定义在 internal/api/middleware_llmkey.go. 这里保持字面值以避免
+// 跨 module 依赖 (desktop 不能 import backend internal 包).
+//
+// ⚠️ 改名时双方必须同步 (改名后 grep 整个项目同步).
+var userKeyHeaderMap = map[string]string{
+	"dashscope": "X-LLM-Key-DashScope",
+	"deepseek":  "X-LLM-Key-DeepSeek",
+	"minimax":   "X-LLM-Key-Minimax",
 }
 
 // ListProjects 调后端 GET /api/projects. admin sees all, user sees own.
