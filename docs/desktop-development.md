@@ -706,6 +706,13 @@ jobs:
 | 01:05 | Module C | desktop/frontend/src/App.tsx (+278 行): AI_BUTTONS 5 按钮配置 + 6 state (instruction/position/busy/error/success/reviewResult) + doAI() 统一入口 (validate + confirm + call + 处理响应) + refreshChapterContent() 重新拉取 + Review modal (大分数 + verdict 中文标签 + 3 issues section) + AI section UI (instruction 输入 + position 输入 + 5 按钮) | 41b76bb |
 | 01:10 | Module C | desktop/frontend/src/App.css (+210 行): .ai-section 紫色渐变背景 + .ai-action-btn flex + .review-modal max-width 640px + .review-score (32px + good/warn/bad 三色) + .review-issue (红/黄/灰三色边框). wailsjs/ 同步 5 个新方法 + 4 个新 struct (本地生成, wails dev 自动重新生成) | 41b76bb |
 | 01:15 | Module C | **后端 smoke test**: POST /api/auth/login-jwt → token; POST /api/chapter/1 (project_id=2) → 201 + char_count=32; POST /api/chapter/1/review → 200 + 完整 ReviewResult (quality_score=72.5, verdict=needs_revision, 3 critical + 2 major + 1 minor issues). **Module C 端到端通过** | (smoke) |
+| 01:20 | Module C.5 | **用户截图报告**: "扩写失败: ...context deadline exceeded while awaiting headers" (HTTP POST /api/chapter/2/expand) | (用户截图) |
+| 01:25 | Module C.5 | **根因**: desktop http.Client.Timeout 120s 太短 + 后端 expand/rewrite/insert handler 在 LLM 调用前没 flush response headers (client 一直 awaiting headers) | (诊断) |
+| 01:28 | Module C.5 fix | desktop/app.go: Timeout 120s → 600s (10 分钟). 注释解释 LLM 冷启动 60-180s + 后端 flush 改进方案 | c780806 |
+| 01:30 | Module C.5 fix | desktop/frontend: aiElapsedSec state + useEffect 每秒更新 + 按钮文字 "⏳ {label}中... 23s" + 30s 后黄底提示 "LLM 首次调用可能 1-2 分钟 (冷启动)". App.css .ai-wait-hint 黄底样式 | c780806 |
+| 01:33 | Module C.5 fix | internal/api/chapter_actions.go: expand/rewrite/insert handler 在 LLM 调用前 WriteHeader(200) + Flush(). Go 自动用 chunked transfer encoding, client 立即收到 200 + headers, 即使 LLM 阻塞 5 分钟也不会 abort | c780806 |
+| 01:35 | Module C.5 | 验证: tsc 0 errors + go vet clean + go test api ok 4.4s. CI #217 ✅ success | c780806 |
+| 01:36 | Module C.5 | 后端 atomic swap deploy: md5 32f8ace0. health OK | (部署) |
 
 ### 待办 (下一阶段)
 
