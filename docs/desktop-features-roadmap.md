@@ -101,6 +101,26 @@
 
 ---
 
+### Module J: Windows 自动启动 + 启动时最小化到托盘 ✅ (2026-09-20)
+**目标**: 桌面 app 开机自启 (Windows) + 启动时隐藏主窗口 (仅托盘图标)
+
+**实施**:
+- `desktop/internal/settings/` 新包 (settings.go + autostart_windows.go + autostart_other.go)
+  - settings.go: Settings struct (AutoStart + StartMinimized) + Load/Save (JSON `%APPDATA%/novel2all-desktop/settings.json`, 原子写)
+  - autostart_windows.go: HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Novel2ALL (Enable/Disable/IsEnabled)
+  - autostart_other.go: macOS/Linux stub (`//go:build !windows`, 返 'not supported' 或 false)
+- desktop Go: 3 个 wails 方法 (GetSettings/UpdateSettings/GetAutoStart)
+- desktop React: SettingsPage 加 2 toggle (开机自启 + 启动时最小化) + 设置保存 + 实际 Registry 状态显示
+- main.go: 启动时 settings.Load() 读 StartMinimized → wails.Run 的 StartHidden 选项
+
+**平台支持**:
+- Windows: 完整 (Registry 自启 + 启动最小化)
+- macOS/Linux: 暂未实现 (后续 Sprint 加 LaunchAgents / .desktop 文件)
+
+**下一步**: Module I (主题/语言/快捷键, 2d) 或 Module G (云同步, 3d)
+
+---
+
 ### Module F: 项目 CRUD (含 owner check)
 **目标**: 用户能创建/编辑/删除 project
 **后端**: `/api/projects` POST/PUT/DELETE (已有)
@@ -240,9 +260,11 @@
 | C 章节 action | ✅ 已完成 (2026-09-20, commit 41b76bb) |
 | D 人物/关系/伏笔 | ✅ 已完成 (2026-09-20, commit 19f3a2f) |
 | E 章节大纲 | ✅ 已完成 (2026-09-20, commit b0c9d60) |
-| H Skills 调用 | ✅ 已完成 (2026-09-20, commit (待 push)) |
+| H Skills 调用 | ✅ 已完成 (2026-09-20, commit 9c5a386) |
+| J 自动启动 | ✅ 已完成 (2026-09-20, commit (pending)) |
+| I 主题 | ⏸️ 2d |
 
-**当前 main 分支**: (待 push 后确认) (Module H 完成)
+**当前 main 分支**: (Module J 完成, 待 push)
 **GitHub v0.1.0 release**: 已发布, Novel2ALL.exe 11.7 MB
 
 ---

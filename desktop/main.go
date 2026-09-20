@@ -12,6 +12,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"desktop-novel2all/internal/settings"
 	"desktop-novel2all/internal/systray"
 )
 
@@ -51,6 +52,10 @@ func main() {
 	app := NewApp()
 	app.trayMenuRef = trayMenu
 
+	// Module J (2026-09-20): 启动时根据 settings 决定是否 StartHidden.
+	startSettings, _ := settings.Load()
+	startHidden := startSettings.StartMinimized
+
 	err := wails.Run(&options.App{
 		Title:             "Novel2ALL",
 		Width:             1024,
@@ -58,6 +63,7 @@ func main() {
 		MinWidth:          800,
 		MinHeight:         600,
 		HideWindowOnClose: true, // 关窗 → 最小化到托盘, 不退出
+		StartHidden:       startHidden,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

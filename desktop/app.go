@@ -16,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"desktop-novel2all/internal/secrets"
+	"desktop-novel2all/internal/settings"
 	"desktop-novel2all/internal/systray"
 	"desktop-novel2all/internal/update"
 )
@@ -1582,4 +1583,60 @@ func (a *App) GetSkill(name string) (*SkillSummary, error) {
 		}
 	}
 	return nil, fmt.Errorf("skill %q not found", name)
+}
+
+// ---------------------------------------------------------------------------
+// Module J: Settings 持久化 + 自动启动 (桌面设置)
+// ---------------------------------------------------------------------------
+
+// Settings 桌面 app 配置 (Module J - 2026-09-20).
+type Settings struct {
+	AutoStart      bool `json:"auto_start"`
+	StartMinimized bool `json:"start_minimized"`
+}
+
+// GetSettings 读持久化设置. 不存在返默认 (AutoStart=false, StartMinimized=false).
+func (a *App) GetSettings() (*Settings, error) {
+	s, err := settings.Load()
+	if err != nil {
+		// 加载失败 (文件损坏?) 返默认 + 错误给上层 toast
+		return &Settings{AutoStart: false, StartMinimized: false}, err
+	}
+	return &Settings{AutoStart: s.AutoStart, StartMinimized: s.StartMinimized}, nil
+}
+
+// GetAutoStart 检查 Windows Registry 当前自启项状态 (与持久化设置独立).
+//
+// 反映系统真实状态: 即使用户在我 app 开了自启, 如果 registry 写失败或 app
+// 卸载后清理失败, 状态可能不一致. UI 用此展示真实情况.
+func (a *App) GetAutoStart() (bool, error) {
+	return settings.IsAutoStartEnabled()
+}
+
+// UpdateSettings 保存设置 + 应用到系统.
+//
+// AutoStart=true: 写 Windows Registry (Windows) / 返回错 (其他 OS).
+// AutoStart=false: 删除 Registry (幂等).
+// StartMinimized: 仅保存, 启动时 main.go 读 settings 应用.
+func (a *App) UpdateSettings(s Settings) error {
+	// 1. 持久化到 settings.json
+	if err := settings.Save(settings.Settings{
+		AutoStart:      s.AutoStart,
+		StartMinimized: s.StartMinimized,
+	}); err != nil {
+		return fmt.Errorf("save settings: %w", err)
+	}
+
+	// 2. 应用 AutoStart 到系统
+	if s.AutoStart {
+		if err := settings.EnableAutoStart(); err != nil {
+			return fmt.Errorf("enable auto-start: %w", err)
+		}
+	} else {
+		if err := settings.DisableAutoStart(); err != nil {
+			return fmt.Errorf("disable auto-start: %w", err)
+		}
+	}
+
+	return nil
 }

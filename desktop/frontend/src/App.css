@@ -1693,3 +1693,27 @@ html, body, #root, #App {
     max-height: 360px;
     overflow-y: auto;
 }
+/* ===== Module J: Settings 页面 toggle 行 ===== */
+
+.setting-toggle-row {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px !important;
+    cursor: pointer;
+}
+
+.setting-toggle-row input[type='checkbox'] {
+    cursor: pointer;
+    width: auto !important;
+    margin: 0 !important;
+}
+
+.setting-toggle-row span {
+    font-size: 13px;
+    color: var(--color-text);
+}
+
+.settings-actions {
+    margin-top: 8px;
+}

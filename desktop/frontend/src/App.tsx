@@ -59,6 +59,10 @@ import {
     ListSkills,
     ExecuteSkillSync,
     GetSkill,
+    // Module J: Settings 持久化 + 自动启动
+    GetSettings,
+    UpdateSettings,
+    GetAutoStart,
 } from '../wailsjs/go/main/App';
 import type { main } from '../wailsjs/go/models';
 
@@ -530,6 +534,55 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
     const [llmError, setLlmError] = useState<string>('');
     const [llmSuccess, setLlmSuccess] = useState<string>('');
 
+    // Module J: Settings 持久化 (开机自启 + 启动时最小化)
+    const [settings, setSettings] = useState<{ auto_start: boolean; start_minimized: boolean }>({
+        auto_start: false,
+        start_minimized: false,
+    });
+    const [settingsLoading, setSettingsLoading] = useState(true);
+    const [settingsSaving, setSettingsSaving] = useState(false);
+    const [settingsError, setSettingsError] = useState<string>('');
+    const [settingsSuccess, setSettingsSuccess] = useState<string>('');
+    const [actualAutoStart, setActualAutoStart] = useState<boolean | null>(null); // null=未知
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const s = await GetSettings();
+                setSettings({ auto_start: !!s?.auto_start, start_minimized: !!s?.start_minimized });
+                // 额外查询实际系统状态 (registry), 跟持久化设置可能不一致
+                const actual = await GetAutoStart();
+                setActualAutoStart(actual);
+            } catch (e: any) {
+                setSettingsError(`加载设置失败: ${e?.message ?? e}`);
+            } finally {
+                setSettingsLoading(false);
+            }
+        })();
+    }, []);
+
+    async function saveSettings(newSettings: { auto_start: boolean; start_minimized: boolean }) {
+        setSettingsSaving(true);
+        setSettingsError('');
+        setSettingsSuccess('');
+        try {
+            await UpdateSettings(newSettings);
+            setSettings(newSettings);
+            setSettingsSuccess('已保存');
+            // 刷新实际状态 (registry 写后)
+            try {
+                const actual = await GetAutoStart();
+                setActualAutoStart(actual);
+            } catch {
+                // ignore
+            }
+        } catch (e: any) {
+            setSettingsError(`保存失败: ${e?.message ?? e}`);
+        } finally {
+            setSettingsSaving(false);
+        }
+    }
+
     useEffect(() => {
         (async () => {
             try {
@@ -727,6 +780,56 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
                     )}
                     {llmError && <div className="error" style={{ marginTop: '8px' }}>{llmError}</div>}
                     {llmSuccess && <div className="info ok" style={{ marginTop: '8px' }}>{llmSuccess}</div>}
+                </section>
+
+                <section className="settings-section">
+                    <h3>桌面设置</h3>
+                    {settingsLoading ? (
+                        <div className="info">加载设置中...</div>
+                    ) : (
+                        <>
+                            <label className="form-label setting-toggle-row">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.auto_start}
+                                    disabled={settingsSaving}
+                                    onChange={(e) => setSettings({ ...settings, auto_start: e.target.checked })}
+                                />
+                                <span>开机自启 (Windows Registry HKCU\...\Run)</span>
+                            </label>
+                            {actualAutoStart !== null && actualAutoStart !== settings.auto_start && (
+                                <div className="info" style={{ fontSize: '11px', marginLeft: '24px' }}>
+                                    系统当前状态: {actualAutoStart ? '已启用' : '未启用'} (与设置不同步, 可能被外部修改)
+                                </div>
+                            )}
+
+                            <label className="form-label setting-toggle-row">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.start_minimized}
+                                    disabled={settingsSaving}
+                                    onChange={(e) => setSettings({ ...settings, start_minimized: e.target.checked })}
+                                />
+                                <span>启动时最小化到托盘 (不弹主窗口)</span>
+                            </label>
+
+                            <div className="settings-actions">
+                                <button
+                                    className="btn primary small"
+                                    onClick={() => saveSettings(settings)}
+                                    disabled={settingsSaving}
+                                >
+                                    {settingsSaving ? '保存中...' : '保存设置'}
+                                </button>
+                            </div>
+
+                            {settingsError && <div className="error" style={{ marginTop: '8px' }}>{settingsError}</div>}
+                            {settingsSuccess && <div className="info ok" style={{ marginTop: '8px' }}>{settingsSuccess}</div>}
+                            <div className="info" style={{ fontSize: '11px', marginTop: '12px' }}>
+                                提示: 开机自启下次启动时生效. 启动时最小化需要重启 app.
+                            </div>
+                        </>
+                    )}
                 </section>
 
                 <section className="settings-section">
