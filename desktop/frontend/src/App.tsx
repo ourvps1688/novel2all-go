@@ -339,7 +339,7 @@ function App() {
 
     return (
         <div id="App" className="app-shell">
-            {/* ===== Phase 1.2: Top Navbar (stuck) ===== */}
+            {/* ===== Phase 1.5: Top Navbar (only settings/account/logout) ===== */}
             <div className="app-navbar">
                 <div className="app-navbar-brand">
                     <div className="app-navbar-brand-icon">N</div>
@@ -347,17 +347,11 @@ function App() {
                 </div>
                 <div className="app-navbar-spacer" />
                 {user && (
-                    <span className="info" style={{ fontSize: 12 }}>
-                        👤 {user.username} <span className="role">{user.role}</span>
-                    </span>
+                    <div className="app-navbar-user" title={user.username}>
+                        <div className="app-navbar-avatar" aria-hidden="true">👤</div>
+                        <span className="app-navbar-username">{user.username}</span>
+                    </div>
                 )}
-                {selectedProject && (
-                    <button className="app-navbar-link" onClick={() => setShowKnowledge(true)} title="知识管理">📚 知识</button>
-                )}
-                {selectedProject && (
-                    <button className="app-navbar-link" onClick={() => setShowOutline(true)} title="章节大纲">📝 大纲</button>
-                )}
-                <button className="app-navbar-link" onClick={() => setShowSkills(true)} title="Skills">⚡ Skills</button>
                 <button className="app-navbar-link" onClick={() => setShowSettings(true)} title="设置">⚙ 设置</button>
                 <button className="app-navbar-link" onClick={doLogout} title="登出">登出</button>
                 <button
@@ -404,6 +398,36 @@ function App() {
             <div className="main app-body">
                 {/* 左: Sidebar (full height, project list + status footer) */}
                 <aside className={`sidebar app-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+                    {/* Phase 1.5: 导航项 (知识/大纲/Skills) */}
+                    <div className="app-sidebar-section">
+                        <button
+                            className="app-sidebar-item"
+                            onClick={() => selectedProject ? setShowKnowledge(true) : null}
+                            disabled={!selectedProject}
+                            title={selectedProject ? '知识管理' : '先选择项目'}
+                        >
+                            <span className="app-sidebar-item-icon">📚</span>
+                            <span>知识管理</span>
+                        </button>
+                        <button
+                            className="app-sidebar-item"
+                            onClick={() => selectedProject ? setShowOutline(true) : null}
+                            disabled={!selectedProject}
+                            title={selectedProject ? '章节大纲' : '先选择项目'}
+                        >
+                            <span className="app-sidebar-item-icon">📝</span>
+                            <span>章节大纲</span>
+                        </button>
+                        <button
+                            className="app-sidebar-item"
+                            onClick={() => setShowSkills(true)}
+                            title="Skills"
+                        >
+                            <span className="app-sidebar-item-icon">⚡</span>
+                            <span>Skills</span>
+                        </button>
+                    </div>
+
                     <div className="app-sidebar-section">
                         <div className="app-sidebar-section-title">
                             <span>项目 <span className="count">({projects.length})</span></span>
