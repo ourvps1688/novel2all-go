@@ -136,6 +136,15 @@
 
 **工作量**: 1.5 天
 **风险**: 低
+
+### Module H: Skills 调用 ✅ (2026-09-20)
+**实现**:
+- 桌面 Go: 3 wails 方法 (ListSkills/GetSkill/ExecuteSkillSync). 同步版本 (SSE 流式留后续 Sprint)
+- React UI: SkillsPanel 13 卡片网格 + 运行 modal (输入 + 高级 provider/model 选项 + 结果展示)
+- user-bar 加 "⚡ Skills" 按钮 (无需选项目)
+- 后端 endpoint: GET /api/skills + POST /api/skills/{name}/execute-sync
+
+**下一步 Module J (自动启动 + 最小化到托盘)** 或 Module I (主题/语言), 详见状态表.
 **验证**: 调 skill → 看后端日志
 
 ---
@@ -231,9 +240,9 @@
 | C 章节 action | ✅ 已完成 (2026-09-20, commit 41b76bb) |
 | D 人物/关系/伏笔 | ✅ 已完成 (2026-09-20, commit 19f3a2f) |
 | E 章节大纲 | ✅ 已完成 (2026-09-20, commit b0c9d60) |
-| H Skills 调用 | ⏸️ 1.5d |
+| H Skills 调用 | ✅ 已完成 (2026-09-20, commit (待 push)) |
 
-**当前 main 分支**: b0c9d60 (Module E 完成)
+**当前 main 分支**: (待 push 后确认) (Module H 完成)
 **GitHub v0.1.0 release**: 已发布, Novel2ALL.exe 11.7 MB
 
 ---

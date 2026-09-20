@@ -55,6 +55,10 @@ import {
     CreateOutline,
     UpdateOutline,
     DeleteOutline,
+    // Module H: Skills 调用
+    ListSkills,
+    ExecuteSkillSync,
+    GetSkill,
 } from '../wailsjs/go/main/App';
 import type { main } from '../wailsjs/go/models';
 
@@ -81,6 +85,9 @@ function App() {
 
     // Module E: 章节大纲面板可见性
     const [showOutline, setShowOutline] = useState(false);
+
+    // Module H: Skills 面板可见性
+    const [showSkills, setShowSkills] = useState(false);
 
     // 项目 Modal (Phase F: CRUD)
     const [projectModal, setProjectModal] = useState<{
@@ -315,6 +322,7 @@ function App() {
                     {selectedProject && (
                         <button className="btn" onClick={() => setShowOutline(true)}>📝 章节大纲</button>
                     )}
+                    <button className="btn" onClick={() => setShowSkills(true)}>⚡ Skills</button>
                     <button className="btn" onClick={() => setShowSettings(true)}>⚙ 设置</button>
                     <button className="btn" onClick={doLogout}>登出</button>
                 </div>
@@ -338,6 +346,12 @@ function App() {
                 <OutlinePanel
                     projectID={selectedProject.id}
                     onClose={() => setShowOutline(false)}
+                />
+            )}
+
+            {showSkills && (
+                <SkillsPanel
+                    onClose={() => setShowSkills(false)}
                 />
             )}
 
@@ -1931,6 +1945,196 @@ function KnowledgePanel(props: {
 
                             {err && <div className="error" style={{ marginTop: '8px' }}>{err}</div>}
                         </>
+                    )}
+                </div>
+
+                <div className="modal-footer">
+                    <button className="btn" onClick={props.onClose}>关闭</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Module H: SkillsPanel (13 个 LLM-driven skills 调用)
+// ---------------------------------------------------------------------------
+
+// SkillsPanel 13 skill 卡片网格 + 运行 modal (input textarea + run + 结果).
+// props.projectID 不必填 (skills 与项目无关, 走后端全局 skills API).
+function SkillsPanel(props: {
+    onClose: () => void;
+}) {
+    const [skills, setSkills] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState('');
+    const [runningSkill, setRunningSkill] = useState<string>(''); // 当前选中的 skill name
+    const [input, setInput] = useState('');
+    const [provider, setProvider] = useState('');
+    const [model, setModel] = useState('');
+    const [result, setResult] = useState<any | null>(null);
+    const [running, setRunning] = useState(false);
+
+    async function refresh() {
+        setLoading(true);
+        setErr('');
+        try {
+            const list = await ListSkills();
+            setSkills(list ?? []);
+        } catch (e: any) {
+            setErr(`加载 skills 失败: ${e?.message ?? e}`);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        refresh();
+    }, []);
+
+    function openSkill(skillName: string) {
+        setRunningSkill(skillName);
+        setInput('');
+        setProvider('');
+        setModel('');
+        setResult(null);
+    }
+
+    function closeSkill() {
+        setRunningSkill('');
+        setResult(null);
+    }
+
+    async function execute() {
+        if (!input.trim()) {
+            setErr('输入不能为空');
+            return;
+        }
+        setRunning(true);
+        setErr('');
+        try {
+            const r = await ExecuteSkillSync(runningSkill, input, provider, model);
+            setResult(r);
+        } catch (e: any) {
+            setErr(`执行失败: ${e?.message ?? e}`);
+        } finally {
+            setRunning(false);
+        }
+    }
+
+    // Skill 卡片 icon 映射 (Module H - 用 emoji 简单占位)
+    function skillIcon(name: string): string {
+        const icons: Record<string, string> = {
+            'expand': '✨',
+            'rewrite': '🔄',
+            'review': '📋',
+            'consistency-review': '🔍',
+            'compress': '📦',
+            'translate': '🌐',
+            'outline': '📝',
+            'brainstorm': '💡',
+            'character': '👤',
+            'worldbuild': '🌍',
+            'foreshadow': '🔮',
+            'refine': '✨',
+            'diagnose': '🩺',
+        };
+        return icons[name] || '⚡';
+    }
+
+    return (
+        <div className="modal-bg" onClick={props.onClose}>
+            <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h2>⚡ Skills (13 个 LLM-driven 工具)</h2>
+                    <button className="modal-close" onClick={props.onClose} aria-label="关闭">✕</button>
+                </div>
+
+                <div className="modal-body">
+                    {!runningSkill && (
+                        <>
+                            {loading ? (
+                                <div className="info">加载中...</div>
+                            ) : skills.length === 0 ? (
+                                <div className="info">未加载到 skills (检查后端)</div>
+                            ) : (
+                                <div className="skills-grid">
+                                    {skills.map((s) => (
+                                        <div key={s.name} className="skill-card" onClick={() => openSkill(s.name)}>
+                                            <div className="skill-icon">{skillIcon(s.name)}</div>
+                                            <div className="skill-info">
+                                                <div className="skill-name">{s.name}</div>
+                                                <div className="skill-desc">{s.description}</div>
+                                            </div>
+                                            <button className="skill-run-btn">▶ 运行</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {err && <div className="error" style={{ marginTop: '8px' }}>{err}</div>}
+                        </>
+                    )}
+
+                    {runningSkill && (
+                        <div className="skill-execute-panel">
+                            <button className="btn small" onClick={closeSkill}>← 返回 skills 列表</button>
+                            <h3 style={{ marginTop: '12px' }}>{skillIcon(runningSkill)} {runningSkill}</h3>
+
+                            <label className="form-label">
+                                输入 prompt *
+                                <textarea
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    placeholder="传给 skill 的输入 (如: '扩写这段战斗描写')"
+                                    rows={5}
+                                    disabled={running}
+                                />
+                            </label>
+
+                            <details className="skill-advanced">
+                                <summary>高级选项 (provider / model)</summary>
+                                <div className="form-row">
+                                    <label className="form-label form-label-narrow">
+                                        Provider (留空用默认)
+                                        <select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={running}>
+                                            <option value="">(默认)</option>
+                                            <option value="dashscope">dashscope</option>
+                                            <option value="deepseek">deepseek</option>
+                                            <option value="minimax">minimax</option>
+                                        </select>
+                                    </label>
+                                    <label className="form-label form-label-grow">
+                                        Model (留空用 provider 默认)
+                                        <input
+                                            type="text"
+                                            value={model}
+                                            onChange={(e) => setModel(e.target.value)}
+                                            placeholder="如: claude-opus-4-5-20250929"
+                                            disabled={running}
+                                        />
+                                    </label>
+                                </div>
+                            </details>
+
+                            <div className="skill-actions">
+                                <button className="btn primary" onClick={execute} disabled={running || !input.trim()}>
+                                    {running ? '⏳ 执行中 (10-60s)...' : '▶ 运行'}
+                                </button>
+                            </div>
+
+                            {err && <div className="error" style={{ marginTop: '12px' }}>{err}</div>}
+
+                            {result && (
+                                <div className="skill-result">
+                                    <div className="skill-result-meta">
+                                        <span className="role-tag">{result.provider}</span>
+                                        <span className="role-tag">{result.model}</span>
+                                        <span>{result.tokens_in} → {result.tokens_out} tokens</span>
+                                    </div>
+                                    <pre className="skill-result-content">{result.content}</pre>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
 

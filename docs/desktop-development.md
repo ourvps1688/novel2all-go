@@ -746,6 +746,12 @@ jobs:
 | 03:30 | Module E.4 | CI #228 lint fail: 'outline.go is not properly formatted (gofmt)'. 本地未跑 gofmt 直接提交. 修 `gofmt -w internal/api/outline.go`, amend 上次 commit (f1df34c) → f1df34c+fix, push | (lint fix) |
 | 03:32 | Module E.4 | 后端 atomic swap deploy md5 68be3cb5 → 0f7e0d18 (fix 后). smoke 测试 POST /api/outline 返回 **400 'invalid id'** — ServeHTTP bug: `strings.Split('', '/')` 返回 `[""]` (length 1), 进入 case 1 → ParseInt 失败. 修: 加 nonEmptyParts 计数 (过滤空串). amend + push (fedd07d) | (bug fix) |
 | 03:35 | Module E.4 | CI #230 ✅ ALL GREEN (test/lint/6 build matrix/smoke). 后端 re-deploy md5 0f7e0d18. **后端 smoke 全 CRUD**: POST → 201 + 完整 JSON; 重复章节 → 409 'chapter 1 already exists'; GET → 200; PUT → 200 + 更新; DELETE → 204; GET deleted → 404 'outline 1 not found' | (CI pass + deploy) |
+| 03:40 | Module H | 启动 Module H (1.5d): 桌面 app 能调后端 13 个 skills (与 Module C 互补但调用面更广) | (新任务) |
+| 03:45 | Module H | **调研**: 后端 internal/api/skills.go 已有完整 API: GET /api/skills (list), POST /api/skills/{name}/execute (SSE 流式), POST /api/skills/{name}/execute-sync (同步), GET /api/skills/{name}/status. SkillSummary + ExecuteRequest + SSEEvent structs. Loader 13 个 SKILL.md (embed.FS). Sprint V1.0.1 P2 决定只做 sync 版本 (SSE 流式留后续) | (调研) |
+| 03:50 | Module H.1 | **桌面 Go** (app.go, +93): SkillSummary struct (name/description) + SkillExecuteResult struct (content/provider/model/tokens_in/tokens_out). callSkillsExecute helper (处理 list + execute-sync 通用 HTTP/JSON 逻辑). 3 wails 方法: ListSkills / ExecuteSkillSync / GetSkill (过滤 ListSkills 替代独立 endpoint). ExecuteSkillSync 验证必填 (skill name + input 非空) | (桌面 Go) |
+| 03:55 | Module H.2 | **React UI**: SkillsPanel component (13 skill 卡片网格 220px+, 自适应 auto-fill). 每卡片: emoji icon (skill 名映射) + skill 名 + description (2 行截断) + ▶ 运行按钮. 点击卡片进入运行 modal: 大 textarea 输入 prompt + 高级选项 (provider select / model input, 默认走后端 router) + 运行按钮. 加载态 (⏳ 10-60s) + 结果展示 (meta + content pre 块, max-height 360px 滚动) | (React) |
+| 03:58 | Module H.2 | App.css 新增 .skills-grid / .skill-card (hover 紫边 + 浅紫底) / .skill-icon (24px emoji) / .skill-name / .skill-desc (2 行 ellipsis) / .skill-run-btn (紫色 pill) / .skill-execute-panel / .skill-advanced (details) / .skill-actions / .skill-result (紫边, max-height 360px 滚动 pre 块, 等宽字体) | (CSS) |
+| 04:00 | Module H.3 | 验证: go vet ./internal/... clean + 14/14 secrets + 2/2 update tests PASS. tsc 沙箱缺 deps, CI 验证. docs + 4 条 Module H 条目 + roadmap H 标 ✅. commit + push + CI 待验证 + 后端 atomic swap deploy | (验证) |
 
 ### 待办 (下一阶段)
 
@@ -765,6 +771,7 @@ jobs:
 - [x] **Module C**: 章节 action LLM 调用 ✅ — 5 个 wails 方法 (expand/rewrite/review/insert/rollback) + AI section UI + Review modal (大分数 + issues)
 - [x] **Module D**: 人物/关系/伏笔 知识管理 ✅ — 后端补 PUT/PATCH/DELETE + 桌面 15 wails 方法 + KnowledgePanel UI (3 tab CRUD)
 - [x] **Module E**: 章节大纲 ✅ — 新文件 outline.go + OutlineItem + 5 wails 方法 + OutlinePanel UI (按章节号排序)
+- [x] **Module H**: Skills 调用 ✅ — 桌面 3 wails 方法 (ListSkills/ExecuteSkillSync/GetSkill) + SkillsPanel UI (13 skill 卡片网格)
 
 ---
 

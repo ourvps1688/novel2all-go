@@ -152,13 +152,28 @@ type OutlineItem struct {
 	Foreshadows []string `json:"foreshadows,omitempty"`
 }
 
+// SkillSummary 技能概要 (Module H - 2026-09-20).
+//
+// 后端 internal/api/skills.go SkillSummary struct 镜像.
+// 后端 GET /api/skills 返回 13 个 SKILL.md 的 name + description 列表.
+type SkillSummary struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// SkillExecuteResult 同步执行 skill 的结果 (Module H).
+//
+// 后端 ExecuteResult 字段镜像. 桌面只暴露同步版本 (execute-sync),
+// 流式 (SSE) 后续 Sprint 优化再加入 (需后端持续推送 + Wails events emit).
+type SkillExecuteResult struct {
+	Content   string `json:"content"`
+	Provider  string `json:"provider"`
+	Model     string `json:"model"`
+	TokensIn  int    `json:"tokens_in"`
+	TokensOut int    `json:"tokens_out"`
+}
+
 // ActionRequest chapter action LLM 调用的请求体 (Module C).
-//
-// 后端 ActionRequest 的子集: 桌面 app 不传 project_root (后端 fallback "."),
-// 只传 project_id (后端用于 owner check) + 业务字段.
-//
-// Instruction: 给 LLM 的自然语言指令 (扩写/重写用).
-// Position:   insert 用, 1-based 行号.
 type ActionRequest struct {
 	ProjectID   int64  `json:"project_id"`
 	Instruction string `json:"instruction,omitempty"`
@@ -1468,4 +1483,99 @@ func (a *App) DeleteOutline(id int64) error {
 	}
 	path := fmt.Sprintf("/api/outline/%d", id)
 	return a.callOutlineCRUD(http.MethodDelete, path, nil, nil)
+}
+
+// ---------------------------------------------------------------------------
+// Module H: Skills 调用 (LLM 驱动的 13 个技能)
+// ---------------------------------------------------------------------------
+
+// callSkillsExecute 通用 helper (GET list + POST execute-sync).
+func (a *App) callSkillsExecute(method, path string, body any, result any) error {
+	var reqBody io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshal body: %w", err)
+		}
+		reqBody = bytes.NewReader(b)
+	}
+	resp, err := a.doRequest(method, path, reqBody)
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", method, path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("%s %s 失败 (HTTP %d): %s", method, path, resp.StatusCode, string(respBody))
+	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
+	if result == nil || len(respBody) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(respBody, result); err != nil {
+		return fmt.Errorf("解析响应失败: %w (body: %s)", err, string(respBody))
+	}
+	return nil
+}
+
+// ListSkills 列出所有 13 个 skill (name + description).
+//
+// 后端 GET /api/skills → {skills: [...], count: N}
+func (a *App) ListSkills() ([]SkillSummary, error) {
+	var out struct {
+		Skills []SkillSummary `json:"skills"`
+		Count  int             `json:"count"`
+	}
+	if err := a.callSkillsExecute(http.MethodGet, "/api/skills", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Skills, nil
+}
+
+// ExecuteSkillSync 同步执行 skill (阻塞等结果).
+//
+// 后端 POST /api/skills/{name}/execute-sync → SkillExecuteResult
+// 注意: 同步调用可能耗时 10-60s (LLM 调用). timeout 在 doRequest 里 = 600s.
+//
+// Input: 用户 prompt
+// Provider/Model/Variables: 可选覆盖 (空 = 后端默认)
+func (a *App) ExecuteSkillSync(name string, input string, provider string, model string) (*SkillExecuteResult, error) {
+	if name == "" {
+		return nil, fmt.Errorf("skill name 不能为空")
+	}
+	if input == "" {
+		return nil, fmt.Errorf("input 不能为空")
+	}
+	body := map[string]any{
+		"input":    input,
+		"provider": provider,
+		"model":    model,
+	}
+	path := fmt.Sprintf("/api/skills/%s/execute-sync", name)
+	var result SkillExecuteResult
+	if err := a.callSkillsExecute(http.MethodPost, path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetSkill 单个 skill 的详细信息 (description + references 等).
+//
+// 后端 GET /api/skills/{name} → 返回 Skill struct (body + references 列表).
+// 注: 后端当前没有此 endpoint (需走 skillsHandler.ListDetailed 或类似).
+// 暂用 ListSkills 过滤, 后续可加独立端点.
+func (a *App) GetSkill(name string) (*SkillSummary, error) {
+	skills, err := a.ListSkills()
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range skills {
+		if s.Name == name {
+			return &s, nil
+		}
+	}
+	return nil, fmt.Errorf("skill %q not found", name)
 }
