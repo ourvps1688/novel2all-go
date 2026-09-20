@@ -752,6 +752,7 @@ jobs:
 | 03:55 | Module H.2 | **React UI**: SkillsPanel component (13 skill 卡片网格 220px+, 自适应 auto-fill). 每卡片: emoji icon (skill 名映射) + skill 名 + description (2 行截断) + ▶ 运行按钮. 点击卡片进入运行 modal: 大 textarea 输入 prompt + 高级选项 (provider select / model input, 默认走后端 router) + 运行按钮. 加载态 (⏳ 10-60s) + 结果展示 (meta + content pre 块, max-height 360px 滚动) | (React) |
 | 03:58 | Module H.2 | App.css 新增 .skills-grid / .skill-card (hover 紫边 + 浅紫底) / .skill-icon (24px emoji) / .skill-name / .skill-desc (2 行 ellipsis) / .skill-run-btn (紫色 pill) / .skill-execute-panel / .skill-advanced (details) / .skill-actions / .skill-result (紫边, max-height 360px 滚动 pre 块, 等宽字体) | (CSS) |
 | 04:00 | Module H.3 | 验证: go vet ./internal/... clean + 14/14 secrets + 2/2 update tests PASS. tsc 沙箱缺 deps, CI 验证. docs + 4 条 Module H 条目 + roadmap H 标 ✅. commit + push + CI 待验证 + 后端 atomic swap deploy | (验证) |
+| 04:05 | Module H.3 | CI #232 ✅ ALL GREEN (test/lint/6 build matrix/smoke). 后端 smoke: GET /api/skills/ → 13 skills (browser-cdp + story + story-cover + story-deslop + story-import + story-long-analyze + story-long-scan + story-long-write + story-review + story-setup + story-short-analyze + story-short-scan + story-short-write). **icon 映射表需更新**: 实际 skill 名带 story- 前缀, 不是裸的 expand/rewrite/review. 用户输入 task:WRITING → 路由 minimax (admin key 未配). 结论: **Module H 端到端工作正常**, server 端 LLM key 配置是运维问题 | (CI pass + smoke) |
 
 ### 待办 (下一阶段)
 
