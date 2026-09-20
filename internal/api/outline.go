@@ -74,7 +74,16 @@ func (h *OutlineHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path = strings.Trim(path, "/")
 	parts := strings.Split(path, "/")
 
-	switch len(parts) {
+	// strings.Split("", "/") = [""] (length 1, 单个空串),
+	// 必须先过滤掉空串再判断 length, 否则空 path 被当作 "/api/outline/{id}" 处理 → 误报 invalid id.
+	nonEmptyParts := 0
+	for _, p := range parts {
+		if p != "" {
+			nonEmptyParts++
+		}
+	}
+
+	switch nonEmptyParts {
 	case 0:
 		// 集合端点 /api/outline (可带 ?project_root= 或 body 含 project_id)
 		switch r.Method {
