@@ -80,14 +80,22 @@
 
 ---
 
-### Module E: 章节大纲 (outline)
-**目标**: 用户能看/编辑章节大纲 (与 chapter 关联)
-**后端**: `/api/projects/{id}/outline` (需查)
-**桌面 app 加**:
-- OutlinePage: 大纲列表 + 编辑
-- 章节选择器关联大纲
+### Module E: 章节大纲 (outline) ✅ (2026-09-20)
+**目标**: 用户能规划/编辑章节大纲 (写作前必备)
+**实现**:
+- 后端: 新建 internal/api/outline.go (OutlineItem struct + 完整 CRUD + 章节号唯一性检查)
+- 桌面 Go: OutlineItem struct + 5 wails 方法 (List/Get/Create/Update/Delete)
+- React UI: OutlinePanel (按章节号排序, 章节徽章 + 列表 + 表单 + 删除)
+- 触发: user-bar "📝 章节大纲" 按钮 (选中项目后显示)
 
-**工作量**: 1.5 天
+**核心字段**:
+- chapter: 章节号 (项目内唯一, 创建时后端检查 409)
+- title + summary: 标题 + 梗概
+- key_events[]: 关键事件列表
+- status: planned / in_progress / done
+- characters[] / foreshadows[]: 关联 Module D 的人物/伏笔 (弱类型, 用名字引用)
+
+**下一步 Module H (Skills 调用)** 或 **Module J (自动启动)**, 详见 roadmap 状态表.
 **风险**: 中
 **验证**: 编辑大纲 → 章节页面能读到
 
@@ -221,10 +229,11 @@
 | A 章节 CRUD | ✅ 已完成 (2026-09-19, commits 3842005/b95b6ec/5d4f3d3) |
 | B LLM key | ✅ 已完成 (2026-09-20, commit bb14af4) |
 | C 章节 action | ✅ 已完成 (2026-09-20, commit 41b76bb) |
-| D 人物/关系/伏笔 | ✅ 已完成 (2026-09-20, 19f3a2f) |
-| E 章节大纲 | ⏸️ 排队 |
+| D 人物/关系/伏笔 | ✅ 已完成 (2026-09-20, commit 19f3a2f) |
+| E 章节大纲 | ✅ 已完成 (2026-09-20, commit b0c9d60) |
+| H Skills 调用 | ⏸️ 1.5d |
 
-**当前 main 分支**: 19f3a2f (Module D 完成)
+**当前 main 分支**: b0c9d60 (Module E 完成)
 **GitHub v0.1.0 release**: 已发布, Novel2ALL.exe 11.7 MB
 
 ---

@@ -33,6 +33,28 @@ import {
     ReviewChapter,
     InsertChapter,
     RollbackChapter,
+    // Module D: 知识管理 (人物/关系/伏笔)
+    ListCharacters,
+    GetCharacter,
+    CreateCharacter,
+    UpdateCharacter,
+    DeleteCharacter,
+    ListRelationships,
+    GetRelationship,
+    CreateRelationship,
+    UpdateRelationship,
+    DeleteRelationship,
+    ListForeshadows,
+    GetForeshadow,
+    CreateForeshadow,
+    UpdateForeshadow,
+    DeleteForeshadow,
+    // Module E: 章节大纲
+    ListOutlines,
+    GetOutline,
+    CreateOutline,
+    UpdateOutline,
+    DeleteOutline,
 } from '../wailsjs/go/main/App';
 import type { main } from '../wailsjs/go/models';
 
@@ -56,6 +78,9 @@ function App() {
 
     // Module D: 知识管理面板可见性
     const [showKnowledge, setShowKnowledge] = useState(false);
+
+    // Module E: 章节大纲面板可见性
+    const [showOutline, setShowOutline] = useState(false);
 
     // 项目 Modal (Phase F: CRUD)
     const [projectModal, setProjectModal] = useState<{
@@ -287,6 +312,9 @@ function App() {
                     {selectedProject && (
                         <button className="btn" onClick={() => setShowKnowledge(true)}>📚 知识管理</button>
                     )}
+                    {selectedProject && (
+                        <button className="btn" onClick={() => setShowOutline(true)}>📝 章节大纲</button>
+                    )}
                     <button className="btn" onClick={() => setShowSettings(true)}>⚙ 设置</button>
                     <button className="btn" onClick={doLogout}>登出</button>
                 </div>
@@ -303,6 +331,13 @@ function App() {
                 <KnowledgePanel
                     projectID={selectedProject.id}
                     onClose={() => setShowKnowledge(false)}
+                />
+            )}
+
+            {showOutline && selectedProject && (
+                <OutlinePanel
+                    projectID={selectedProject.id}
+                    onClose={() => setShowOutline(false)}
                 />
             )}
 
@@ -1328,6 +1363,249 @@ function verdictLabel(verdict: string): string {
         needs_revision: '需修订',
     };
     return map[verdict] || verdict;
+}
+
+// ---------------------------------------------------------------------------
+// Module E: OutlinePanel (章节大纲) — CRUD UI
+// ---------------------------------------------------------------------------
+
+// OutlinePanel 章节大纲列表 + 创建/编辑表单 + 删除.
+// 与 KnowledgePanel 风格一致. props.projectID 必填.
+function OutlinePanel(props: {
+    projectID?: number;
+    onClose: () => void;
+}) {
+    const [items, setItems] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState('');
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [form, setForm] = useState<Record<string, any>>({});
+
+    async function refresh() {
+        if (!props.projectID) return;
+        setLoading(true);
+        setErr('');
+        try {
+            const list = await ListOutlines(props.projectID);
+            // 后端 ListOutlines 已按 chapter 排序 (桌面端冒泡排序), 这里不需再排
+            setItems(list ?? []);
+        } catch (e: any) {
+            setErr(`加载失败: ${e?.message ?? e}`);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        refresh();
+        setEditingId(null);
+        setForm({});
+    }, [props.projectID]);
+
+    function startCreate() {
+        // 默认下一个未用章节号
+        const usedChapters = items.map((it) => it.chapter);
+        let nextChapter = 1;
+        while (usedChapters.includes(nextChapter)) nextChapter++;
+        setEditingId(null);
+        setForm({
+            chapter: nextChapter,
+            title: '',
+            summary: '',
+            key_events: [],
+            status: 'planned',
+            notes: '',
+            characters: [],
+            foreshadows: [],
+        });
+    }
+
+    function startEdit(item: any) {
+        setEditingId(item.id);
+        setForm({
+            chapter: item.chapter,
+            title: item.title ?? '',
+            summary: item.summary ?? '',
+            key_events: item.key_events ?? [],
+            status: item.status ?? 'planned',
+            notes: item.notes ?? '',
+            characters: item.characters ?? [],
+            foreshadows: item.foreshadows ?? [],
+        });
+    }
+
+    function cancelEdit() {
+        setEditingId(null);
+        setForm({});
+    }
+
+    async function save() {
+        if (!props.projectID) return;
+        setErr('');
+        if (!form.title?.toString().trim() || !form.chapter) {
+            setErr('章节号和标题必填');
+            return;
+        }
+        try {
+            const input = {
+                project_id: props.projectID,
+                chapter: Number(form.chapter) || 0,
+                title: form.title?.toString().trim() ?? '',
+                summary: form.summary?.toString() ?? '',
+                key_events: form.key_events ?? [],
+                status: form.status?.toString() || 'planned',
+                notes: form.notes?.toString() ?? '',
+                characters: form.characters ?? [],
+                foreshadows: form.foreshadows ?? [],
+            };
+            if (editingId) await UpdateOutline(editingId, input);
+            else await CreateOutline(input);
+            cancelEdit();
+            await refresh();
+        } catch (e: any) {
+            setErr(`保存失败: ${e?.message ?? e}`);
+        }
+    }
+
+    async function remove(id: number) {
+        if (!props.projectID) return;
+        if (!confirm(`确认删除大纲 id=${id}? 不可恢复`)) return;
+        setErr('');
+        try {
+            await DeleteOutline(id);
+            await refresh();
+        } catch (e: any) {
+            setErr(`删除失败: ${e?.message ?? e}`);
+        }
+    }
+
+    // Key events / characters / foreshadows 用 textarea 多行字符串 (\n 分隔)
+    function parseListField(s: string): string[] {
+        return s.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+    }
+
+    return (
+        <div className="modal-bg" onClick={props.onClose}>
+            <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h2>📝 章节大纲</h2>
+                    <button className="modal-close" onClick={props.onClose} aria-label="关闭">✕</button>
+                </div>
+
+                <div className="modal-body">
+                    {!props.projectID ? (
+                        <div className="info">请先选择项目</div>
+                    ) : (
+                        <>
+                            <div className="outline-toolbar">
+                                <span className="outline-toolbar-hint">每章一行, 章节号项目内唯一</span>
+                                <span className="knowledge-tab-spacer" />
+                                <button className="btn primary small" onClick={startCreate}>+ 新建</button>
+                            </div>
+
+                            {Object.keys(form).length > 0 && (
+                                <div className="knowledge-form">
+                                    <h4>{editingId ? `编辑大纲 #${editingId}` : '新建大纲'}</h4>
+                                    <div className="form-row">
+                                        <label className="form-label form-label-narrow">
+                                            章节号 *
+                                            <input type="number" min="1" value={form.chapter ?? 1} onChange={(e) => setForm({ ...form, chapter: parseInt(e.target.value) || 1 })} />
+                                        </label>
+                                        <label className="form-label form-label-grow">
+                                            标题 *
+                                            <input type="text" value={form.title ?? ''} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如: 王小毛初遇师父" />
+                                        </label>
+                                    </div>
+                                    <label className="form-label">
+                                        梗概 (一两段)
+                                        <textarea value={form.summary ?? ''} onChange={(e) => setForm({ ...form, summary: e.target.value })} rows={3} placeholder="这一章讲什么..." />
+                                    </label>
+                                    <label className="form-label">
+                                        关键事件 (一行一个)
+                                        <textarea value={(form.key_events ?? []).join('\n')} onChange={(e) => setForm({ ...form, key_events: parseListField(e.target.value) })} rows={3} placeholder="主角觉醒异能&#10;遇见反派&#10;..." />
+                                    </label>
+                                    <div className="form-row">
+                                        <label className="form-label form-label-narrow">
+                                            状态
+                                            <select value={form.status ?? 'planned'} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                                                <option value="planned">计划</option>
+                                                <option value="in_progress">创作中</option>
+                                                <option value="done">已完成</option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <label className="form-label">
+                                        涉及人物 (一行一个, 与 Module D 关联)
+                                        <textarea value={(form.characters ?? []).join('\n')} onChange={(e) => setForm({ ...form, characters: parseListField(e.target.value) })} rows={2} placeholder="王小毛&#10;师父" />
+                                    </label>
+                                    <label className="form-label">
+                                        相关伏笔 (一行一个, 与 Module D 关联)
+                                        <textarea value={(form.foreshadows ?? []).join('\n')} onChange={(e) => setForm({ ...form, foreshadows: parseListField(e.target.value) })} rows={2} placeholder="神秘身世之谜&#10;古剑来历" />
+                                    </label>
+                                    <label className="form-label">
+                                        作者备注
+                                        <textarea value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="创作时提醒自己 (如: 这一章要埋伏笔)" />
+                                    </label>
+                                    <div className="knowledge-form-actions">
+                                        <button className="btn primary" onClick={save}>保存</button>
+                                        <button className="btn" onClick={cancelEdit}>取消</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {loading ? (
+                                <div className="info">加载中...</div>
+                            ) : items.length === 0 ? (
+                                <div className="empty-state">
+                                    <div className="empty-state-icon">📝</div>
+                                    <div className="empty-state-title">暂无大纲</div>
+                                    <div className="empty-state-desc">点击右上角"+ 新建"开始规划章节大纲</div>
+                                </div>
+                            ) : (
+                                <ul className="knowledge-list">
+                                    {items.map((item) => (
+                                        <li key={item.id} className="knowledge-row">
+                                            <div className="outline-row-badge">
+                                                <div className="outline-row-chapter">第</div>
+                                                <div className="outline-row-num">{item.chapter}</div>
+                                                <div className="outline-row-chapter">章</div>
+                                            </div>
+                                            <div className="knowledge-row-info">
+                                                <div className="knowledge-row-title">
+                                                    {item.title}
+                                                    {item.status && <span className={`status-tag status-${item.status}`}>{item.status}</span>}
+                                                </div>
+                                                {item.summary && (
+                                                    <div className="knowledge-row-meta">{item.summary}</div>
+                                                )}
+                                                {item.key_events && item.key_events.length > 0 && (
+                                                    <div className="outline-key-events">
+                                                        {item.key_events.map((evt: string, i: number) => (
+                                                            <span key={i} className="outline-event">• {evt}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="knowledge-row-actions">
+                                                <button className="chapter-action-btn" onClick={() => startEdit(item)} title="编辑">✎</button>
+                                                <button className="chapter-action-btn danger" onClick={() => remove(item.id)} title="删除">🗑</button>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+
+                            {err && <div className="error" style={{ marginTop: '8px' }}>{err}</div>}
+                        </>
+                    )}
+                </div>
+
+                <div className="modal-footer">
+                    <button className="btn" onClick={props.onClose}>关闭</button>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 // ---------------------------------------------------------------------------

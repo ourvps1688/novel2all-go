@@ -132,6 +132,26 @@ type Foreshadow struct {
 	Description    string `json:"description,omitempty"`
 }
 
+// OutlineItem 章节大纲 (Module E - 2026-09-20).
+//
+// 后端 internal/api/outline.go OutlineItem struct 镜像.
+// chapter: 章节号 (1-based, 在项目内唯一).
+// key_events: 关键事件列表.
+// status: planned (default) / in_progress / done.
+// characters/foreshadows: 关联名 (与 Module D characters/foreshadows 弱类型关联).
+type OutlineItem struct {
+	ID          int64    `json:"id"`
+	ProjectID   int64    `json:"project_id"`
+	Chapter     int      `json:"chapter"`
+	Title       string   `json:"title"`
+	Summary     string   `json:"summary,omitempty"`
+	KeyEvents   []string `json:"key_events,omitempty"`
+	Status      string   `json:"status"`
+	Notes       string   `json:"notes,omitempty"`
+	Characters  []string `json:"characters,omitempty"`
+	Foreshadows []string `json:"foreshadows,omitempty"`
+}
+
 // ActionRequest chapter action LLM 调用的请求体 (Module C).
 //
 // 后端 ActionRequest 的子集: 桌面 app 不传 project_root (后端 fallback "."),
@@ -1337,4 +1357,115 @@ func (a *App) DeleteForeshadow(id int64) error {
 	}
 	path := fmt.Sprintf("/api/foreshadows/%d", id)
 	return a.callKnowledgeCRUD(http.MethodDelete, path, nil, nil)
+}
+
+// ---------------------------------------------------------------------------
+// Module E: 章节大纲 (Outline) CRUD
+// ---------------------------------------------------------------------------
+
+// callOutlineCRUD 通用 helper. 后端 /api/outline + /api/outline/{id}.
+func (a *App) callOutlineCRUD(method, path string, body any, result any) error {
+	var reqBody io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshal body: %w", err)
+		}
+		reqBody = bytes.NewReader(b)
+	}
+	resp, err := a.doRequest(method, path, reqBody)
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", method, path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("%s %s 失败 (HTTP %d): %s", method, path, resp.StatusCode, string(respBody))
+	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
+	if result == nil || len(respBody) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(respBody, result); err != nil {
+		return fmt.Errorf("解析响应失败: %w (body: %s)", err, string(respBody))
+	}
+	return nil
+}
+
+func (a *App) ListOutlines(projectID int64) ([]OutlineItem, error) {
+	var out struct {
+		Outline []OutlineItem `json:"outline"`
+		Count   int            `json:"count"`
+	}
+	if err := a.callOutlineCRUD(http.MethodGet, "/api/outline", nil, &out); err != nil {
+		return nil, err
+	}
+	// 按章节号排序 (后端不保证顺序)
+	items := out.Outline
+	for i := 0; i < len(items); i++ {
+		for j := i + 1; j < len(items); j++ {
+			if items[j].Chapter < items[i].Chapter {
+				items[i], items[j] = items[j], items[i]
+			}
+		}
+	}
+	return items, nil
+}
+
+func (a *App) GetOutline(projectID int64, id int64) (*OutlineItem, error) {
+	path := fmt.Sprintf("/api/outline/%d", id)
+	var item OutlineItem
+	if err := a.callOutlineCRUD(http.MethodGet, path, nil, &item); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (a *App) CreateOutline(input OutlineItem) (*OutlineItem, error) {
+	if input.Chapter <= 0 {
+		return nil, fmt.Errorf("章节号必须 > 0")
+	}
+	if input.Title == "" {
+		return nil, fmt.Errorf("章节标题必填")
+	}
+	input.ID = 0 // 后端分配
+	var item OutlineItem
+	if err := a.callOutlineCRUD(http.MethodPost, "/api/outline", input, &item); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (a *App) UpdateOutline(id int64, input OutlineItem) (*OutlineItem, error) {
+	if id <= 0 {
+		return nil, fmt.Errorf("outline id 必须 > 0")
+	}
+	if input.Chapter <= 0 {
+		return nil, fmt.Errorf("章节号必须 > 0")
+	}
+	if input.Title == "" {
+		return nil, fmt.Errorf("章节标题必填")
+	}
+	input.ID = id
+	var item OutlineItem
+	path := fmt.Sprintf("/api/outline/%d", id)
+	if err := a.callOutlineCRUD(http.MethodPut, path, input, &item); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (a *App) DeleteOutline(id int64) error {
+	if id <= 0 {
+		return fmt.Errorf("outline id 必须 > 0")
+	}
+	path := fmt.Sprintf("/api/outline/%d", id)
+	return a.callOutlineCRUD(http.MethodDelete, path, nil, nil)
 }

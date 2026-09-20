@@ -225,6 +225,11 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("/api/foreshadows", authGuard(charactersHandler))
 	mux.Handle("/api/foreshadows/", authGuard(charactersHandler))
 
+	// Module E (2026-09-20): Outline 章节大纲 API (受保护 P0-A, JSON 持久化)
+	outlineHandler := NewOutlineHandler()
+	mux.Handle("/api/outline", authGuard(outlineHandler))
+	mux.Handle("/api/outline/", authGuard(outlineHandler))
+
 	// Sprint 25: Memory API (长记忆系统) (受保护 P0-A)
 	// 注: projectRoot = 当前目录, Sprint 26+ 改成从 cfg 读
 	memoryHandler := NewMemoryHandler(".")

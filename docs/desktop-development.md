@@ -735,6 +735,14 @@ jobs:
 | 02:48 | Module D.3 | App.css 新增 .knowledge-tabs / .tab / .form / .list / .row / .role-tag / .type-tag / .status-tag (角色/类型/状态彩色标签). 复用现有 ai-section 渐变 + chapter-row 列表样式 + chapter-action-btn 图标按钮 | (React) |
 | 02:50 | Module D.4 | 验证: go vet ./... clean + go build ./... OK (加 frontend/dist placeholder 解 embed). tsc 本地缺 deps (沙箱装不上 react/wailsjs 全套), 靠 CI 验证. docs changelog 加 Module D 条目. commit + push + CI #225+ | (验证) |
 | 02:55 | Module D.4 | CI #226 ✅ ALL GREEN (test/lint/6 build matrix/smoke). 后端 atomic swap deploy md5 8c3a92a1. **后端 smoke**: GET list → 200+N, GET /id → 200+JSON, PUT → 200+updated, DELETE → 204 No Content, GET deleted → 404 + 正确 error body | (CI pass + deploy) |
+| 03:05 | Module E | 启动 Module E (1.5d): 章节大纲 CRUD (人物/关系/伏笔后, 写作知识管理补完) | (新任务) |
+| 03:10 | Module E | **调研**: 后端无 outline endpoint (roadmap "需查"确认). greenfield 实现, 决定单层数据模型 (1 项=1 章), 字段: chapter/title/summary/key_events/status/notes/characters/foreshadows | (调研) |
+| 03:15 | Module E.1 | **后端 (新文件 outline.go, +242/-3)**: OutlineItem struct (chapter/title/summary/key_events/status/notes/characters/foreshadows). OutlineHandler + ServeHTTP 完整 CRUD (GET list/POST create/GET id/PUT id/DELETE id). storage: project_root/outline.json (原子写 tmp+rename). chapter 唯一性检查 (409). 加 projectRootFromRequest + projectIDFromRequest helper | (后端) |
+| 03:17 | Module E.1 | router.go 注册 /api/outline + /api/outline/ (mux.Handle × 2, authGuard). 修 strconv.Atoi → ParseInt 兼容 int64 | (router) |
+| 03:20 | Module E.2 | **桌面 Go**: OutlineItem struct 镜像后端 + 5 wails 方法 (ListOutlines/GetOutline/CreateOutline/UpdateOutline/DeleteOutline). 通用 callOutlineCRUD helper. ListOutlines 客户端冒泡排序 (按 chapter). Create/Update 验证必填 | (桌面 Go) |
+| 03:23 | Module E.3 | **React UI**: OutlinePanel component (按章节号排序, 章节徽章 48x48 显示 "第 N 章", 列表 + 表单 + 删除). 表单字段: chapter/title/summary/key_events (多行) /status/notes/characters/foreshadows (多行, 与 Module D 关联名). user-bar 加 '📝 章节大纲' 按钮 | (React) |
+| 03:25 | Module E.3 | App.css 新增: .outline-toolbar / .outline-row-badge (48x48 紫色徽章) / .outline-row-num (大数字) / .outline-key-events / .outline-event (灰色小标签) + .status-planned/.status-in_progress 颜色 | (CSS) |
+| 03:27 | Module E.4 | 验证: go vet ./... clean + go test ./internal/... pass. tsc 本地缺 deps, CI 验证. docs 加 5 条 Module E 条目 + roadmap Module E 标 ✅. commit + push + CI 待验证. 后端 atomic swap deploy 待 smoke 全 CRUD | (验证) |
 
 ### 待办 (下一阶段)
 
@@ -753,6 +761,7 @@ jobs:
 - [x] **Module C.1**: Markdown 编辑器升级（工具栏 + 实时预览 + 字数统计）✅ — marked@18.0.13, 8 个工具栏按钮, 左右分栏 .modal-wide 920px
 - [x] **Module C**: 章节 action LLM 调用 ✅ — 5 个 wails 方法 (expand/rewrite/review/insert/rollback) + AI section UI + Review modal (大分数 + issues)
 - [x] **Module D**: 人物/关系/伏笔 知识管理 ✅ — 后端补 PUT/PATCH/DELETE + 桌面 15 wails 方法 + KnowledgePanel UI (3 tab CRUD)
+- [x] **Module E**: 章节大纲 ✅ — 新文件 outline.go + OutlineItem + 5 wails 方法 + OutlinePanel UI (按章节号排序)
 
 ---
 
