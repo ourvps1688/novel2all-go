@@ -261,10 +261,10 @@
 | D 人物/关系/伏笔 | ✅ 已完成 (2026-09-20, commit 19f3a2f) |
 | E 章节大纲 | ✅ 已完成 (2026-09-20, commit b0c9d60) |
 | H Skills 调用 | ✅ 已完成 (2026-09-20, commit 9c5a386) |
-| J 自动启动 | ✅ 已完成 (2026-09-20, commit (pending)) |
+| J 自动启动 | ✅ 已完成 (2026-09-20, commit ec14b70) |
 | I 主题 | ⏸️ 2d |
 
-**当前 main 分支**: (Module J 完成, 待 push)
+**当前 main 分支**: ec14b70 (Module J 完成)
 **GitHub v0.1.0 release**: 已发布, Novel2ALL.exe 11.7 MB
 
 ---
