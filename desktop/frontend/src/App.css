@@ -2330,3 +2330,131 @@ body {
 .modal-body select.form-input {
     padding: 6px 10px;
 }
+
+/* ===== Phase 1.7: Navbar 与 工作区间隔 ===== */
+.app-shell {
+    /* 顶部 navbar 与 下方工作区增加 8px 间隔 (border + gap) */
+    grid-template-rows: 56px 8px 1fr;
+}
+
+.app-shell::before {
+    /* 间隔阴影 (柔和分隔线效果) */
+    content: '';
+    grid-row: 2 / 3;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* ===== Phase 1.7: Sidebar 状态 footer 重排版 ===== */
+.app-sidebar-status {
+    border-top: 1px solid var(--color-border) !important;
+    border-bottom: none !important;
+    padding: 12px 14px !important;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.app-sidebar-status .status-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.app-sidebar-status .status-row-header {
+    justify-content: space-between;
+}
+
+.app-sidebar-status .status-label {
+    color: var(--color-text-secondary);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.app-sidebar-status .status-url {
+    color: var(--color-text-tertiary);
+    font-size: 10px;
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    word-break: break-all;
+    background: var(--color-bg);
+    padding: 4px 6px;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.app-sidebar-status .status-health {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+
+.app-sidebar-status .status-health .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--color-text-tertiary);
+}
+
+.app-sidebar-status .status-health.ok {
+    color: var(--color-success);
+}
+
+.app-sidebar-status .status-health.ok .status-dot {
+    background: var(--color-success);
+    box-shadow: 0 0 0 2px hsl(158 64% 52% / 0.25);
+}
+
+.app-sidebar-status .status-health.fail {
+    color: var(--color-danger);
+}
+
+.app-sidebar-status .status-health.fail .status-dot {
+    background: var(--color-danger);
+    box-shadow: 0 0 0 2px hsl(0 84% 60% / 0.25);
+}
+
+/* ===== Phase 1.7: 刷新按钮 loading 状态 ===== */
+.status-refresh-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-bg-card);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    transition: all 0.15s ease;
+}
+
+.status-refresh-btn:hover:not(:disabled) {
+    background: var(--color-accent-bg);
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+.status-refresh-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.status-refresh-btn.refreshing .refresh-icon {
+    animation: refresh-spin 0.9s linear infinite;
+    display: inline-block;
+}
+
+@keyframes refresh-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}

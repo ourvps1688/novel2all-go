@@ -128,6 +128,7 @@ function App() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [chapters, setChapters] = useState<Chapter[]>([]);
+    const [refreshing, setRefreshing] = useState(false);  // 刷新按钮 loading 状态
 
     // Module A: Chapter CRUD state
     const [chapterModal, setChapterModal] = useState<{
@@ -203,13 +204,17 @@ function App() {
         setChapters([]);
     }
 
-    // 刷新项目列表
+    // 刷新项目列表 (带 loading 状态, UI 显示旋转动画)
     async function refreshProjects() {
+        if (refreshing) return;  // 防止重复点击
+        setRefreshing(true);
         try {
             const list = await ListProjects();
             setProjects(list ?? []);
         } catch (e: any) {
             setError(`获取项目失败: ${e?.message ?? e}`);
+        } finally {
+            setRefreshing(false);
         }
     }
 
@@ -472,17 +477,28 @@ function App() {
                     )}
                     </div>
 
-                    {/* Status footer (moved from old status-bar at top) */}
-                    <div className="app-sidebar-section" style={{ marginTop: 'auto', borderBottom: 'none', borderTop: '1px solid var(--color-border)' }}>
-                        <div className="app-sidebar-section-title" style={{ textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>
-                            <span>📡 后端</span>
-                            <button onClick={refreshProjects} title="刷新项目列表">🔄</button>
+                    {/* Status footer (Phase 1.7: 重排版 + refresh loading) */}
+                    <div className="app-sidebar-section app-sidebar-status" style={{ marginTop: 'auto' }}>
+                        <div className="status-row status-row-header">
+                            <span className="status-label">📡 后端</span>
+                            <button
+                                className={`status-refresh-btn ${refreshing ? 'refreshing' : ''}`}
+                                onClick={refreshProjects}
+                                disabled={refreshing}
+                                title={refreshing ? '刷新中...' : '刷新项目列表'}
+                                aria-label="刷新项目列表"
+                            >
+                                <span className="refresh-icon">🔄</span>
+                            </button>
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', padding: '0 4px', wordBreak: 'break-all' }}>
-                            <code>{backendURL}</code>
+                        <div className="status-row">
+                            <code className="status-url" title={backendURL}>{backendURL}</code>
                         </div>
-                        <div style={{ fontSize: 11, padding: '4px', color: healthMsg.includes('OK') ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                            {healthMsg}
+                        <div className="status-row">
+                            <span className={`status-health ${healthMsg.includes('OK') ? 'ok' : 'fail'}`}>
+                                <span className="status-dot" />
+                                {healthMsg}
+                            </span>
                         </div>
                     </div>
                 </aside>
