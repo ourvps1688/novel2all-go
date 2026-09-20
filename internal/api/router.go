@@ -165,6 +165,9 @@ func registerContentRoutes(mux *http.ServeMux, deps Deps) {
 		skillsHandler := NewSkillsHandler(executor, deps.Loader)
 		// Sprint 28: 注入 SkillTaskManager 支持 SSE status
 		skillsHandler.skillTaskMgr = NewSkillTaskManager()
+		// Sprint V1.0.1 P2 (2026-09-20): 注册两个路径避免 301 redirect (桌面 HTTP client
+		// http.ErrUseLastResponse 不跟 redirect → 必须直连).
+		mux.Handle("/api/skills", skillsHandler)
 		mux.Handle("/api/skills/", skillsHandler)
 		// Sprint 28: SSE skill status (GET /api/skills/{name}/status)
 		// 注意: /api/skills/ 优先级更长会优先生效, 但路径含 /status 后缀更具体
