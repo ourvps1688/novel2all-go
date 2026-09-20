@@ -61,12 +61,18 @@
 
 ---
 
-### Module D: 人物/关系/伏笔 CRUD
+### Module D: 人物/关系/伏笔 CRUD ✅ (2026-09-20)
 **目标**: 用户能管理 characters / relationships / foreshadows
-**后端**: `/api/projects/{id}/characters`, relationships, foreshadows (已有)
-**桌面 app 加**:
-- CharactersPage + RelationshipsPage + ForeshadowsPage
-- 表单 (add/edit/delete)
+**实现**:
+- 后端补 PUT/PATCH/DELETE (原只有 GET/POST): ServeHTTP 支持 path 长度==2, 加 handleGet/Update/Delete
+- 桌面 Go: 3 struct + 15 wails 方法 (List/Get/Create/Update/Delete × 3 类别)
+- 通用 callKnowledgeCRUD helper 简化 15 个方法
+- React UI: KnowledgePanel (3 tab: 人物/关系/伏笔), 列表 + 创建/编辑表单 + 删除
+- 触发: user-bar "📚 知识管理" 按钮 (仅选中项目后显示)
+
+**已知限制**:
+- 数据存后端 state/<category>.json (Phase 1 mock, 后续 project_id 绑定文件系统路径时升级)
+- Relationship 用人物名字引用 (不是 ID), 简单但脆弱 (重命名后失效)
 
 **工作量**: 2 天
 **风险**: 低 — 简单 CRUD
@@ -215,9 +221,10 @@
 | A 章节 CRUD | ✅ 已完成 (2026-09-19, commits 3842005/b95b6ec/5d4f3d3) |
 | B LLM key | ✅ 已完成 (2026-09-20, commit bb14af4) |
 | C 章节 action | ✅ 已完成 (2026-09-20, commit 41b76bb) |
-| ... | ⏸️ 排队 |
+| D 人物/关系/伏笔 | ✅ 已完成 (2026-09-20, 19f3a2f) |
+| E 章节大纲 | ⏸️ 排队 |
 
-**当前 main 分支**: 41b76bb (Module C 完成)
+**当前 main 分支**: 19f3a2f (Module D 完成)
 **GitHub v0.1.0 release**: 已发布, Novel2ALL.exe 11.7 MB
 
 ---

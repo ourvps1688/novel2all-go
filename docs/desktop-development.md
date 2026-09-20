@@ -727,6 +727,13 @@ jobs:
 | 02:14 | CI fix | ci.yml: `uses: golangci/golangci-lint-action@v6` → `@v7`. v7 支持 golangci-lint v2.x | 489eead |
 | 02:15 | CI fix | 修代码 20 文件 30+ lint issues (v2.13.2 比 v1.61 严格得多, 暴露了 542 latent issues). `defer x.Close()` → `defer func() { _ = x.Close() }()` (15 处), type assertion 显式 (3 处), embedded field 省略 (2 处), `fmt.Fprintf` (4 处), type conversion (2 处), gofmt (5 处), 删 unused alias | 3118dfe |
 | 02:18 | CI fix | 验证: golangci-lint v2.13.2 run ./... → 0 issues ✅ + go vet + go build clean. CI #224 ✅ **ALL GREEN** (test/lint/6 build matrix/smoke) | (CI pass) |
+| 02:25 | Module D | 启动 Module D (2d): 人物/关系/伏笔知识管理 (3 类 CRUD) | (新任务) |
+| 02:30 | Module D | **调研**: 后端 characters.go 只有 GET + POST, 缺 PUT/PATCH/DELETE. ServeHTTP 当前只支持单 path (len(parts)!=1 → 404), 不能处理 /api/{category}/{id}. 需补 handleGet/Update/Delete + 路径长度==2 分支 | (调研) |
+| 02:35 | Module D.1 | **后端补全**: ServeHTTP 加 path 长度==2 分支, 加 handleGet / handleUpdate / handleDelete. handleUpdate 用 json.RawMessage 解析 + 强制 ID 一致性. handleDelete 返回 204 No Content. 加 strconv import | (后端) |
+| 02:40 | Module D.2 | **桌面 Go**: 加 3 struct (Character/Relationship/Foreshadow, snake_case JSON tag 镜像后端). 加 1 个通用 helper `callKnowledgeCRUD(method, path, body, result)` + 15 wails 方法 (5 × 3 类别): List{Chars,Rel,Fore} / Get{...} / Create{...} / Update{...} / Delete{...}. List 接受 projectID 参数 (后端 fallback "."). Create/Update 强制清空/设置 ID. Validate 必填字段 | (桌面 Go) |
+| 02:45 | Module D.3 | **React UI**: KnowledgePanel component (3 tab: 人物/关系/伏笔), 每 tab: 列表 + 创建/编辑表单 + 删除按钮 (confirm dialog). tab 切换 → refresh. 表单: 类别相关字段 (人物: name+role+chapters; 关系: char_a+char_b+type; 伏笔: title+chapters+status). 复用 ai-section 紫色样式 + chapter-row 列表样式. 触发按钮在 user-bar (selectedProject 后才显示) | (React) |
+| 02:48 | Module D.3 | App.css 新增 .knowledge-tabs / .tab / .form / .list / .row / .role-tag / .type-tag / .status-tag (角色/类型/状态彩色标签). 复用现有 ai-section 渐变 + chapter-row 列表样式 + chapter-action-btn 图标按钮 | (React) |
+| 02:50 | Module D.4 | 验证: go vet ./... clean + go build ./... OK (加 frontend/dist placeholder 解 embed). tsc 本地缺 deps (沙箱装不上 react/wailsjs 全套), 靠 CI 验证. docs changelog 加 Module D 条目. commit + push + CI #225+ | (验证) |
 
 ### 待办 (下一阶段)
 
@@ -744,6 +751,7 @@ jobs:
 - [x] **Module B**: LLM API key 配置（加密本地存储 + SettingsPage UI）✅ — PBKDF2 + AES-256-GCM, 机器绑定 master key, 14 个单元测试全过
 - [x] **Module C.1**: Markdown 编辑器升级（工具栏 + 实时预览 + 字数统计）✅ — marked@18.0.13, 8 个工具栏按钮, 左右分栏 .modal-wide 920px
 - [x] **Module C**: 章节 action LLM 调用 ✅ — 5 个 wails 方法 (expand/rewrite/review/insert/rollback) + AI section UI + Review modal (大分数 + issues)
+- [x] **Module D**: 人物/关系/伏笔 知识管理 ✅ — 后端补 PUT/PATCH/DELETE + 桌面 15 wails 方法 + KnowledgePanel UI (3 tab CRUD)
 
 ---
 

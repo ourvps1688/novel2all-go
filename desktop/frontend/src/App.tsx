@@ -54,6 +54,9 @@ function App() {
     // 设置页可见性
     const [showSettings, setShowSettings] = useState(false);
 
+    // Module D: 知识管理面板可见性
+    const [showKnowledge, setShowKnowledge] = useState(false);
+
     // 项目 Modal (Phase F: CRUD)
     const [projectModal, setProjectModal] = useState<{
         mode: 'create' | 'edit' | null;
@@ -281,6 +284,9 @@ function App() {
                             <span className="role">{user.role}</span>
                         </>
                     )}
+                    {selectedProject && (
+                        <button className="btn" onClick={() => setShowKnowledge(true)}>📚 知识管理</button>
+                    )}
                     <button className="btn" onClick={() => setShowSettings(true)}>⚙ 设置</button>
                     <button className="btn" onClick={doLogout}>登出</button>
                 </div>
@@ -290,6 +296,13 @@ function App() {
                 <SettingsPage
                     onClose={() => setShowSettings(false)}
                     backendURL={backendURL}
+                />
+            )}
+
+            {showKnowledge && selectedProject && (
+                <KnowledgePanel
+                    projectID={selectedProject.id}
+                    onClose={() => setShowKnowledge(false)}
                 />
             )}
 
@@ -1315,6 +1328,340 @@ function verdictLabel(verdict: string): string {
         needs_revision: '需修订',
     };
     return map[verdict] || verdict;
+}
+
+// ---------------------------------------------------------------------------
+// Module D: KnowledgePanel (人物 / 关系 / 伏笔) — CRUD UI
+// ---------------------------------------------------------------------------
+
+// KnowledgePanel 3 tab (characters / relationships / foreshadows) 知识管理.
+// 复用 ai-section 紫色样式风格. props.projectID 必填.
+function KnowledgePanel(props: {
+    projectID?: number;
+    onClose: () => void;
+}) {
+    const [activeTab, setActiveTab] = useState<'characters' | 'relationships' | 'foreshadows'>('characters');
+    const [items, setItems] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState('');
+    const [editingId, setEditingId] = useState<number | null>(null); // null = 新建
+    const [form, setForm] = useState<Record<string, any>>({});
+
+    async function refresh() {
+        if (!props.projectID) return;
+        setLoading(true);
+        setErr('');
+        try {
+            let list: any[] = [];
+            if (activeTab === 'characters') list = await ListCharacters(props.projectID);
+            else if (activeTab === 'relationships') list = await ListRelationships(props.projectID);
+            else list = await ListForeshadows(props.projectID);
+            setItems(list ?? []);
+        } catch (e: any) {
+            setErr(`加载失败: ${e?.message ?? e}`);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        refresh();
+        setEditingId(null);
+        setForm({});
+    }, [activeTab, props.projectID]);
+
+    function startCreate() {
+        setEditingId(null);
+        if (activeTab === 'characters') {
+            setForm({ name: '', role: 'supporting', description: '', first_chapter: 0, last_chapter: 0, traits: [] });
+        } else if (activeTab === 'relationships') {
+            setForm({ character_a: '', character_b: '', type: 'friend', description: '' });
+        } else {
+            setForm({ title: '', planted_chapter: 1, payoff_chapter: 0, status: 'active', description: '' });
+        }
+    }
+
+    function startEdit(item: any) {
+        setEditingId(item.id);
+        setForm({ ...item, traits: item.traits ?? [] });
+    }
+
+    function cancelEdit() {
+        setEditingId(null);
+        setForm({});
+    }
+
+    async function save() {
+        if (!props.projectID) return;
+        setErr('');
+        try {
+            if (activeTab === 'characters') {
+                if (!form.name?.toString().trim()) {
+                    setErr('人物名字必填');
+                    return;
+                }
+                const input = {
+                    name: form.name?.toString().trim() ?? '',
+                    role: form.role?.toString().trim() || 'supporting',
+                    description: form.description?.toString() ?? '',
+                    first_chapter: Number(form.first_chapter) || 0,
+                    last_chapter: Number(form.last_chapter) || 0,
+                    traits: form.traits ?? [],
+                };
+                if (editingId) await UpdateCharacter(editingId, input);
+                else await CreateCharacter(input);
+            } else if (activeTab === 'relationships') {
+                if (!form.character_a?.toString().trim() || !form.character_b?.toString().trim()) {
+                    setErr('人物 A 和人物 B 必填');
+                    return;
+                }
+                const input = {
+                    character_a: form.character_a?.toString().trim() ?? '',
+                    character_b: form.character_b?.toString().trim() ?? '',
+                    type: form.type?.toString().trim() || 'friend',
+                    description: form.description?.toString() ?? '',
+                };
+                if (editingId) await UpdateRelationship(editingId, input);
+                else await CreateRelationship(input);
+            } else {
+                if (!form.title?.toString().trim() || !form.planted_chapter) {
+                    setErr('伏笔标题和埋设章节必填');
+                    return;
+                }
+                const input = {
+                    title: form.title?.toString().trim() ?? '',
+                    planted_chapter: Number(form.planted_chapter) || 1,
+                    payoff_chapter: Number(form.payoff_chapter) || 0,
+                    status: form.status?.toString().trim() || 'active',
+                    description: form.description?.toString() ?? '',
+                };
+                if (editingId) await UpdateForeshadow(editingId, input);
+                else await CreateForeshadow(input);
+            }
+            cancelEdit();
+            await refresh();
+        } catch (e: any) {
+            setErr(`保存失败: ${e?.message ?? e}`);
+        }
+    }
+
+    async function remove(id: number) {
+        if (!props.projectID) return;
+        if (!confirm(`确认删除 id=${id}? 不可恢复`)) return;
+        setErr('');
+        try {
+            if (activeTab === 'characters') await DeleteCharacter(id);
+            else if (activeTab === 'relationships') await DeleteRelationship(id);
+            else await DeleteForeshadow(id);
+            await refresh();
+        } catch (e: any) {
+            setErr(`删除失败: ${e?.message ?? e}`);
+        }
+    }
+
+    return (
+        <div className="modal-bg" onClick={props.onClose}>
+            <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h2>📚 知识管理 (人物 / 关系 / 伏笔)</h2>
+                    <button className="modal-close" onClick={props.onClose} aria-label="关闭">✕</button>
+                </div>
+
+                <div className="modal-body">
+                    {!props.projectID ? (
+                        <div className="info">请先选择项目</div>
+                    ) : (
+                        <>
+                            {/* Tab 切换 */}
+                            <div className="knowledge-tabs">
+                                <button
+                                    className={`knowledge-tab ${activeTab === 'characters' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('characters')}
+                                >
+                                    人物
+                                </button>
+                                <button
+                                    className={`knowledge-tab ${activeTab === 'relationships' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('relationships')}
+                                >
+                                    关系
+                                </button>
+                                <button
+                                    className={`knowledge-tab ${activeTab === 'foreshadows' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('foreshadows')}
+                                >
+                                    伏笔
+                                </button>
+                                <span className="knowledge-tab-spacer" />
+                                <button className="btn primary small" onClick={startCreate}>+ 新建</button>
+                            </div>
+
+                            {/* 编辑表单 */}
+                            {Object.keys(form).length > 0 && (
+                                <div className="knowledge-form">
+                                    <h4>{editingId ? `编辑 ${activeTab === 'foreshadows' ? '伏笔' : activeTab === 'characters' ? '人物' : '关系'} #${editingId}` : `新建${activeTab === 'foreshadows' ? '伏笔' : activeTab === 'characters' ? '人物' : '关系'}`}</h4>
+                                    {activeTab === 'characters' && (
+                                        <>
+                                            <label className="form-label">
+                                                名字 *
+                                                <input type="text" value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如: 王小毛" />
+                                            </label>
+                                            <label className="form-label">
+                                                角色
+                                                <select value={form.role ?? 'supporting'} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                                                    <option value="protagonist">主角</option>
+                                                    <option value="antagonist">反派</option>
+                                                    <option value="supporting">配角</option>
+                                                </select>
+                                            </label>
+                                            <label className="form-label">
+                                                首次出现章节
+                                                <input type="number" min="0" value={form.first_chapter ?? 0} onChange={(e) => setForm({ ...form, first_chapter: e.target.value })} />
+                                            </label>
+                                            <label className="form-label">
+                                                最后出现章节
+                                                <input type="number" min="0" value={form.last_chapter ?? 0} onChange={(e) => setForm({ ...form, last_chapter: e.target.value })} />
+                                            </label>
+                                            <label className="form-label">
+                                                描述
+                                                <textarea value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
+                                            </label>
+                                        </>
+                                    )}
+                                    {activeTab === 'relationships' && (
+                                        <>
+                                            <label className="form-label">
+                                                人物 A *
+                                                <input type="text" value={form.character_a ?? ''} onChange={(e) => setForm({ ...form, character_a: e.target.value })} placeholder="如: 王小毛" />
+                                            </label>
+                                            <label className="form-label">
+                                                人物 B *
+                                                <input type="text" value={form.character_b ?? ''} onChange={(e) => setForm({ ...form, character_b: e.target.value })} placeholder="如: 林轩" />
+                                            </label>
+                                            <label className="form-label">
+                                                关系类型
+                                                <select value={form.type ?? 'friend'} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                                                    <option value="friend">朋友</option>
+                                                    <option value="foe">敌人</option>
+                                                    <option value="family">家人</option>
+                                                    <option value="romantic">恋人</option>
+                                                    <option value="rival">对手</option>
+                                                    <option value="mentor">师徒</option>
+                                                </select>
+                                            </label>
+                                            <label className="form-label">
+                                                描述
+                                                <textarea value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
+                                            </label>
+                                        </>
+                                    )}
+                                    {activeTab === 'foreshadows' && (
+                                        <>
+                                            <label className="form-label">
+                                                标题 *
+                                                <input type="text" value={form.title ?? ''} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如: 主角的神秘身世" />
+                                            </label>
+                                            <label className="form-label">
+                                                埋设章节 *
+                                                <input type="number" min="1" value={form.planted_chapter ?? 1} onChange={(e) => setForm({ ...form, planted_chapter: e.target.value })} />
+                                            </label>
+                                            <label className="form-label">
+                                                揭示章节 (可选)
+                                                <input type="number" min="0" value={form.payoff_chapter ?? 0} onChange={(e) => setForm({ ...form, payoff_chapter: e.target.value })} />
+                                            </label>
+                                            <label className="form-label">
+                                                状态
+                                                <select value={form.status ?? 'active'} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                                                    <option value="active">活跃</option>
+                                                    <option value="resolved">已揭示</option>
+                                                    <option value="abandoned">已废弃</option>
+                                                </select>
+                                            </label>
+                                            <label className="form-label">
+                                                描述
+                                                <textarea value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
+                                            </label>
+                                        </>
+                                    )}
+                                    <div className="knowledge-form-actions">
+                                        <button className="btn primary" onClick={save}>保存</button>
+                                        <button className="btn" onClick={cancelEdit}>取消</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 列表 */}
+                            {loading ? (
+                                <div className="info">加载中...</div>
+                            ) : items.length === 0 ? (
+                                <div className="empty-state">
+                                    <div className="empty-state-icon">📚</div>
+                                    <div className="empty-state-title">暂无{activeTab === 'characters' ? '人物' : activeTab === 'relationships' ? '关系' : '伏笔'}</div>
+                                    <div className="empty-state-desc">点击右上角"+ 新建"开始</div>
+                                </div>
+                            ) : (
+                                <ul className="knowledge-list">
+                                    {items.map((item) => (
+                                        <li key={item.id} className="knowledge-row">
+                                            <div className="knowledge-row-info">
+                                                {activeTab === 'characters' && (
+                                                    <>
+                                                        <div className="knowledge-row-title">
+                                                            {item.name}
+                                                            {item.role && <span className={`role-tag role-${item.role}`}>{item.role}</span>}
+                                                        </div>
+                                                        <div className="knowledge-row-meta">
+                                                            {item.first_chapter > 0 && `首现 #${item.first_chapter}`}
+                                                            {item.last_chapter > 0 && ` → 末现 #${item.last_chapter}`}
+                                                            {item.description && ` · ${item.description.slice(0, 80)}`}
+                                                        </div>
+                                                    </>
+                                                )}
+                                                {activeTab === 'relationships' && (
+                                                    <>
+                                                        <div className="knowledge-row-title">
+                                                            {item.character_a} ↔ {item.character_b}
+                                                            {item.type && <span className={`type-tag type-${item.type}`}>{item.type}</span>}
+                                                        </div>
+                                                        <div className="knowledge-row-meta">
+                                                            {item.description && item.description.slice(0, 100)}
+                                                        </div>
+                                                    </>
+                                                )}
+                                                {activeTab === 'foreshadows' && (
+                                                    <>
+                                                        <div className="knowledge-row-title">
+                                                            {item.title}
+                                                            {item.status && <span className={`status-tag status-${item.status}`}>{item.status}</span>}
+                                                        </div>
+                                                        <div className="knowledge-row-meta">
+                                                            埋设 #第{item.planted_chapter}章
+                                                            {item.payoff_chapter > 0 && ` → 揭示 #第${item.payoff_chapter}章`}
+                                                            {item.description && ` · ${item.description.slice(0, 80)}`}
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                            <div className="knowledge-row-actions">
+                                                <button className="chapter-action-btn" onClick={() => startEdit(item)} title="编辑">✎</button>
+                                                <button className="chapter-action-btn danger" onClick={() => remove(item.id)} title="删除">🗑</button>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+
+                            {err && <div className="error" style={{ marginTop: '8px' }}>{err}</div>}
+                        </>
+                    )}
+                </div>
+
+                <div className="modal-footer">
+                    <button className="btn" onClick={props.onClose}>关闭</button>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 export default App;

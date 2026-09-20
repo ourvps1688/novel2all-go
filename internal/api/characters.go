@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -60,7 +61,7 @@ func (h *CharactersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/")
 	path = strings.Trim(path, "/")
 	parts := strings.Split(path, "/")
-	if len(parts) != 1 {
+	if len(parts) < 1 || len(parts) > 2 {
 		http.NotFound(w, r)
 		return
 	}
@@ -70,6 +71,28 @@ func (h *CharactersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
+	// 单条 by ID: /api/{category}/{id} → Get/Update/Delete
+	if len(parts) == 2 {
+		id, err := strconv.Atoi(parts[1])
+		if err != nil || id <= 0 {
+			http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			h.handleGet(w, r, parts[0], id)
+		case http.MethodPut, http.MethodPatch:
+			h.handleUpdate(w, r, parts[0], id)
+		case http.MethodDelete:
+			h.handleDelete(w, r, parts[0], id)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	}
+
+	// 集合: /api/{category} → List/Create
 	switch r.Method {
 	case http.MethodGet:
 		h.handleList(w, r, parts[0])
@@ -95,6 +118,138 @@ func (h *CharactersHandler) handleList(w http.ResponseWriter, r *http.Request, c
 		category: items,
 		"count":  len(items),
 	})
+}
+
+// handleGet 单条 by ID. Module D (2026-09-20) 补全 CRUD.
+func (h *CharactersHandler) handleGet(w http.ResponseWriter, r *http.Request, category string, id int) {
+	projectRoot := r.URL.Query().Get("project_root")
+	if projectRoot == "" {
+		projectRoot = "."
+	}
+	items, err := loadCategoryJSON[json.RawMessage](projectRoot, category)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	for _, raw := range items {
+		// 简单 ID 提取 (避免引入 reflect). JSON shape 已知.
+		var meta struct {
+			ID int `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			continue
+		}
+		if meta.ID == id {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_, _ = w.Write(raw)
+			return
+		}
+	}
+	http.Error(w, fmt.Sprintf(`{"error":"%s %d not found"}`, category, id), http.StatusNotFound)
+}
+
+// handleUpdate 更新单条 (PUT/PATCH). Module D (2026-09-20).
+//
+// body 完整 JSON (e.g. {"name":"X","role":"..."}), 替换文件里 ID==id 的项.
+func (h *CharactersHandler) handleUpdate(w http.ResponseWriter, r *http.Request, category string, id int) {
+	projectRoot := r.URL.Query().Get("project_root")
+	if projectRoot == "" {
+		projectRoot = "."
+	}
+	body, err := readBodyAll(r)
+	if err != nil {
+		http.Error(w, `{"error":"read body"}`, http.StatusBadRequest)
+		return
+	}
+	items, err := loadCategoryJSON[json.RawMessage](projectRoot, category)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	// 找 ID 匹配的项并替换 (注意 ID 一致性 — 强制设置 id 字段为 path id)
+	found := false
+	for i, raw := range items {
+		var meta struct {
+			ID int `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			continue
+		}
+		if meta.ID == id {
+			// 解析新 body → 强制 ID 一致 → 替换
+			var newItem map[string]any
+			if err := json.Unmarshal(body, &newItem); err != nil {
+				http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+				return
+			}
+			newItem["id"] = id // 强制 ID 与 path 一致
+			newRaw, _ := json.Marshal(newItem)
+			items[i] = newRaw
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.Error(w, fmt.Sprintf(`{"error":"%s %d not found"}`, category, id), http.StatusNotFound)
+		return
+	}
+	if err := saveCategoryJSON(projectRoot, category, items); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	// 返回更新后的对象
+	for _, raw := range items {
+		var meta struct {
+			ID int `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			continue
+		}
+		if meta.ID == id {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(raw)
+			return
+		}
+	}
+}
+
+// handleDelete 删除单条. Module D (2026-09-20).
+func (h *CharactersHandler) handleDelete(w http.ResponseWriter, r *http.Request, category string, id int) {
+	projectRoot := r.URL.Query().Get("project_root")
+	if projectRoot == "" {
+		projectRoot = "."
+	}
+	items, err := loadCategoryJSON[json.RawMessage](projectRoot, category)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	newItems := items[:0]
+	found := false
+	for _, raw := range items {
+		var meta struct {
+			ID int `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			newItems = append(newItems, raw)
+			continue
+		}
+		if meta.ID == id {
+			found = true // skip this item
+			continue
+		}
+		newItems = append(newItems, raw)
+	}
+	if !found {
+		http.Error(w, fmt.Sprintf(`{"error":"%s %d not found"}`, category, id), http.StatusNotFound)
+		return
+	}
+	if err := saveCategoryJSON(projectRoot, category, newItems); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 //nolint:gocyclo // 三类别分发天然多分支

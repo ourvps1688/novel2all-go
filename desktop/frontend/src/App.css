@@ -1340,3 +1340,157 @@ html, body, #root, #App {
 .review-issue-note {
     color: var(--color-text);
 }
+
+/* ===== Module D: Knowledge Panel (人物/关系/伏笔) ===== */
+
+.knowledge-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.knowledge-tab {
+    padding: 6px 14px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.knowledge-tab:hover {
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+
+.knowledge-tab.active {
+    background: var(--color-accent);
+    color: #fff;
+}
+
+.knowledge-tab-spacer {
+    flex: 1;
+}
+
+.knowledge-form {
+    padding: 12px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+}
+
+.knowledge-form h4 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.knowledge-form-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.knowledge-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.knowledge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    transition: border-color 0.15s ease;
+}
+
+.knowledge-row:hover {
+    border-color: var(--color-accent);
+}
+
+.knowledge-row-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.knowledge-row-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.knowledge-row-meta {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.knowledge-row-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* Tag styles (role / type / status) */
+.role-tag,
+.type-tag,
+.status-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 4px;
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
+}
+
+.role-protagonist {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.role-antagonist {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.role-supporting {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+.status-active {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status-resolved {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.status-abandoned {
+    background: #f3f4f6;
+    color: #6b7280;
+}

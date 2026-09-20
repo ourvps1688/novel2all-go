@@ -93,6 +93,45 @@ type APIError struct {
 	Error string `json:"error"`
 }
 
+// Character 人物 (Module D - 知识管理).
+//
+// 后端 internal/api/characters.go Character struct 镜像:
+//   - json tags 必须与后端一致 (snake_case)
+//   - ID 由后端 nextID 分配, 创建时不传
+type Character struct {
+	ID           int64    `json:"id"`
+	Name         string   `json:"name"`
+	Role         string   `json:"role"`                     // protagonist/antagonist/supporting
+	Description  string   `json:"description,omitempty"`
+	FirstChapter int      `json:"first_chapter,omitempty"`
+	LastChapter  int      `json:"last_chapter,omitempty"`
+	Traits       []string `json:"traits,omitempty"`
+}
+
+// Relationship 人物关系 (Module D).
+//
+// character_a + character_b 用名字引用 (不是 ID), 简单 + 用户友好.
+type Relationship struct {
+	ID          int64  `json:"id"`
+	CharacterA  string `json:"character_a"` // 人物 A 名字
+	CharacterB  string `json:"character_b"` // 人物 B 名字
+	Type        string `json:"type"`        // friend/foe/family/romantic/rival/...
+	Description string `json:"description,omitempty"`
+}
+
+// Foreshadow 伏笔 (Module D).
+//
+// planted_chapter 必填, payoff_chapter 可空 (伏笔未揭示).
+// status: active (default) / resolved / abandoned.
+type Foreshadow struct {
+	ID             int64  `json:"id"`
+	Title          string `json:"title"`
+	PlantedChapter int    `json:"planted_chapter"`
+	PayoffChapter  int    `json:"payoff_chapter,omitempty"`
+	Status         string `json:"status"`
+	Description    string `json:"description,omitempty"`
+}
+
 // ActionRequest chapter action LLM 调用的请求体 (Module C).
 //
 // 后端 ActionRequest 的子集: 桌面 app 不传 project_root (后端 fallback "."),
@@ -1075,4 +1114,227 @@ func (a *App) RollbackChapter(projectID int64, chapter int) (*ActionResponse, er
 		return nil, fmt.Errorf("解析 rollback 响应失败: %w", err)
 	}
 	return &resp, nil
+}
+
+// ---------------------------------------------------------------------------
+// Module D: 知识管理 (人物 / 关系 / 伏笔) — CRUD wails-bound 方法
+// ---------------------------------------------------------------------------
+
+// callKnowledgeCRUD 通用 helper, 15 个 wails 方法都走这里.
+//
+// category: "characters" / "relationships" / "foreshadows"
+// method:   GET (list) / POST (create) / GET/ID (get) / PUT/ID (update) / DELETE/ID (delete)
+// path:     /api/{category} 或 /api/{category}/{id}
+// body:     nil for GET/DELETE, marshalled JSON for POST/PUT
+// result:   unmarshal target (ptr to struct/slice)
+//
+// 返回值: HTTP 状态码非 200/201/204 → 已 wrap 的 error; 否则 nil.
+func (a *App) callKnowledgeCRUD(method, path string, body any, result any) error {
+	var reqBody io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshal body: %w", err)
+		}
+		reqBody = bytes.NewReader(b)
+	}
+	resp, err := a.doRequest(method, path, reqBody)
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", method, path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// 204 No Content (DELETE 成功) → 无 body, result 应 nil
+	if resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("%s %s 失败 (HTTP %d): %s", method, path, resp.StatusCode, string(body))
+	}
+	// 读取 body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
+	// result nil 表示调用方不关心 body (如 DELETE)
+	if result == nil {
+		return nil
+	}
+	if len(respBody) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(respBody, result); err != nil {
+		return fmt.Errorf("解析响应失败: %w (body: %s)", err, string(respBody))
+	}
+	return nil
+}
+
+// --- Characters (3 list/get/create + 1 update + 1 delete = 5 methods) ---
+
+func (a *App) ListCharacters(projectID int64) ([]Character, error) {
+	path := fmt.Sprintf("/api/characters?project_root=.")
+	var out struct {
+		Characters []Character `json:"characters"`
+		Count      int          `json:"count"`
+	}
+	if err := a.callKnowledgeCRUD(http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Characters, nil
+}
+
+func (a *App) GetCharacter(projectID int64, id int64) (*Character, error) {
+	path := fmt.Sprintf("/api/characters/%d", id)
+	var c Character
+	if err := a.callKnowledgeCRUD(http.MethodGet, path, nil, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (a *App) CreateCharacter(input Character) (*Character, error) {
+	if input.Name == "" {
+		return nil, fmt.Errorf("character name 不能为空")
+	}
+	// 后端不收 project_root (fallback "."), 但 ID 由后端分配
+	input.ID = 0
+	var c Character
+	if err := a.callKnowledgeCRUD(http.MethodPost, "/api/characters", input, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (a *App) UpdateCharacter(id int64, input Character) (*Character, error) {
+	if id <= 0 {
+		return nil, fmt.Errorf("character id 必须 > 0")
+	}
+	input.ID = id // 强制 ID 与 path 一致
+	var c Character
+	path := fmt.Sprintf("/api/characters/%d", id)
+	if err := a.callKnowledgeCRUD(http.MethodPut, path, input, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (a *App) DeleteCharacter(id int64) error {
+	if id <= 0 {
+		return fmt.Errorf("character id 必须 > 0")
+	}
+	path := fmt.Sprintf("/api/characters/%d", id)
+	return a.callKnowledgeCRUD(http.MethodDelete, path, nil, nil)
+}
+
+// --- Relationships (5 methods, 同 pattern) ---
+
+func (a *App) ListRelationships(projectID int64) ([]Relationship, error) {
+	path := "/api/relationships?project_root=."
+	var out struct {
+		Relationships []Relationship `json:"relationships"`
+		Count        int             `json:"count"`
+	}
+	if err := a.callKnowledgeCRUD(http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Relationships, nil
+}
+
+func (a *App) GetRelationship(projectID int64, id int64) (*Relationship, error) {
+	path := fmt.Sprintf("/api/relationships/%d", id)
+	var r Relationship
+	if err := a.callKnowledgeCRUD(http.MethodGet, path, nil, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (a *App) CreateRelationship(input Relationship) (*Relationship, error) {
+	if input.CharacterA == "" || input.CharacterB == "" {
+		return nil, fmt.Errorf("character_a 和 character_b 必填")
+	}
+	input.ID = 0
+	var r Relationship
+	if err := a.callKnowledgeCRUD(http.MethodPost, "/api/relationships", input, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (a *App) UpdateRelationship(id int64, input Relationship) (*Relationship, error) {
+	if id <= 0 {
+		return nil, fmt.Errorf("relationship id 必须 > 0")
+	}
+	input.ID = id
+	var r Relationship
+	path := fmt.Sprintf("/api/relationships/%d", id)
+	if err := a.callKnowledgeCRUD(http.MethodPut, path, input, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (a *App) DeleteRelationship(id int64) error {
+	if id <= 0 {
+		return fmt.Errorf("relationship id 必须 > 0")
+	}
+	path := fmt.Sprintf("/api/relationships/%d", id)
+	return a.callKnowledgeCRUD(http.MethodDelete, path, nil, nil)
+}
+
+// --- Foreshadows (5 methods, 同 pattern) ---
+
+func (a *App) ListForeshadows(projectID int64) ([]Foreshadow, error) {
+	path := "/api/foreshadows?project_root=."
+	var out struct {
+		Foreshadows []Foreshadow `json:"foreshadows"`
+		Count      int           `json:"count"`
+	}
+	if err := a.callKnowledgeCRUD(http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Foreshadows, nil
+}
+
+func (a *App) GetForeshadow(projectID int64, id int64) (*Foreshadow, error) {
+	path := fmt.Sprintf("/api/foreshadows/%d", id)
+	var f Foreshadow
+	if err := a.callKnowledgeCRUD(http.MethodGet, path, nil, &f); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+func (a *App) CreateForeshadow(input Foreshadow) (*Foreshadow, error) {
+	if input.Title == "" || input.PlantedChapter <= 0 {
+		return nil, fmt.Errorf("title 和 planted_chapter 必填")
+	}
+	input.ID = 0
+	var f Foreshadow
+	if err := a.callKnowledgeCRUD(http.MethodPost, "/api/foreshadows", input, &f); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+func (a *App) UpdateForeshadow(id int64, input Foreshadow) (*Foreshadow, error) {
+	if id <= 0 {
+		return nil, fmt.Errorf("foreshadow id 必须 > 0")
+	}
+	input.ID = id
+	var f Foreshadow
+	path := fmt.Sprintf("/api/foreshadows/%d", id)
+	if err := a.callKnowledgeCRUD(http.MethodPut, path, input, &f); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+func (a *App) DeleteForeshadow(id int64) error {
+	if id <= 0 {
+		return fmt.Errorf("foreshadow id 必须 > 0")
+	}
+	path := fmt.Sprintf("/api/foreshadows/%d", id)
+	return a.callKnowledgeCRUD(http.MethodDelete, path, nil, nil)
 }
