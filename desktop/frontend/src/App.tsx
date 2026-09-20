@@ -106,6 +106,11 @@ function App() {
     // Module E: 章节大纲面板可见性
     const [showOutline, setShowOutline] = useState(false);
 
+    // Phase 1.2: 侧栏折叠状态 (localStorage 持久化)
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+        try { return localStorage.getItem('sidebarCollapsed') === '1'; } catch { return false; }
+    });
+
     // Module H: Skills 面板可见性
     const [showSkills, setShowSkills] = useState(false);
 
@@ -333,26 +338,39 @@ function App() {
     }
 
     return (
-        <div id="App">
-            <div className="header">
-                <h1><span className="logo-accent">Novel</span>2ALL</h1>
-                <div className="user-bar">
-                    {user && (
-                        <>
-                            <span>👤 {user.username}</span>
-                            <span className="role">{user.role}</span>
-                        </>
-                    )}
-                    {selectedProject && (
-                        <button className="btn" onClick={() => setShowKnowledge(true)}>📚 知识管理</button>
-                    )}
-                    {selectedProject && (
-                        <button className="btn" onClick={() => setShowOutline(true)}>📝 章节大纲</button>
-                    )}
-                    <button className="btn" onClick={() => setShowSkills(true)}>⚡ Skills</button>
-                    <button className="btn" onClick={() => setShowSettings(true)}>⚙ 设置</button>
-                    <button className="btn" onClick={doLogout}>登出</button>
+        <div id="App" className="app-shell">
+            {/* ===== Phase 1.2: Top Navbar (stuck) ===== */}
+            <div className="app-navbar">
+                <div className="app-navbar-brand">
+                    <div className="app-navbar-brand-icon">N</div>
+                    <span><span className="logo-accent">Novel</span>2ALL</span>
                 </div>
+                <div className="app-navbar-spacer" />
+                {user && (
+                    <span className="info" style={{ fontSize: 12 }}>
+                        👤 {user.username} <span className="role">{user.role}</span>
+                    </span>
+                )}
+                {selectedProject && (
+                    <button className="app-navbar-link" onClick={() => setShowKnowledge(true)} title="知识管理">📚 知识</button>
+                )}
+                {selectedProject && (
+                    <button className="app-navbar-link" onClick={() => setShowOutline(true)} title="章节大纲">📝 大纲</button>
+                )}
+                <button className="app-navbar-link" onClick={() => setShowSkills(true)} title="Skills">⚡ Skills</button>
+                <button className="app-navbar-link" onClick={() => setShowSettings(true)} title="设置">⚙ 设置</button>
+                <button className="app-navbar-link" onClick={doLogout} title="登出">登出</button>
+                <button
+                    className="sidebar-toggle"
+                    onClick={() => {
+                        const next = !sidebarCollapsed;
+                        setSidebarCollapsed(next);
+                        try { localStorage.setItem('sidebarCollapsed', next ? '1' : '0'); } catch {}
+                    }}
+                    title={sidebarCollapsed ? '展开侧栏' : '折叠侧栏'}
+                >
+                    {sidebarCollapsed ? '☰' : '✕'}
+                </button>
             </div>
 
             {showSettings && (
@@ -382,28 +400,15 @@ function App() {
                 />
             )}
 
-            <div className="status-bar">
-                <span>后端:</span>
-                <code>{backendURL}</code>
-                <span className={`health ${healthMsg.includes('OK') ? 'ok' : ''}`}>{healthMsg}</span>
-                <button className="btn small" onClick={refreshProjects} title="刷新项目列表">🔄 刷新</button>
-            </div>
-
-            <div className="main">
-                {/* 左: 项目列表 (Stripe-style compact rows) */}
-                <div className="sidebar">
-                    <div className="sidebar-header">
-                        <h3>项目 <span className="count">({projects.length})</span></h3>
-                        <div className="sidebar-actions">
-                            <button
-                                className="btn-add"
-                                onClick={() => openProjectModal('create')}
-                                title="新建项目"
-                            >
-                                +
-                            </button>
+            {/* ===== Phase 1.2: Body = Sidebar + Main ===== */}
+            <div className="main app-body">
+                {/* 左: Sidebar (full height, project list + status footer) */}
+                <aside className={`sidebar app-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+                    <div className="app-sidebar-section">
+                        <div className="app-sidebar-section-title">
+                            <span>项目 <span className="count">({projects.length})</span></span>
+                            <button onClick={() => openProjectModal('create')} title="新建项目">+</button>
                         </div>
-                    </div>
                     {projects.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-state-icon">📚</div>
@@ -441,10 +446,25 @@ function App() {
                             ))}
                         </ul>
                     )}
-                </div>
+                    </div>
 
-                {/* 右: 章节列表 */}
-                <div className="content">
+                    {/* Status footer (moved from old status-bar at top) */}
+                    <div className="app-sidebar-section" style={{ marginTop: 'auto', borderBottom: 'none', borderTop: '1px solid var(--color-border)' }}>
+                        <div className="app-sidebar-section-title" style={{ textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>
+                            <span>📡 后端</span>
+                            <button onClick={refreshProjects} title="刷新项目列表">🔄</button>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', padding: '0 4px', wordBreak: 'break-all' }}>
+                            <code>{backendURL}</code>
+                        </div>
+                        <div style={{ fontSize: 11, padding: '4px', color: healthMsg.includes('OK') ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                            {healthMsg}
+                        </div>
+                    </div>
+                </aside>
+
+                {/* 右: 章节列表 (Phase 1.2: app-main) */}
+                <main className="content app-main">
                     {selectedProject ? (
                         <>
                             <h3>📖 {selectedProject.name}</h3>
@@ -501,7 +521,7 @@ function App() {
                     ) : (
                         <p className="placeholder">← 选择左侧项目查看章节</p>
                     )}
-                </div>
+                </main>
             </div>
 
             {projectModal.mode && (
