@@ -734,6 +734,7 @@ jobs:
 | 02:45 | Module D.3 | **React UI**: KnowledgePanel component (3 tab: 人物/关系/伏笔), 每 tab: 列表 + 创建/编辑表单 + 删除按钮 (confirm dialog). tab 切换 → refresh. 表单: 类别相关字段 (人物: name+role+chapters; 关系: char_a+char_b+type; 伏笔: title+chapters+status). 复用 ai-section 紫色样式 + chapter-row 列表样式. 触发按钮在 user-bar (selectedProject 后才显示) | (React) |
 | 02:48 | Module D.3 | App.css 新增 .knowledge-tabs / .tab / .form / .list / .row / .role-tag / .type-tag / .status-tag (角色/类型/状态彩色标签). 复用现有 ai-section 渐变 + chapter-row 列表样式 + chapter-action-btn 图标按钮 | (React) |
 | 02:50 | Module D.4 | 验证: go vet ./... clean + go build ./... OK (加 frontend/dist placeholder 解 embed). tsc 本地缺 deps (沙箱装不上 react/wailsjs 全套), 靠 CI 验证. docs changelog 加 Module D 条目. commit + push + CI #225+ | (验证) |
+| 02:55 | Module D.4 | CI #226 ✅ ALL GREEN (test/lint/6 build matrix/smoke). 后端 atomic swap deploy md5 8c3a92a1. **后端 smoke**: GET list → 200+N, GET /id → 200+JSON, PUT → 200+updated, DELETE → 204 No Content, GET deleted → 404 + 正确 error body | (CI pass + deploy) |
 
 ### 待办 (下一阶段)
 
