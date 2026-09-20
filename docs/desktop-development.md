@@ -743,6 +743,9 @@ jobs:
 | 03:23 | Module E.3 | **React UI**: OutlinePanel component (按章节号排序, 章节徽章 48x48 显示 "第 N 章", 列表 + 表单 + 删除). 表单字段: chapter/title/summary/key_events (多行) /status/notes/characters/foreshadows (多行, 与 Module D 关联名). user-bar 加 '📝 章节大纲' 按钮 | (React) |
 | 03:25 | Module E.3 | App.css 新增: .outline-toolbar / .outline-row-badge (48x48 紫色徽章) / .outline-row-num (大数字) / .outline-key-events / .outline-event (灰色小标签) + .status-planned/.status-in_progress 颜色 | (CSS) |
 | 03:27 | Module E.4 | 验证: go vet ./... clean + go test ./internal/... pass. tsc 本地缺 deps, CI 验证. docs 加 5 条 Module E 条目 + roadmap Module E 标 ✅. commit + push + CI 待验证. 后端 atomic swap deploy 待 smoke 全 CRUD | (验证) |
+| 03:30 | Module E.4 | CI #228 lint fail: 'outline.go is not properly formatted (gofmt)'. 本地未跑 gofmt 直接提交. 修 `gofmt -w internal/api/outline.go`, amend 上次 commit (f1df34c) → f1df34c+fix, push | (lint fix) |
+| 03:32 | Module E.4 | 后端 atomic swap deploy md5 68be3cb5 → 0f7e0d18 (fix 后). smoke 测试 POST /api/outline 返回 **400 'invalid id'** — ServeHTTP bug: `strings.Split('', '/')` 返回 `[""]` (length 1), 进入 case 1 → ParseInt 失败. 修: 加 nonEmptyParts 计数 (过滤空串). amend + push (fedd07d) | (bug fix) |
+| 03:35 | Module E.4 | CI #230 ✅ ALL GREEN (test/lint/6 build matrix/smoke). 后端 re-deploy md5 0f7e0d18. **后端 smoke 全 CRUD**: POST → 201 + 完整 JSON; 重复章节 → 409 'chapter 1 already exists'; GET → 200; PUT → 200 + 更新; DELETE → 204; GET deleted → 404 'outline 1 not found' | (CI pass + deploy) |
 
 ### 待办 (下一阶段)
 
