@@ -2294,3 +2294,39 @@ body {
     background: transparent;
     color: var(--color-text-secondary);
 }
+
+/* ===== Phase 1.6: Settings 排版清理 ===== */
+
+/* modal-body 内 section 间距收紧 */
+.modal-body .settings-section h3 {
+    margin: 0 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* 设置页内 .info 默认左对齐 (覆盖全局 .info center) */
+.modal-body .info {
+    text-align: left;
+    color: var(--color-text-secondary);
+}
+
+/* 设置页 form-label 行距 */
+.modal-body .form-label {
+    margin-bottom: 10px;
+    color: var(--color-text);
+}
+
+/* select 控件统一 */
+.modal-body select {
+    appearance: auto;
+    cursor: pointer;
+}
+
+/* 默认模型 select 容器 */
+.modal-body .form-input,
+.modal-body select.form-input {
+    padding: 6px 10px;
+}

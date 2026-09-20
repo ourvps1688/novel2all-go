@@ -605,10 +605,11 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
     const [llmSuccess, setLlmSuccess] = useState<string>('');
 
     // Module J: Settings 持久化 (开机自启 + 启动时最小化)
-    const [settings, setSettings] = useState<{ auto_start: boolean; start_minimized: boolean; theme: string }>({
+    const [settings, setSettings] = useState<{ auto_start: boolean; start_minimized: boolean; theme: string; default_provider: string }>({
         auto_start: false,
         start_minimized: false,
         theme: 'system',
+        default_provider: '',
     });
     const [settingsLoading, setSettingsLoading] = useState(true);
     const [settingsSaving, setSettingsSaving] = useState(false);
@@ -624,6 +625,7 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
                     auto_start: !!s?.auto_start,
                     start_minimized: !!s?.start_minimized,
                     theme: s?.theme || 'system',
+                    default_provider: s?.default_provider || '',
                 });
                 // 额外查询实际系统状态 (registry), 跟持久化设置可能不一致
                 const actual = await GetAutoStart();
@@ -636,7 +638,7 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
         })();
     }, []);
 
-    async function saveSettings(newSettings: { auto_start: boolean; start_minimized: boolean; theme: string }) {
+    async function saveSettings(newSettings: { auto_start: boolean; start_minimized: boolean; theme: string; default_provider: string }) {
         setSettingsSaving(true);
         setSettingsError('');
         setSettingsSuccess('');
@@ -788,18 +790,73 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
                     <button className="btn" onClick={props.onClose}>✕</button>
                 </div>
 
+                <div className="modal-body">
                 <section className="settings-section">
                     <h3>版本</h3>
-                    <p>当前: <strong>{currentVer}</strong></p>
-                    <p>后端: <code>{props.backendURL}</code></p>
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span className="info" style={{ fontSize: 13 }}>当前 <strong>v{currentVer}</strong></span>
+                        <span className="info" style={{ fontSize: 12 }}>后端 <code>{props.backendURL}</code></span>
+                    </div>
+                </section>
+
+                <section className="settings-section">
+                    <h3>界面</h3>
+                    {settingsLoading ? (
+                        <div className="info">加载设置中...</div>
+                    ) : (
+                        <>
+                            <div className="info" style={{ fontSize: 12, marginBottom: 4 }}>主题</div>
+                            <div className="theme-selector">
+                                {[
+                                    { key: 'light',  icon: '☀️', label: '浅色' },
+                                    { key: 'dark',   icon: '🌙', label: '深色' },
+                                    { key: 'paper',  icon: '📜', label: '暖米' },
+                                    { key: 'system', icon: '💻', label: '跟随系统' },
+                                ].map((opt) => (
+                                    <button
+                                        key={opt.key}
+                                        type="button"
+                                        className={`theme-option ${settings.theme === opt.key ? 'active' : ''}`}
+                                        disabled={settingsSaving}
+                                        onClick={async () => {
+                                            applyTheme(opt.key);
+                                            const newSettings = { ...settings, theme: opt.key };
+                                            setSettings(newSettings);
+                                            await saveSettings(newSettings);
+                                        }}
+                                    >
+                                        <span className="theme-option-icon">{opt.icon}</span>
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="info" style={{ fontSize: 12, marginTop: 12, marginBottom: 4 }}>默认模型</div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <select
+                                    className="form-input"
+                                    value={settings.default_provider || ''}
+                                    disabled={settingsSaving}
+                                    onChange={async (e) => {
+                                        const v = e.target.value;
+                                        const newSettings = { ...settings, default_provider: v };
+                                        setSettings(newSettings);
+                                        await saveSettings(newSettings);
+                                    }}
+                                    style={{ flex: 1, padding: '6px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-card)', color: 'var(--color-text)', fontSize: 13 }}
+                                >
+                                    <option value="">后端默认 (admin key fallback)</option>
+                                    {llmProviders.map(p => (
+                                        <option key={p} value={p}>{p}{llmConfigured.has(p) ? ' (已配置)' : ' (未配置)'}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </>
+                    )}
                 </section>
 
                 <section className="settings-section">
                     <h3>LLM API Keys</h3>
-                    <p className="settings-help">
-                        每个 provider 的 API key 单独加密存储在本机 (AES-256-GCM + PBKDF2, 机器绑定).
-                        留空 = 保留已配置. 后端 admin key 仍作为 fallback.
-                    </p>
                     {llmProviders.length === 0 ? (
                         <p className="info">加载中...</p>
                     ) : (
@@ -900,38 +957,6 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
 
                             {settingsError && <div className="error" style={{ marginTop: '8px' }}>{settingsError}</div>}
                             {settingsSuccess && <div className="info ok" style={{ marginTop: '8px' }}>{settingsSuccess}</div>}
-
-                            {/* Phase 1: 主题选择 (light/dark/paper/system) - AI-Novel 风格 4 选项 */}
-                            <div className="info" style={{ fontSize: '12px', marginTop: '12px', marginBottom: '4px' }}>界面主题</div>
-                            <div className="theme-selector">
-                                {[
-                                    { key: 'light',  icon: '☀️', label: '浅色' },
-                                    { key: 'dark',   icon: '🌙', label: '深色' },
-                                    { key: 'paper',  icon: '📜', label: '暖米' },
-                                    { key: 'system', icon: '💻', label: '跟随系统' },
-                                ].map((opt) => (
-                                    <button
-                                        key={opt.key}
-                                        type="button"
-                                        className={`theme-option ${settings.theme === opt.key ? 'active' : ''}`}
-                                        disabled={settingsSaving}
-                                        onClick={async () => {
-                                            // 立即前端预览 + 持久化到 settings.json
-                                            applyTheme(opt.key);
-                                            const newSettings = { ...settings, theme: opt.key };
-                                            setSettings(newSettings);
-                                            await saveSettings(newSettings);
-                                        }}
-                                    >
-                                        <span className="theme-option-icon">{opt.icon}</span>
-                                        {opt.label}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <div className="info" style={{ fontSize: '11px', marginTop: '12px' }}>
-                                提示: 开机自启下次启动时生效. 启动时最小化需要重启 app. 主题切换立即生效.
-                            </div>
                         </>
                     )}
                 </section>
@@ -973,6 +998,7 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
                 </section>
 
                 {error && <div className="error">{error}</div>}
+                </div>  {/* modal-body close */}
             </div>
         </div>
     );

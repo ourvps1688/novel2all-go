@@ -1591,9 +1591,10 @@ func (a *App) GetSkill(name string) (*SkillSummary, error) {
 
 // Settings 桌面 app 配置 (Module J - 2026-09-20).
 type Settings struct {
-	AutoStart      bool   `json:"auto_start"`
-	StartMinimized bool   `json:"start_minimized"`
-	Theme          string `json:"theme"` // light / dark / paper / system (default)
+	AutoStart       bool   `json:"auto_start"`
+	StartMinimized  bool   `json:"start_minimized"`
+	Theme           string `json:"theme"` // light / dark / paper / system (default)
+	DefaultProvider string `json:"default_provider"` // dashscope/deepseek/minimax, 空 = 后端 fallback
 }
 
 // GetSettings 读持久化设置. 不存在返默认.
@@ -1601,9 +1602,14 @@ func (a *App) GetSettings() (*Settings, error) {
 	s, err := settings.Load()
 	if err != nil {
 		// 加载失败 (文件损坏?) 返默认 + 错误给上层 toast
-		return &Settings{AutoStart: false, StartMinimized: false, Theme: "system"}, err
+		return &Settings{AutoStart: false, StartMinimized: false, Theme: "system", DefaultProvider: ""}, err
 	}
-	return &Settings{AutoStart: s.AutoStart, StartMinimized: s.StartMinimized, Theme: s.Theme}, nil
+	return &Settings{
+		AutoStart:       s.AutoStart,
+		StartMinimized:  s.StartMinimized,
+		Theme:           s.Theme,
+		DefaultProvider: s.DefaultProvider,
+	}, nil
 }
 
 // GetAutoStart 检查 Windows Registry 当前自启项状态 (与持久化设置独立).
@@ -1651,12 +1657,14 @@ func (a *App) SetTheme(theme string) error {
 // AutoStart=false: 删除 Registry (幂等).
 // StartMinimized: 仅保存, 启动时 main.go 读 settings 应用.
 // Theme: 仅保存 (实际应用在桌面端通过 DOM 切换).
+// DefaultProvider: 仅保存, 启动时 main.go 读 settings 应用.
 func (a *App) UpdateSettings(s Settings) error {
 	// 1. 持久化到 settings.json
 	if err := settings.Save(settings.Settings{
-		AutoStart:      s.AutoStart,
-		StartMinimized: s.StartMinimized,
-		Theme:          s.Theme,
+		AutoStart:       s.AutoStart,
+		StartMinimized:  s.StartMinimized,
+		Theme:           s.Theme,
+		DefaultProvider: s.DefaultProvider,
 	}); err != nil {
 		return fmt.Errorf("save settings: %w", err)
 	}
@@ -1672,5 +1680,42 @@ func (a *App) UpdateSettings(s Settings) error {
 		}
 	}
 
+	return nil
+}
+
+// GetDefaultProvider 返回用户在 SettingsPage 选的默认 LLM provider.
+func (a *App) GetDefaultProvider() (string, error) {
+	s, err := settings.Load()
+	if err != nil {
+		return "", err
+	}
+	return s.DefaultProvider, nil
+}
+
+// SetDefaultProvider 保存默认 LLM provider (dashscope/deepseek/minimax).
+//
+// 空字符串 = 用后端 admin key fallback (与 GetLLMKeys 都未配置时一致).
+// 校验: 仅接受 SupportedProviders() 列表中的值或空字符串.
+func (a *App) SetDefaultProvider(provider string) error {
+	if provider != "" {
+		allowed := false
+		for _, p := range supportedProviders {
+			if p == provider {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return fmt.Errorf("invalid provider %q (must be one of %v or empty)", provider, supportedProviders)
+		}
+	}
+	s, err := settings.Load()
+	if err != nil {
+		s = settings.Default()
+	}
+	s.DefaultProvider = provider
+	if err := settings.Save(s); err != nil {
+		return fmt.Errorf("save default provider: %w", err)
+	}
 	return nil
 }
