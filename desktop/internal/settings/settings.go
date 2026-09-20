@@ -19,13 +19,19 @@ type Settings struct {
 
 	// StartMinimized 启动时最小化到托盘 (不弹主窗口).
 	StartMinimized bool `json:"start_minimized"`
+
+	// Theme "light" / "dark" / "system" (默认 system).
+	//   - light/dark: 强制指定
+	//   - system: 跟随操作系统 (prefers-color-scheme media query)
+	Theme string `json:"theme"`
 }
 
-// Default 返回默认设置 (AutoStart false, StartMinimized false).
+// Default 返回默认设置.
 func Default() Settings {
 	return Settings{
 		AutoStart:      false,
 		StartMinimized: false,
+		Theme:          "system",
 	}
 }
 

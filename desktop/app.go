@@ -1591,18 +1591,19 @@ func (a *App) GetSkill(name string) (*SkillSummary, error) {
 
 // Settings 桌面 app 配置 (Module J - 2026-09-20).
 type Settings struct {
-	AutoStart      bool `json:"auto_start"`
-	StartMinimized bool `json:"start_minimized"`
+	AutoStart      bool   `json:"auto_start"`
+	StartMinimized bool   `json:"start_minimized"`
+	Theme          string `json:"theme"` // light / dark / system (default)
 }
 
-// GetSettings 读持久化设置. 不存在返默认 (AutoStart=false, StartMinimized=false).
+// GetSettings 读持久化设置. 不存在返默认.
 func (a *App) GetSettings() (*Settings, error) {
 	s, err := settings.Load()
 	if err != nil {
 		// 加载失败 (文件损坏?) 返默认 + 错误给上层 toast
-		return &Settings{AutoStart: false, StartMinimized: false}, err
+		return &Settings{AutoStart: false, StartMinimized: false, Theme: "system"}, err
 	}
-	return &Settings{AutoStart: s.AutoStart, StartMinimized: s.StartMinimized}, nil
+	return &Settings{AutoStart: s.AutoStart, StartMinimized: s.StartMinimized, Theme: s.Theme}, nil
 }
 
 // GetAutoStart 检查 Windows Registry 当前自启项状态 (与持久化设置独立).
@@ -1613,16 +1614,49 @@ func (a *App) GetAutoStart() (bool, error) {
 	return settings.IsAutoStartEnabled()
 }
 
+// GetTheme 返回当前持久化的 theme 值.
+func (a *App) GetTheme() (string, error) {
+	s, err := settings.Load()
+	if err != nil {
+		return "system", err
+	}
+	if s.Theme == "" {
+		return "system", nil
+	}
+	return s.Theme, nil
+}
+
+// SetTheme 仅持久化 theme 到 settings.json (不应用).
+// 真正应用是前端通过 document.documentElement.dataset.theme 来切.
+// 拆开的原因: 后端不直接操作 DOM (违反关注点分离).
+func (a *App) SetTheme(theme string) error {
+	if theme != "light" && theme != "dark" && theme != "system" {
+		return fmt.Errorf("invalid theme %q (must be light/dark/system)", theme)
+	}
+	s, err := settings.Load()
+	if err != nil {
+		// 文件不存在时 Load 返默认, 此时 s 是空 Settings
+		s = settings.Default()
+	}
+	s.Theme = theme
+	if err := settings.Save(s); err != nil {
+		return fmt.Errorf("save theme: %w", err)
+	}
+	return nil
+}
+
 // UpdateSettings 保存设置 + 应用到系统.
 //
 // AutoStart=true: 写 Windows Registry (Windows) / 返回错 (其他 OS).
 // AutoStart=false: 删除 Registry (幂等).
 // StartMinimized: 仅保存, 启动时 main.go 读 settings 应用.
+// Theme: 仅保存 (实际应用在桌面端通过 DOM 切换).
 func (a *App) UpdateSettings(s Settings) error {
 	// 1. 持久化到 settings.json
 	if err := settings.Save(settings.Settings{
 		AutoStart:      s.AutoStart,
 		StartMinimized: s.StartMinimized,
+		Theme:          s.Theme,
 	}); err != nil {
 		return fmt.Errorf("save settings: %w", err)
 	}

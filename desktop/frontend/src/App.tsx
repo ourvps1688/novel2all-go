@@ -63,8 +63,26 @@ import {
     GetSettings,
     UpdateSettings,
     GetAutoStart,
+    // Module I: 主题
+    GetTheme,
+    SetTheme,
 } from '../wailsjs/go/main/App';
 import type { main } from '../wailsjs/go/models';
+
+// Module I: 主题应用 helper
+// 读用户选择 (light/dark/system), 设 <html> data-theme 属性 (CSS 选择器据此切换 token).
+// 不做应用内实时刷新 - 后端保存后由下次启动生效.
+function applyTheme(theme: string) {
+    const root = document.documentElement;
+    if (theme === 'light') {
+        root.dataset.theme = 'light';
+    } else if (theme === 'dark') {
+        root.dataset.theme = 'dark';
+    } else {
+        // 'system' (默认): 删除 data-theme, 让 prefers-color-scheme media query 接管.
+        delete root.dataset.theme;
+    }
+}
 
 type User = main.User;
 type Project = main.Project;
@@ -117,9 +135,16 @@ function App() {
     const [chapterContent, setChapterContent] = useState<string>('');
     const [loadingChapter, setLoadingChapter] = useState(false);
 
-    // 启动时检查后端 + 是否已登录
+    // 启动时检查后端 + 是否已登录 + Module I 主题初始化
     useEffect(() => {
         (async () => {
+            // Module I: 应用保存的主题 (light/dark/system)
+            try {
+                const theme = await GetTheme();
+                applyTheme(theme);
+            } catch {
+                // 默认 system (跟随 OS)
+            }
             try {
                 const url = await BackendURL();
                 setBackendURL(url);
@@ -535,9 +560,10 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
     const [llmSuccess, setLlmSuccess] = useState<string>('');
 
     // Module J: Settings 持久化 (开机自启 + 启动时最小化)
-    const [settings, setSettings] = useState<{ auto_start: boolean; start_minimized: boolean }>({
+    const [settings, setSettings] = useState<{ auto_start: boolean; start_minimized: boolean; theme: string }>({
         auto_start: false,
         start_minimized: false,
+        theme: 'system',
     });
     const [settingsLoading, setSettingsLoading] = useState(true);
     const [settingsSaving, setSettingsSaving] = useState(false);
@@ -549,7 +575,11 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
         (async () => {
             try {
                 const s = await GetSettings();
-                setSettings({ auto_start: !!s?.auto_start, start_minimized: !!s?.start_minimized });
+                setSettings({
+                    auto_start: !!s?.auto_start,
+                    start_minimized: !!s?.start_minimized,
+                    theme: s?.theme || 'system',
+                });
                 // 额外查询实际系统状态 (registry), 跟持久化设置可能不一致
                 const actual = await GetAutoStart();
                 setActualAutoStart(actual);
@@ -825,8 +855,36 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
 
                             {settingsError && <div className="error" style={{ marginTop: '8px' }}>{settingsError}</div>}
                             {settingsSuccess && <div className="info ok" style={{ marginTop: '8px' }}>{settingsSuccess}</div>}
+
+                            {/* Module I: 主题选择 (light/dark/system) */}
+                            <div className="info" style={{ fontSize: '12px', marginTop: '12px', marginBottom: '4px' }}>界面主题</div>
+                            <div className="theme-selector">
+                                {[
+                                    { key: 'light',  icon: '☀️', label: '浅色' },
+                                    { key: 'dark',   icon: '🌙', label: '深色' },
+                                    { key: 'system', icon: '💻', label: '跟随系统' },
+                                ].map((opt) => (
+                                    <button
+                                        key={opt.key}
+                                        type="button"
+                                        className={`theme-option ${settings.theme === opt.key ? 'active' : ''}`}
+                                        disabled={settingsSaving}
+                                        onClick={async () => {
+                                            // 立即前端预览 + 持久化到 settings.json
+                                            applyTheme(opt.key);
+                                            const newSettings = { ...settings, theme: opt.key };
+                                            setSettings(newSettings);
+                                            await saveSettings(newSettings);
+                                        }}
+                                    >
+                                        <span className="theme-option-icon">{opt.icon}</span>
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+
                             <div className="info" style={{ fontSize: '11px', marginTop: '12px' }}>
-                                提示: 开机自启下次启动时生效. 启动时最小化需要重启 app.
+                                提示: 开机自启下次启动时生效. 启动时最小化需要重启 app. 主题切换立即生效.
                             </div>
                         </>
                     )}
