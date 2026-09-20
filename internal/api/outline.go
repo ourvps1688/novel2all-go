@@ -50,20 +50,21 @@ var (
 )
 
 const (
-	outlineStatusPlanned     = "planned"
-	outlineStatusInProgress  = "in_progress"
-	outlineStatusDone        = "done"
-	defaultOutlineFileName    = "outline.json"
+	outlineStatusPlanned    = "planned"
+	outlineStatusInProgress = "in_progress"
+	outlineStatusDone       = "done"
+	defaultOutlineFileName  = "outline.json"
 )
 
 // OutlineHandler /api/outline + /api/outline/{id} CRUD.
 //
 // 端点:
-//   GET    /api/outline?project_root=.     → list
-//   POST   /api/outline                     → create (body 含 project_id + 字段)
-//   GET    /api/outline/{id}                → get one
-//   PUT    /api/outline/{id}                → update (完整 body 替换, 强制 ID 一致)
-//   DELETE /api/outline/{id}                → delete, 返 204
+//
+//	GET    /api/outline?project_root=.     → list
+//	POST   /api/outline                     → create (body 含 project_id + 字段)
+//	GET    /api/outline/{id}                → get one
+//	PUT    /api/outline/{id}                → update (完整 body 替换, 强制 ID 一致)
+//	DELETE /api/outline/{id}                → delete, 返 204
 type OutlineHandler struct{}
 
 func NewOutlineHandler() *OutlineHandler { return &OutlineHandler{} }
