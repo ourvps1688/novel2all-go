@@ -577,17 +577,6 @@ func respondActionError(w http.ResponseWriter, err error, status int) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 }
 
-// requireAPIKeyOrWrite503 检查 user-supplied 或 admin API key 是否有.
-// 无 key → 直接返 503 (避免 streaming flush 200 后无法改 status).
-// 返回 true = 有 key, 可继续; false = 已返 503, 调用方应 return.
-func requireAPIKeyOrWrite503(w http.ResponseWriter, err error) bool {
-	if errors.Is(err, llm.ErrNoAPIKey) {
-		respondActionError(w, err, http.StatusServiceUnavailable)
-		return false
-	}
-	return true
-}
-
 // checkAPIBeforeStream Sprint V1.0.1 (2026-09-20): 在 streaming flush 200 OK 之前
 // 检查指定 provider 是否有可用 API key (user ctx 或 admin constructor).
 // 无 key → 立即返 503 友好提示, 调用方应 return.

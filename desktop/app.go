@@ -99,9 +99,9 @@ type APIError struct {
 //   - json tags 必须与后端一致 (snake_case)
 //   - ID 由后端 nextID 分配, 创建时不传
 type Character struct {
-	ID           int64    `json:"id"`
+	ID           *int64   `json:"id,omitempty"` // Sprint V1.0.1 P2 (2026-09-20): 改为指针, 创建时 nil → TS optional → wailsjs 类型不再 required. 后端 nextID 分配.
 	Name         string   `json:"name"`
-	Role         string   `json:"role"`                     // protagonist/antagonist/supporting
+	Role         string   `json:"role"` // protagonist/antagonist/supporting
 	Description  string   `json:"description,omitempty"`
 	FirstChapter int      `json:"first_chapter,omitempty"`
 	LastChapter  int      `json:"last_chapter,omitempty"`
@@ -112,10 +112,10 @@ type Character struct {
 //
 // character_a + character_b 用名字引用 (不是 ID), 简单 + 用户友好.
 type Relationship struct {
-	ID          int64  `json:"id"`
+	ID          *int64 `json:"id,omitempty"` // 见 Character.ID 说明
 	CharacterA  string `json:"character_a"` // 人物 A 名字
 	CharacterB  string `json:"character_b"` // 人物 B 名字
-	Type        string `json:"type"`        // friend/foe/family/romantic/rival/...
+	Type        string `json:"type"` // friend/foe/family/romantic/rival/...
 	Description string `json:"description,omitempty"`
 }
 
@@ -124,7 +124,7 @@ type Relationship struct {
 // planted_chapter 必填, payoff_chapter 可空 (伏笔未揭示).
 // status: active (default) / resolved / abandoned.
 type Foreshadow struct {
-	ID             int64  `json:"id"`
+	ID             *int64 `json:"id,omitempty"` // 见 Character.ID 说明
 	Title          string `json:"title"`
 	PlantedChapter int    `json:"planted_chapter"`
 	PayoffChapter  int    `json:"payoff_chapter,omitempty"`
@@ -140,7 +140,7 @@ type Foreshadow struct {
 // status: planned (default) / in_progress / done.
 // characters/foreshadows: 关联名 (与 Module D characters/foreshadows 弱类型关联).
 type OutlineItem struct {
-	ID          int64    `json:"id"`
+	ID          *int64   `json:"id,omitempty"` // 见 Character.ID 说明
 	ProjectID   int64    `json:"project_id"`
 	Chapter     int      `json:"chapter"`
 	Title       string   `json:"title"`
@@ -1233,7 +1233,7 @@ func (a *App) CreateCharacter(input Character) (*Character, error) {
 		return nil, fmt.Errorf("character name 不能为空")
 	}
 	// 后端不收 project_root (fallback "."), 但 ID 由后端分配
-	input.ID = 0
+
 	var c Character
 	if err := a.callKnowledgeCRUD(http.MethodPost, "/api/characters", input, &c); err != nil {
 		return nil, err
@@ -1245,7 +1245,8 @@ func (a *App) UpdateCharacter(id int64, input Character) (*Character, error) {
 	if id <= 0 {
 		return nil, fmt.Errorf("character id 必须 > 0")
 	}
-	input.ID = id // 强制 ID 与 path 一致
+	idCopy := id
+	input.ID = &idCopy // 强制 ID 与 path 一致
 	var c Character
 	path := fmt.Sprintf("/api/characters/%d", id)
 	if err := a.callKnowledgeCRUD(http.MethodPut, path, input, &c); err != nil {
@@ -1289,7 +1290,7 @@ func (a *App) CreateRelationship(input Relationship) (*Relationship, error) {
 	if input.CharacterA == "" || input.CharacterB == "" {
 		return nil, fmt.Errorf("character_a 和 character_b 必填")
 	}
-	input.ID = 0
+
 	var r Relationship
 	if err := a.callKnowledgeCRUD(http.MethodPost, "/api/relationships", input, &r); err != nil {
 		return nil, err
@@ -1301,7 +1302,8 @@ func (a *App) UpdateRelationship(id int64, input Relationship) (*Relationship, e
 	if id <= 0 {
 		return nil, fmt.Errorf("relationship id 必须 > 0")
 	}
-	input.ID = id
+	idCopy := id
+	input.ID = &idCopy
 	var r Relationship
 	path := fmt.Sprintf("/api/relationships/%d", id)
 	if err := a.callKnowledgeCRUD(http.MethodPut, path, input, &r); err != nil {
@@ -1345,7 +1347,7 @@ func (a *App) CreateForeshadow(input Foreshadow) (*Foreshadow, error) {
 	if input.Title == "" || input.PlantedChapter <= 0 {
 		return nil, fmt.Errorf("title 和 planted_chapter 必填")
 	}
-	input.ID = 0
+
 	var f Foreshadow
 	if err := a.callKnowledgeCRUD(http.MethodPost, "/api/foreshadows", input, &f); err != nil {
 		return nil, err
@@ -1357,7 +1359,8 @@ func (a *App) UpdateForeshadow(id int64, input Foreshadow) (*Foreshadow, error) 
 	if id <= 0 {
 		return nil, fmt.Errorf("foreshadow id 必须 > 0")
 	}
-	input.ID = id
+	idCopy := id
+	input.ID = &idCopy
 	var f Foreshadow
 	path := fmt.Sprintf("/api/foreshadows/%d", id)
 	if err := a.callKnowledgeCRUD(http.MethodPut, path, input, &f); err != nil {
@@ -1450,7 +1453,7 @@ func (a *App) CreateOutline(input OutlineItem) (*OutlineItem, error) {
 	if input.Title == "" {
 		return nil, fmt.Errorf("章节标题必填")
 	}
-	input.ID = 0 // 后端分配
+
 	var item OutlineItem
 	if err := a.callOutlineCRUD(http.MethodPost, "/api/outline", input, &item); err != nil {
 		return nil, err
@@ -1468,7 +1471,8 @@ func (a *App) UpdateOutline(id int64, input OutlineItem) (*OutlineItem, error) {
 	if input.Title == "" {
 		return nil, fmt.Errorf("章节标题必填")
 	}
-	input.ID = id
+	idCopy := id
+	input.ID = &idCopy
 	var item OutlineItem
 	path := fmt.Sprintf("/api/outline/%d", id)
 	if err := a.callOutlineCRUD(http.MethodPut, path, input, &item); err != nil {
