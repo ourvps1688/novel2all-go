@@ -753,6 +753,9 @@ jobs:
 | 03:58 | Module H.2 | App.css 新增 .skills-grid / .skill-card (hover 紫边 + 浅紫底) / .skill-icon (24px emoji) / .skill-name / .skill-desc (2 行 ellipsis) / .skill-run-btn (紫色 pill) / .skill-execute-panel / .skill-advanced (details) / .skill-actions / .skill-result (紫边, max-height 360px 滚动 pre 块, 等宽字体) | (CSS) |
 | 04:00 | Module H.3 | 验证: go vet ./internal/... clean + 14/14 secrets + 2/2 update tests PASS. tsc 沙箱缺 deps, CI 验证. docs + 4 条 Module H 条目 + roadmap H 标 ✅. commit + push + CI 待验证 + 后端 atomic swap deploy | (验证) |
 | 04:05 | Module H.3 | CI #232 ✅ ALL GREEN (test/lint/6 build matrix/smoke). 后端 smoke: GET /api/skills/ → 13 skills (browser-cdp + story + story-cover + story-deslop + story-import + story-long-analyze + story-long-scan + story-long-write + story-review + story-setup + story-short-analyze + story-short-scan + story-short-write). **icon 映射表需更新**: 实际 skill 名带 story- 前缀, 不是裸的 expand/rewrite/review. 用户输入 task:WRITING → 路由 minimax (admin key 未配). 结论: **Module H 端到端工作正常**, server 端 LLM key 配置是运维问题 | (CI pass + smoke) |
+| 04:15 | Module I.1 | 用户报告: 'server admin LLM key 不合理, 应只走桌面端设置 (Module B 已有加密 + X-LLM-Key header). admin key 增加泄露风险'. 用户选方案 A: **完全去除 admin key fallback**. 实施: `internal/config/config.go` 加 `llmAdminFallbackKey()` helper 默认返空, 仅当 `LLM_ALLOW_ADMIN_FALLBACK=true` 时读 env. Config struct 字段保留 (向后兼容). 修测试: TestLoad_DotEnvValid 期望 admin key = "" (新默认); 加 TestLoad_DotEnvWithAdminFallback 验证 fallback 开关 | (config) |
+| 04:25 | Module I.2 | `internal/llm/api_key.go`: 加 `ErrNoAPIKey` sentinel + `ResolveAPIKey(ctx, provider, constructorKey)` helper. `internal/llm/router.go`: ChatStream/Chat/ChatWithTools 三处加早期检查 (`APIKeyFromContext == "" && !p.Available()`), 没 user key + 没 admin key → 返 ErrNoAPIKey (清晰错误). `internal/api/skills.go` executeSync + `internal/api/chapter_actions.go` respondActionError: 识别 `errors.Is(err, llm.ErrNoAPIKey)` → HTTP 503 Service Unavailable (友好提示, 不是 500) | (router + handlers) |
+| 04:30 | Module I.3 | 验证: go test ./internal/... 全过 (pre-existing bash test failure 与本 commit 无关). 后端 atomic swap deploy md5 <新>. smoke (无 admin key + 无 user key → 503 'user API key required, please configure in SettingsPage'). CI 待过. docs 加 4 条 Module I 条目 + roadmap Module I 标 ✅ | (验证) |
 
 ### 待办 (下一阶段)
 
@@ -773,6 +776,7 @@ jobs:
 - [x] **Module D**: 人物/关系/伏笔 知识管理 ✅ — 后端补 PUT/PATCH/DELETE + 桌面 15 wails 方法 + KnowledgePanel UI (3 tab CRUD)
 - [x] **Module E**: 章节大纲 ✅ — 新文件 outline.go + OutlineItem + 5 wails 方法 + OutlinePanel UI (按章节号排序)
 - [x] **Module H**: Skills 调用 ✅ — 桌面 3 wails 方法 (ListSkills/ExecuteSkillSync/GetSkill) + SkillsPanel UI (13 skill 卡片网格)
+- [x] **Module I (架构改造)**: 去除 server admin LLM key fallback ✅ — config.go 默认空, 仅 LLM_ALLOW_ADMIN_FALLBACK=true 时读 env. router 早期检查无 key → ErrNoAPIKey → HTTP 503. 强制桌面配 Module B user key (B.2 已实现 X-LLM-Key 注入)
 
 ---
 

@@ -113,10 +113,13 @@ func Load(envPath string) (*Config, error) {
 			DSN:    getEnv("DB_DSN", defaultDBDSN),
 		},
 		LLM: LLMConfig{
-			DashScopeAPIKey: getEnv("DASHSCOPE_API_KEY", ""),
-			DeepSeekAPIKey:  getEnv("DEEPSEEK_API_KEY", ""),
-			MinimaxAPIKey:   getEnv("MINIMAX_API_KEY", ""),
-			AnthropicAPIKey: getEnv("ANTHROPIC_API_KEY", ""),
+			// Sprint V1.0.1 (2026-09-20): 默认不再从 env 读 admin LLM key.
+			// 所有 LLM 调用应通过 X-LLM-Key-{provider} header (desktop Module B 提供).
+			// 设 LLM_ALLOW_ADMIN_FALLBACK=true 才读 (向后兼容旧部署).
+			DashScopeAPIKey: llmAdminFallbackKey("DASHSCOPE_API_KEY"),
+			DeepSeekAPIKey:  llmAdminFallbackKey("DEEPSEEK_API_KEY"),
+			MinimaxAPIKey:   llmAdminFallbackKey("MINIMAX_API_KEY"),
+			AnthropicAPIKey: llmAdminFallbackKey("ANTHROPIC_API_KEY"),
 		},
 		Skills: SkillsConfig{
 			Dir:         getEnv("SKILLS_DIR", defaultSkillsDir),
@@ -225,6 +228,24 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// llmAdminFallbackKey Sprint V1.0.1 (2026-09-20):
+// 默认空字符串 (admin key 关闭). 仅当 LLM_ALLOW_ADMIN_FALLBACK=true 时读 env var.
+//
+// 设计原因:
+// 1. server admin key 增加泄露风险 (systemd Environment 全员可见)
+// 2. 集中付费 (admin 付所有用户费用)
+// 3. 隐私 (所有用户数据过 admin key)
+// 4. 桌面 Module B 已实现 user key 加密存储 + Module B.2 per-request header 注入
+//
+// 桌面 app 应在 SettingsPage 配置自己的 API key (dashscope/deepseek/minimax).
+// 没配 user key 时, LLM 调用返 503 'user API key required, please configure in SettingsPage'.
+func llmAdminFallbackKey(envKey string) string {
+	if os.Getenv("LLM_ALLOW_ADMIN_FALLBACK") == "true" {
+		return os.Getenv(envKey)
+	}
+	return ""
 }
 
 func getEnvInt(key string, def int) int {

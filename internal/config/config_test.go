@@ -102,8 +102,35 @@ DASHSCOPE_API_KEY=test-dashscope-key
 	if cfg.GitHub.Repo != "test/repo" {
 		t.Errorf("NOVEL2ALL_REPO 应为 test/repo，实际=%q", cfg.GitHub.Repo)
 	}
-	if cfg.LLM.DashScopeAPIKey != "test-dashscope-key" {
-		t.Errorf("DASHSCOPE_API_KEY 应为 test-dashscope-key，实际=%q", cfg.LLM.DashScopeAPIKey)
+	// Sprint V1.0.1 (2026-09-20): DASHSCOPE_API_KEY 默认应为空 (admin key 关闭)
+	if cfg.LLM.DashScopeAPIKey != "" {
+		t.Errorf("DASHSCOPE_API_KEY 应默认空字符串 (admin key fallback 关闭)，实际=%q", cfg.LLM.DashScopeAPIKey)
+	}
+}
+
+// TestLoad_DotEnvWithAdminFallback 测试显式开启 LLM_ALLOW_ADMIN_FALLBACK=true 时 .env DASHSCOPE_API_KEY 会被加载.
+func TestLoad_DotEnvWithAdminFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, ".env")
+	content := `DASHSCOPE_API_KEY=admin-dashscope-fallback-key
+`
+	if err := os.WriteFile(envPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("写入临时 .env 失败：%v", err)
+	}
+	defer os.Unsetenv("LLM_ALLOW_ADMIN_FALLBACK")
+	defer os.Unsetenv("DASHSCOPE_API_KEY")
+
+	for _, k := range []string{"LLM_ALLOW_ADMIN_FALLBACK", "DASHSCOPE_API_KEY"} {
+		_ = os.Unsetenv(k)
+	}
+	os.Setenv("LLM_ALLOW_ADMIN_FALLBACK", "true")
+
+	cfg, err := Load(envPath)
+	if err != nil {
+		t.Fatalf("Load 失败：%v", err)
+	}
+	if cfg.LLM.DashScopeAPIKey != "admin-dashscope-fallback-key" {
+		t.Errorf("LLM_ALLOW_ADMIN_FALLBACK=true 时 DASHSCOPE_API_KEY 应被加载，实际=%q", cfg.LLM.DashScopeAPIKey)
 	}
 }
 

@@ -233,6 +233,11 @@ func (h *SkillsHandler) executeSync(w http.ResponseWriter, r *http.Request, name
 		Model:     req.Model,
 	})
 	if err != nil {
+		// Sprint V1.0.1 (2026-09-20): 区分 "no API key" (503) vs 其他错误 (500)
+		if errors.Is(err, llm.ErrNoAPIKey) {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

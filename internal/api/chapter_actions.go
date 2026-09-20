@@ -261,6 +261,13 @@ func (a *ChapterActions) expand(w http.ResponseWriter, r *http.Request, chapter 
 		return
 	}
 
+	// Sprint V1.0.1 (2026-09-20): 在 flush 200 OK 前先检查 API key.
+	// 否则 ErrNoAPIKey 后无法 WriteHeader(headers 已发) → 客户端收到 200 + 空 body → timeout.
+	// expand/rewrite/insert 默认走 WRITING → minimax provider.
+	if !checkAPIBeforeStream(w, r, llm.ProviderMinimax, a.executor) {
+		return
+	}
+
 	// Module C.5 修复 (2026-09-20): 在 LLM 调用前立即 flush response headers,
 	// 避免 client 在 "awaiting headers" 阶段 timeout (desktop 端 elapsed timer 即可看到等待秒数).
 	// chunked transfer encoding 自动启用, 客户端立即收到 200 + headers.
@@ -313,6 +320,11 @@ func (a *ChapterActions) rewrite(w http.ResponseWriter, r *http.Request, chapter
 	backupPath, err := backupChapterFile(req.ProjectRoot, chapter, before)
 	if err != nil {
 		respondActionError(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	// Sprint V1.0.1 (2026-09-20): flush 200 前先 check API key.
+	if !checkAPIBeforeStream(w, r, llm.ProviderMinimax, a.executor) {
 		return
 	}
 
@@ -404,6 +416,11 @@ func (a *ChapterActions) insert(w http.ResponseWriter, r *http.Request, chapter 
 	backupPath, err := backupChapterFile(req.ProjectRoot, chapter, before)
 	if err != nil {
 		respondActionError(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	// Sprint V1.0.1 (2026-09-20): flush 200 前先 check API key (insert 默认走 minimax).
+	if !checkAPIBeforeStream(w, r, llm.ProviderMinimax, a.executor) {
 		return
 	}
 
@@ -551,9 +568,44 @@ func respondActionError(w http.ResponseWriter, err error, status int) {
 	if errors.Is(err, fs.ErrNotExist) {
 		status = http.StatusNotFound
 	}
+	// Sprint V1.0.1 (2026-09-20): API key 缺失 → 503 (友好提示) 而非 500
+	if errors.Is(err, llm.ErrNoAPIKey) {
+		status = http.StatusServiceUnavailable
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+}
+
+// requireAPIKeyOrWrite503 检查 user-supplied 或 admin API key 是否有.
+// 无 key → 直接返 503 (避免 streaming flush 200 后无法改 status).
+// 返回 true = 有 key, 可继续; false = 已返 503, 调用方应 return.
+func requireAPIKeyOrWrite503(w http.ResponseWriter, err error) bool {
+	if errors.Is(err, llm.ErrNoAPIKey) {
+		respondActionError(w, err, http.StatusServiceUnavailable)
+		return false
+	}
+	return true
+}
+
+// checkAPIBeforeStream Sprint V1.0.1 (2026-09-20): 在 streaming flush 200 OK 之前
+// 检查指定 provider 是否有可用 API key (user ctx 或 admin constructor).
+// 无 key → 立即返 503 友好提示, 调用方应 return.
+// 返回 true = 有 key, 可继续走 streaming 流程.
+//
+// 注: nil executor 测试场景走 mock 路径 (不需 key), 自动跳过.
+func checkAPIBeforeStream(w http.ResponseWriter, r *http.Request, provider llm.ProviderName, exec *skills.Executor) bool {
+	// nil executor = mock 路径 (测试场景), 不需 key → 跳过检查.
+	if exec == nil {
+		return true
+	}
+	// 简化检查: 只看 ctx 里的 user key. Admin key 检查需要 router 实例 (未注入).
+	// 如果 user ctx 没 key, 大概率没 admin key (Sprint V1.0.1 默认关闭 admin fallback).
+	if llm.APIKeyFromContext(r.Context(), provider) == "" {
+		respondActionError(w, llm.ErrNoAPIKey, http.StatusServiceUnavailable)
+		return false
+	}
+	return true
 }
 
 func backupChapterFile(projectRoot string, chapter int, content []byte) (string, error) {

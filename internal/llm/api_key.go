@@ -1,6 +1,9 @@
 package llm
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // API key per-request override (Sprint V1.0.1 Module B.2).
 //
@@ -75,6 +78,36 @@ func APIKeyFromContext(ctx context.Context, provider ProviderName) string {
 		return ""
 	}
 	return m[provider]
+}
+
+// ErrNoAPIKey Sprint V1.0.1 (2026-09-20): 所有 LLM 调用都需要 user-supplied key
+// (从 X-LLM-Key-{provider} header). Admin key fallback 默认禁用 (Module I 决策).
+//
+// 当 handler 准备好调用 LLM 但拿不到任何 key 时, 应该立即返这个错误 (503),
+// 不要让请求到达上游 (避免不必要的 network roundtrip + 给用户明确提示).
+var ErrNoAPIKey = errors.New("user API key required: please configure your API key in SettingsPage (the server has no admin key fallback)")
+
+// ResolveAPIKey 综合解析 user key (ctx) + admin key (constructor) 用于指定 provider.
+// 返回顺序 (Module B.2 + Module I 决策):
+//  1. user-supplied key (from X-LLM-Key-{provider} header via ctx)
+//  2. admin key (from constructor, 仅当 LLM_ALLOW_ADMIN_FALLBACK=true 时非空)
+//  3. 否则返回 ErrNoAPIKey
+//
+// 调用方应该:
+//
+//	key, err := llm.ResolveAPIKey(ctx, p.Name(), p.apiKey)
+//	if err != nil { return err }  // HTTP handler 返 503
+//
+// pName: provider 标识 (e.g. "dashscope")
+// constructorKey: provider 初始化时存的 admin key (Sprint V1.0.1 默认空字符串)
+func ResolveAPIKey(ctx context.Context, provider ProviderName, constructorKey string) (string, error) {
+	if userKey := APIKeyFromContext(ctx, provider); userKey != "" {
+		return userKey, nil
+	}
+	if constructorKey != "" {
+		return constructorKey, nil
+	}
+	return "", ErrNoAPIKey
 }
 
 // SetAPIKeyOnContext 是 ContextWithAPIKeys 的单 key 便捷版本.

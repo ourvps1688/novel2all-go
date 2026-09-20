@@ -80,18 +80,13 @@ func NewRouter(cfg Config) *Router {
 		routes:    defaultRoutes(),
 	}
 
-	if cfg.DashScopeAPIKey != "" {
-		r.providers[ProviderDashScope] = NewDashScope(cfg.DashScopeAPIKey)
-	}
-	if cfg.DeepSeekAPIKey != "" {
-		r.providers[ProviderDeepSeek] = NewDeepSeek(cfg.DeepSeekAPIKey)
-	}
-	if cfg.MinimaxAPIKey != "" {
-		r.providers[ProviderMinimax] = NewMinimax(cfg.MinimaxAPIKey)
-	}
-	if cfg.AnthropicAPIKey != "" {
-		r.providers[ProviderAnthropic] = NewAnthropic(cfg.AnthropicAPIKey)
-	}
+	// Sprint V1.0.1 (2026-09-20): 无条件注册所有 4 个 provider (即使 apiKey 空).
+	// 这样 router.resolve() 不会因 "not configured" 错误而短路 — 后续 Chat/ChatStream
+	// 的早期检查会触发 ErrNoAPIKey (友好提示), 而非模糊的 "not configured".
+	r.providers[ProviderDashScope] = NewDashScope(cfg.DashScopeAPIKey)
+	r.providers[ProviderDeepSeek] = NewDeepSeek(cfg.DeepSeekAPIKey)
+	r.providers[ProviderMinimax] = NewMinimax(cfg.MinimaxAPIKey)
+	r.providers[ProviderAnthropic] = NewAnthropic(cfg.AnthropicAPIKey)
 
 	return r
 }
@@ -107,13 +102,15 @@ func defaultRoutes() map[TaskType]routeConfig {
 	}
 }
 
-// AvailableProviders 列出已配置 API key 的 provider
+// AvailableProviders 列出已配置 API key 的 provider (Available()=true)
 func (r *Router) AvailableProviders() []ProviderName {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]ProviderName, 0, len(r.providers))
-	for p := range r.providers {
-		out = append(out, p)
+	for p, prov := range r.providers {
+		if prov.Available() {
+			out = append(out, p)
+		}
 	}
 	return out
 }
@@ -149,12 +146,13 @@ func (r *Router) resolve(req Request) (Provider, string, error) {
 		cfg = r.routes[TaskUnknown]
 	}
 	p, ok := r.providers[cfg.Provider]
-	if !ok {
-		// fallback to deepseek
-		if p2, ok2 := r.providers[ProviderDeepSeek]; ok2 {
+	if !ok || !p.Available() {
+		// 主 provider 未配置或 key 空 → fallback 到 deepseek (如果可用)
+		if p2, ok2 := r.providers[ProviderDeepSeek]; ok2 && p2.Available() {
 			return p2, DefaultDeepSeekModel, nil
 		}
-		return nil, "", fmt.Errorf("task %q routes to %q but not configured", req.Task, cfg.Provider)
+		// 没有任何可用 provider. 后续 Chat 检查会触发 ErrNoAPIKey.
+		return p, cfg.Model, nil
 	}
 	return p, cfg.Model, nil
 }
@@ -180,6 +178,11 @@ func (r *Router) ChatStream(ctx context.Context, req Request, ch chan<- Chunk) e
 	if err != nil {
 		r.recordCall("", string(req.Task), "resolve_error", 0, 0)
 		return err
+	}
+	// Sprint V1.0.1 (2026-09-20): 早期检查 API key.
+	// user key (ctx) → admin key (provider.Available) → 否则返 ErrNoAPIKey.
+	if APIKeyFromContext(ctx, p.Name()) == "" && !p.Available() {
+		return ErrNoAPIKey
 	}
 	req2 := req
 	if req2.OverrideModel == "" {
@@ -212,6 +215,10 @@ func (r *Router) Chat(ctx context.Context, req Request) (*Response, error) {
 	if err != nil {
 		r.recordCall("", string(req.Task), "resolve_error", 0, 0)
 		return nil, err
+	}
+	// Sprint V1.0.1 (2026-09-20): 早期检查 API key. 无 user + 无 admin → 返清晰错误.
+	if APIKeyFromContext(ctx, p.Name()) == "" && !p.Available() {
+		return nil, ErrNoAPIKey
 	}
 	req2 := req
 	if req2.OverrideModel == "" {
@@ -284,6 +291,10 @@ func (r *Router) ChatWithTools(ctx context.Context, req ChatWithToolsRequest) (*
 	})
 	if err != nil {
 		return nil, err
+	}
+	// Sprint V1.0.1 (2026-09-20): 早期检查 API key.
+	if APIKeyFromContext(ctx, provider.Name()) == "" && !provider.Available() {
+		return nil, ErrNoAPIKey
 	}
 	var providerName ProviderName
 	if req.OverrideProvider != "" {
