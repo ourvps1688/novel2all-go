@@ -70,14 +70,12 @@ import {
 import type { main } from '../wailsjs/go/models';
 
 // Module I: 主题应用 helper
-// 读用户选择 (light/dark/system), 设 <html> data-theme 属性 (CSS 选择器据此切换 token).
+// 读用户选择 (light/dark/paper/system), 设 <html> data-theme 属性 (CSS 选择器据此切换 token).
 // 不做应用内实时刷新 - 后端保存后由下次启动生效.
 function applyTheme(theme: string) {
     const root = document.documentElement;
-    if (theme === 'light') {
-        root.dataset.theme = 'light';
-    } else if (theme === 'dark') {
-        root.dataset.theme = 'dark';
+    if (theme === 'light' || theme === 'dark' || theme === 'paper') {
+        root.dataset.theme = theme;
     } else {
         // 'system' (默认): 删除 data-theme, 让 prefers-color-scheme media query 接管.
         delete root.dataset.theme;
@@ -468,28 +466,31 @@ function App() {
                                 ) : (
                                     <ul className="chapter-list">
                                         {chapters.map((c) => (
-<li key={c.id} className="chapter-item">
-                                                    <div className="chapter-info">
-                                                        <div className="chapter-title">
-                                                            {c.title || `第${c.chapter}章`}
-                                                        </div>
-                                                        <div className="chapter-meta">
-                                                            <span className="chapter-num-tag">第{c.chapter}章</span>
-                                                            {' '}{c.char_count ?? 0} 字
-                                                        </div>
-                                                    </div>
-                                                <div className="chapter-actions">
+                                            <li
+                                                key={c.id}
+                                                className="chapter-card"
+                                            >
+                                                <div className="chapter-card-row1">
+                                                    <span className="chapter-card-row1-num">第 {c.chapter} 章</span>
+                                                    <span className="chapter-card-row1-title">
+                                                        {c.title || `第${c.chapter}章`}
+                                                    </span>
+                                                    <span className="chapter-card-row1-meta">
+                                                        {c.char_count ?? 0} 字
+                                                    </span>
+                                                </div>
+                                                <div className="card-modern-actions">
                                                     <button
                                                         className="chapter-action-btn"
                                                         onClick={(e) => { e.stopPropagation(); openChapterEditor(c); }}
                                                         title="编辑章节"
                                                         disabled={loadingChapter}
-                                                    >✎</button>
+                                                    >✎ 编辑</button>
                                                     <button
                                                         className="chapter-action-btn danger"
                                                         onClick={(e) => { e.stopPropagation(); deleteChapter(c); }}
                                                         title="删除章节"
-                                                    >🗑</button>
+                                                    >🗑 删除</button>
                                                 </div>
                                             </li>
                                         ))}
@@ -856,12 +857,13 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
                             {settingsError && <div className="error" style={{ marginTop: '8px' }}>{settingsError}</div>}
                             {settingsSuccess && <div className="info ok" style={{ marginTop: '8px' }}>{settingsSuccess}</div>}
 
-                            {/* Module I: 主题选择 (light/dark/system) */}
+                            {/* Phase 1: 主题选择 (light/dark/paper/system) - AI-Novel 风格 4 选项 */}
                             <div className="info" style={{ fontSize: '12px', marginTop: '12px', marginBottom: '4px' }}>界面主题</div>
                             <div className="theme-selector">
                                 {[
                                     { key: 'light',  icon: '☀️', label: '浅色' },
                                     { key: 'dark',   icon: '🌙', label: '深色' },
+                                    { key: 'paper',  icon: '📜', label: '暖米' },
                                     { key: 'system', icon: '💻', label: '跟随系统' },
                                 ].map((opt) => (
                                     <button

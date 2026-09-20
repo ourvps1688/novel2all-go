@@ -12,27 +12,124 @@
 }
 
 :root {
-    /* 设计 token - 单一来源 */
-    --color-accent: #6366f1;
-    --color-accent-hover: #4f46e5;
-    --color-accent-bg: rgba(99, 102, 241, 0.08);
-    --color-text: #1f2937;
-    --color-text-secondary: #6b7280;
-    --color-text-tertiary: #9ca3af;
-    --color-bg: #f9fafb;
-    --color-bg-card: #ffffff;
-    --color-border: #e5e7eb;
-    --color-border-hover: #d1d5db;
-    --color-danger: #ef4444;
-    --color-danger-hover: #dc2626;
-    --color-danger-bg: rgba(239, 68, 68, 0.08);
-    --color-success: #10b981;
+    /* 设计 token (Phase 1 - AI-Novel 风格移植) - HSL 格式.
+     * 默认浅色. dark mode 通过 [data-theme="dark"] 覆盖.
+     * paper mode 通过 [data-theme="paper"] 暖米色.
+     */
+
+    /* Brand */
+    --color-accent:        hsl(239 84% 67%);
+    --color-accent-hover:   hsl(243 75% 59%);
+    --color-accent-bg:      hsl(239 84% 67% / 0.08);
+
+    /* Text */
+    --color-text:           hsl(221 39% 11%);
+    --color-text-secondary: hsl(220 9% 46%);
+    --color-text-tertiary:  hsl(218 11% 65%);
+
+    /* Surfaces */
+    --color-bg:            hsl(220 14% 96%);
+    --color-bg-card:       hsl(0 0% 100%);
+    --color-border:        hsl(220 13% 91%);
+    --color-border-hover:   hsl(216 19% 77%);
+
+    /* Semantic */
+    --color-danger:        hsl(0 84% 60%);
+    --color-danger-hover:  hsl(0 73% 52%);
+    --color-danger-bg:     hsl(0 84% 60% / 0.08);
+    --color-success:       hsl(158 64% 52%);
+
+    /* Geometry */
     --radius: 8px;
     --radius-sm: 6px;
+    --radius-md: 10px;
     --radius-lg: 12px;
+
+    /* Shadows */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
     --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+/* Paper 主题 (Phase 1 - AI-Novel 风格): 暖米色背景, 适合长时间阅读. */
+:root[data-theme="paper"] {
+    --color-accent:        hsl(28 55% 27%);
+    --color-accent-hover:   hsl(28 60% 22%);
+    --color-accent-bg:      hsl(28 55% 27% / 0.08);
+
+    --color-text:           hsl(28 28% 16%);
+    --color-text-secondary: hsl(28 15% 42%);
+    --color-text-tertiary:  hsl(28 12% 55%);
+
+    --color-bg:            hsl(42 33% 97%);
+    --color-bg-card:       hsl(42 36% 99%);
+    --color-border:        hsl(34 22% 84%);
+    --color-border-hover:   hsl(32 25% 70%);
+
+    --color-danger:        hsl(0 70% 40%);
+    --color-danger-hover:  hsl(0 65% 32%);
+    --color-danger-bg:     hsl(0 70% 40% / 0.08);
+    --color-success:       hsl(110 50% 35%);
+
+    --shadow-sm: 0 1px 2px hsl(28 20% 60% / 0.06);
+    --shadow: 0 1px 3px hsl(28 20% 50% / 0.08), 0 1px 2px hsl(28 20% 60% / 0.04);
+    --shadow-md: 0 4px 6px hsl(28 25% 45% / 0.08), 0 2px 4px hsl(28 25% 50% / 0.05);
+    --shadow-lg: 0 10px 25px hsl(28 30% 40% / 0.10);
+}
+
+/* Dark mode (Phase 1 - AI-Novel 风格): 深色蓝, 保持与已有 dark 兼容. */
+:root[data-theme="dark"] {
+    --color-accent:        hsl(239 84% 75%);
+    --color-accent-hover:   hsl(239 84% 85%);
+    --color-accent-bg:      hsl(239 84% 67% / 0.18);
+
+    --color-text:           hsl(220 13% 91%);
+    --color-text-secondary: hsl(218 11% 70%);
+    --color-text-tertiary:  hsl(218 11% 55%);
+
+    --color-bg:            hsl(222 47% 6%);
+    --color-bg-card:       hsl(222 47% 9%);
+    --color-border:        hsl(218 11% 25%);
+    --color-border-hover:   hsl(218 11% 35%);
+
+    --color-danger:        hsl(0 84% 65%);
+    --color-danger-hover:  hsl(0 84% 70%);
+    --color-danger-bg:     hsl(0 84% 60% / 0.15);
+    --color-success:       hsl(158 64% 55%);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.20);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.30), 0 1px 2px rgba(0, 0, 0, 0.20);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.30), 0 2px 4px rgba(0, 0, 0, 0.20);
+    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.40);
+}
+
+/* 系统偏好: 用户选 '跟随系统' 时, 自动应用对应主题. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        --color-accent:        hsl(239 84% 75%);
+        --color-accent-hover:   hsl(239 84% 85%);
+        --color-accent-bg:      hsl(239 84% 67% / 0.18);
+
+        --color-text:           hsl(220 13% 91%);
+        --color-text-secondary: hsl(218 11% 70%);
+        --color-text-tertiary:  hsl(218 11% 55%);
+
+        --color-bg:            hsl(222 47% 6%);
+        --color-bg-card:       hsl(222 47% 9%);
+        --color-border:        hsl(218 11% 25%);
+        --color-border-hover:   hsl(218 11% 35%);
+
+        --color-danger:        hsl(0 84% 65%);
+        --color-danger-hover:  hsl(0 84% 70%);
+        --color-danger-bg:     hsl(0 84% 60% / 0.15);
+        --color-success:       hsl(158 64% 55%);
+
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.20);
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.30), 0 1px 2px rgba(0, 0, 0, 0.20);
+        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.30), 0 2px 4px rgba(0, 0, 0, 0.20);
+        --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.40);
+    }
 }
 
 html, body, #root, #App {
@@ -1717,73 +1814,18 @@ html, body, #root, #App {
 .settings-actions {
     margin-top: 8px;
 }
+/* ===== Phase 1.1: AI-Novel 风格主题切换按钮 (SettingsPage 用) ===== */
+/* 4 主题: 浅色 / 深色 / 暖米 / 跟随系统 */
 
-/* ===== Module I: 主题系统 (light/dark/system) ===== */
-
-/* 默认 = light (省略 [data-theme] 时的 fallback).
- * 用户选 '跟随系统' 时, 通过 prefers-color-scheme media query 自动切换.
- * 用户选 '浅色'/'深色' 时, 在 <html> 上设 data-theme='light'/'dark'.
- *
- * 当前 CSS tokens 已是浅色 (默认), 深色 token 通过 [data-theme="dark"] override.
- */
-
-:root[data-theme='dark'] {
-    /* 设计 token 反转 - 深色版 */
-    --color-accent: #818cf8;             /* 浅紫 -> 略亮紫, 对比度更高 */
-    --color-accent-hover: #6366f1;
-    --color-accent-bg: rgba(129, 140, 248, 0.15);
-    --color-text: #f1f5f9;                 /* 主文字: 近白 */
-    --color-text-secondary: #94a3b8;       /* 次文字: 浅灰 */
-    --color-text-tertiary: #64748b;        /* 弱文字: 中灰 */
-    --color-bg: #0f172a;                  /* 页面底色: 深蓝黑 */
-    --color-bg-card: #1e293b;              /* 卡片底色: 略亮 */
-    --color-border: #334155;              /* 边框: 中灰蓝 */
-    --color-border-hover: #475569;
-    --color-danger: #f87171;               /* 危险: 浅红 */
-    --color-danger-hover: #ef4444;
-    --color-danger-bg: rgba(248, 113, 113, 0.15);
-    --color-success: #34d399;              /* 成功: 浅绿 */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.4);
-}
-
-/* 系统偏好: 用户选 '跟随系统' 时, 自动应用对应主题.
- * 注意: 用户明确选了 light/dark 后, <html> 上有 data-theme 属性 (比 media query 优先级高),
- * 所以 media query 仅在 data-theme 缺失时生效.
- */
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme]) {
-        --color-accent: #818cf8;
-        --color-accent-hover: #6366f1;
-        --color-accent-bg: rgba(129, 140, 248, 0.15);
-        --color-text: #f1f5f9;
-        --color-text-secondary: #94a3b8;
-        --color-text-tertiary: #64748b;
-        --color-bg: #0f172a;
-        --color-bg-card: #1e293b;
-        --color-border: #334155;
-        --color-border-hover: #475569;
-        --color-danger: #f87171;
-        --color-danger-hover: #ef4444;
-        --color-danger-bg: rgba(248, 113, 113, 0.15);
-        --color-success: #34d399;
-        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-        --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-        --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.4);
-    }
-}
-
-/* 主题切换按钮 (SettingsPage 用) */
 .theme-selector {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: 6px;
     margin-top: 4px;
 }
 
 .theme-option {
-    flex: 1;
-    padding: 8px 12px;
+    padding: 10px 8px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     background: var(--color-bg-card);
@@ -1793,6 +1835,10 @@ html, body, #root, #App {
     cursor: pointer;
     text-align: center;
     transition: all 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
 }
 
 .theme-option:hover {
@@ -1808,6 +1854,398 @@ html, body, #root, #App {
 
 .theme-option-icon {
     font-size: 18px;
-    margin-bottom: 2px;
-    display: block;
+    line-height: 1;
+}
+
+/* ===== Phase 1.2: 3 栏 layout shell (Navbar + Sidebar + Main) ===== */
+
+.app-shell {
+    display: grid;
+    grid-template-rows: 56px 1fr;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-body {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* Navbar - 顶部固定 56px */
+.app-navbar {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    background: var(--color-bg-card);
+    border-bottom: 1px solid var(--color-border);
+    gap: 16px;
+    z-index: 10;
+}
+
+.app-navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--color-text);
+}
+
+.app-navbar-brand-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    background: var(--color-accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.app-navbar-spacer {
+    flex: 1;
+}
+
+.app-navbar-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: none;
+    border: none;
+}
+
+.app-navbar-link:hover {
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+
+.app-navbar-link.active {
+    background: var(--color-accent-bg);
+    color: var(--color-accent);
+}
+
+/* Sidebar - 左侧可折叠 */
+.app-sidebar {
+    width: 240px;
+    background: var(--color-bg-card);
+    border-right: 1px solid var(--color-border);
+    overflow-y: auto;
+    transition: width 0.2s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-sidebar.collapsed {
+    width: 0;
+    border-right: none;
+    overflow: hidden;
+}
+
+.app-sidebar-section {
+    padding: 12px 12px 8px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.app-sidebar-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.app-sidebar-section-title button {
+    background: none;
+    border: none;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+    border-radius: var(--radius-sm);
+}
+
+.app-sidebar-section-title button:hover {
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+
+.app-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    margin-bottom: 1px;
+}
+
+.app-sidebar-item:hover {
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+
+.app-sidebar-item.active {
+    background: var(--color-accent-bg);
+    color: var(--color-accent);
+    font-weight: 500;
+}
+
+.app-sidebar-item-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.app-sidebar-item-badge {
+    margin-left: auto;
+    background: var(--color-bg);
+    color: var(--color-text-tertiary);
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.app-sidebar-item.active .app-sidebar-item-badge {
+    background: var(--color-accent);
+    color: white;
+}
+
+.app-sidebar-empty {
+    padding: 12px 8px;
+    text-align: center;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+}
+
+.sidebar-toggle {
+    background: none;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    line-height: 1;
+    transition: all 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+    background: var(--color-bg);
+    color: var(--color-text);
+    border-color: var(--color-border-hover);
+}
+
+/* Main content area */
+.app-main {
+    overflow-y: auto;
+    padding: 20px 24px;
+    background: var(--color-bg);
+}
+
+@media (max-width: 768px) {
+    .app-sidebar {
+        width: 200px;
+        position: absolute;
+        z-index: 20;
+        height: 100%;
+        box-shadow: var(--shadow-lg);
+    }
+    .app-sidebar.collapsed {
+        width: 0;
+    }
+}
+
+/* ===== Phase 1.3: 卡片样式 (chapters / knowledge / outline) ===== */
+
+.card-modern {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    transition: all 0.15s ease;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.card-modern:hover {
+    border-color: var(--color-border-hover);
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+}
+
+.card-modern-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.card-modern-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.card-modern-title-num {
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+    font-size: 12px;
+    min-width: 30px;
+}
+
+.card-modern-meta {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.card-modern-badge {
+    background: var(--color-accent-bg);
+    color: var(--color-accent);
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.card-modern-badge.success {
+    background: hsl(158 64% 52% / 0.12);
+    color: hsl(158 64% 32%);
+}
+
+.card-modern-badge.warning {
+    background: hsl(38 92% 50% / 0.12);
+    color: hsl(38 92% 38%);
+}
+
+.card-modern-preview {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.card-modern-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+/* 知识库 3 个 tab 不同色边框 (character / relationship / foreshadow) */
+.card-modern.knowledge-character {
+    border-left: 3px solid hsl(239 84% 67%);
+}
+
+.card-modern.knowledge-relationship {
+    border-left: 3px solid hsl(28 80% 52%);
+}
+
+.card-modern.knowledge-foreshadow {
+    border-left: 3px solid hsl(280 70% 55%);
+}
+
+/* 章节卡片 - 强调编号 + 状态徽章 */
+.chapter-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    transition: all 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.chapter-card:hover {
+    border-color: var(--color-accent);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+.chapter-card.active {
+    border-color: var(--color-accent);
+    background: var(--color-accent-bg);
+}
+
+.chapter-card-row1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.chapter-card-row1-num {
+    color: var(--color-text-tertiary);
+    font-weight: 500;
+    min-width: 50px;
+    font-variant-numeric: tabular-nums;
+}
+
+.chapter-card-row1-title {
+    flex: 1;
+    font-weight: 600;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chapter-card-row1-meta {
+    color: var(--color-text-tertiary);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chapter-card-row2 {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+/* 字体微调 - body 全局 */
+body {
+    font-feature-settings: 'tnum';
 }

@@ -1593,7 +1593,7 @@ func (a *App) GetSkill(name string) (*SkillSummary, error) {
 type Settings struct {
 	AutoStart      bool   `json:"auto_start"`
 	StartMinimized bool   `json:"start_minimized"`
-	Theme          string `json:"theme"` // light / dark / system (default)
+	Theme          string `json:"theme"` // light / dark / paper / system (default)
 }
 
 // GetSettings 读持久化设置. 不存在返默认.
@@ -1630,8 +1630,8 @@ func (a *App) GetTheme() (string, error) {
 // 真正应用是前端通过 document.documentElement.dataset.theme 来切.
 // 拆开的原因: 后端不直接操作 DOM (违反关注点分离).
 func (a *App) SetTheme(theme string) error {
-	if theme != "light" && theme != "dark" && theme != "system" {
-		return fmt.Errorf("invalid theme %q (must be light/dark/system)", theme)
+	if theme != "light" && theme != "dark" && theme != "paper" && theme != "system" {
+		return fmt.Errorf("invalid theme %q (must be light/dark/paper/system)", theme)
 	}
 	s, err := settings.Load()
 	if err != nil {
