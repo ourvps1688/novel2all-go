@@ -591,7 +591,7 @@ function SettingsPage(props: { onClose: () => void; backendURL: string }) {
         })();
     }, []);
 
-    async function saveSettings(newSettings: { auto_start: boolean; start_minimized: boolean }) {
+    async function saveSettings(newSettings: { auto_start: boolean; start_minimized: boolean; theme: string }) {
         setSettingsSaving(true);
         setSettingsError('');
         setSettingsSuccess('');
